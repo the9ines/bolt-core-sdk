@@ -1,10 +1,18 @@
-# Bolt Protocol
+# Bolt Core SDK
 
-Bolt is a protocol layer for encrypted device-to-device file transfer. It defines identity, pairing, message protection, message semantics, and state machines independently of any specific transport.
+Open reference implementation of the [Bolt Protocol](https://github.com/the9ines/bolt-protocol) for encrypted device-to-device file transfer.
 
 ---
 
-## Documents
+## What This Is
+
+The SDK that all Bolt-based applications embed to speak Bolt Core. One codepath for pairing, TOFU pinning, handshake gating, envelope encryption, and the transfer state machine.
+
+**Note:** The Bolt Protocol specification (PROTOCOL.md, LOCALBOLT_PROFILE.md) currently resides in this repository until [bolt-protocol](https://github.com/the9ines/bolt-protocol) is fully separated.
+
+---
+
+## Specification Documents
 
 | Document | Description |
 |----------|-------------|
@@ -13,96 +21,42 @@ Bolt is a protocol layer for encrypted device-to-device file transfer. It define
 
 ---
 
-## Core vs Profiles
+## SDK Goals
 
-Bolt is structured as a **protocol family**:
-
-- **Bolt Core** defines what happens: identity, encryption, message types, state machines, conformance rules. It contains no transport-specific details.
-- **Profiles** define how it happens: rendezvous mechanism, transport channel, encoding format, framing, and transport-specific policies.
-
-This separation allows the same protocol to run over different transports:
-
-- **LocalBolt Profile** -- Browser peer channel, local scope policy, `json-envelope-v1`
-- **ByteBolt Profile** (future) -- Broader scope, binary envelope encoding
-
----
-
-## Bolt Core SDK
-
-**Bolt Core SDK** is the reference implementation layer that applications embed to speak Bolt Core.
-
-Goals:
-
-- One codepath for all apps: pairing, TOFU pinning, handshake gating, envelope encryption, transfer state machine
 - Pluggable Profile bindings: apps provide Profile adapters (rendezvous + peer channel + encoding hooks)
 - Deterministic behavior: canonical serialization per Profile, stable state machine, strict conformance checks
 - Small surface area: minimal public API, strong invariants, reliable defaults
+- Transport-agnostic at Core level
 
-Non-goals:
+## SDK Non-Goals
 
-- The SDK does not implement discovery or routing across networks by itself
-- The SDK does not define UI or product policy beyond the Core requirements
-- The SDK does not require a daemon; daemon usage is optional and Profile/app-specific
-
----
-
-## Bolt Daemon
-
-The **Bolt Daemon** is a minimal Rust service that provides reliable, low-resource background capability for Bolt-based apps on supported platforms.
-
-Primary responsibilities (planned):
-
-- Maintain device identity key storage and pinned peer store (TOFU)
-- Provide a stable local API for apps to initiate or accept transfers
-- Enforce resource limits and policy defaults consistently
-- Implement optional background behaviors: keepalive, retry scheduling, rate limiting, logging
-
-Design constraints:
-
-- Low memory footprint
-- Low idle CPU usage (event-driven, no busy polling)
-- Reliable under network churn and app restarts
-- Clear failure modes (crash-only acceptable if supervised, with clean state)
-
-Repo inclusion policy:
-
-- Included in: `localbolt` repo, `localbolt-app` repo
-- Not included in: `localbolt-v3` repo (web app; daemon not applicable)
+- Does not implement discovery or routing
+- Does not define UI or product policy
+- Does not require a daemon
 
 ---
 
-## Versioning
+## Role in the Ecosystem
 
-- Core versions: Bolt Core v1, v2, etc.
-- Profile versions: LocalBolt Profile v1, ByteBolt Profile v1, etc.
-- Profiles declare which Core version they implement
-- Version and capability negotiation happens during the HELLO handshake
+| Relationship | Repository |
+|-------------|-----------|
+| Specification | [bolt-protocol](https://github.com/the9ines/bolt-protocol) |
+| Depends on this | [localbolt](https://github.com/the9ines/localbolt), [localbolt-app](https://github.com/the9ines/localbolt-app), [localbolt-v3](https://github.com/the9ines/localbolt-v3), [bytebolt-app](https://github.com/the9ines/bytebolt-app), [bolt-daemon](https://github.com/the9ines/bolt-daemon) |
 
----
+## Packaging
 
-## Non-goals
-
-Bolt is not:
-
-- A transport protocol (it runs on top of transports)
-- A network routing protocol
-- A NAT traversal specification
-- A storage format
-- A metadata privacy or traffic analysis resistance system
+- **Rust crate**: `bolt-core`
+- **TypeScript package**: `@the9ines/bolt-core`
 
 ---
 
-## Design Principles
-
-- No novel cryptography. Proven primitives only (NaCl box: X25519 + XSalsa20-Poly1305).
-- Transport independence. Security does not depend on transport-layer encryption.
-- Minimal complexity. The smallest protocol that provides the required security properties.
-
----
-
-## Status
+## Spec Status
 
 | Document | Version | Status |
 |----------|---------|--------|
 | Bolt Core v1 | 1.0.0 | Draft |
 | LocalBolt Profile v1 | 1.0.0 | Draft |
+
+## License
+
+MIT
