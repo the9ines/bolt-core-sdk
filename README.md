@@ -36,28 +36,8 @@ The protocol specification lives in [bolt-protocol](https://github.com/the9ines/
 
 ## Packaging
 
-| Target | Package Name | Registry |
-|--------|-------------|----------|
-| Rust | `bolt-core` | [crates.io](https://crates.io) |
-| TypeScript | `@the9ines/bolt-core` | [npm](https://www.npmjs.com) |
-
-Both packages follow the same version number. A single SDK release produces both artifacts.
-
-## Publishing Strategy
-
-1. All changes land on `main` via PR.
-2. Tag with `sdk-vX.Y.Z` following semver.
-3. CI publishes both crate and npm package from the same tag.
-4. Breaking protocol changes require a major version bump.
-5. Profile-only changes (no Core impact) are minor or patch.
-
-## Compatibility Matrix
-
-| SDK Version | Bolt Core Spec | Products |
-|------------|----------------|----------|
-| sdk-v1.0.x | Core v1 | localbolt, localbolt-app, localbolt-v3, bytebolt-app |
-
-Products declare a minimum SDK version in their dependency manifest. The SDK guarantees backward compatibility within the same major version.
+- **Rust crate**: `bolt-core`
+- **TypeScript package**: `@the9ines/bolt-core`
 
 ---
 
