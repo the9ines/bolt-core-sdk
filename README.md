@@ -8,7 +8,16 @@ Open reference implementation of the [Bolt Protocol](https://github.com/the9ines
 
 The SDK that all Bolt-based applications embed to speak Bolt Core. One codepath for pairing, TOFU pinning, handshake gating, envelope encryption, and the transfer state machine.
 
-The protocol specification lives in [bolt-protocol](https://github.com/the9ines/bolt-protocol). This repository contains only the implementation.
+**Note:** The Bolt Protocol specification (PROTOCOL.md, LOCALBOLT_PROFILE.md) currently resides in this repository until [bolt-protocol](https://github.com/the9ines/bolt-protocol) is fully separated.
+
+---
+
+## Specification Documents
+
+| Document | Description |
+|----------|-------------|
+| [PROTOCOL.md](PROTOCOL.md) | Bolt Protocol Core v1. Transport-agnostic specification. |
+| [LOCALBOLT_PROFILE.md](LOCALBOLT_PROFILE.md) | LocalBolt Profile v1. Transport binding for the browser peer channel. |
 
 ---
 
@@ -40,6 +49,13 @@ The protocol specification lives in [bolt-protocol](https://github.com/the9ines/
 - **TypeScript package**: `@the9ines/bolt-core`
 
 ---
+
+## Spec Status
+
+| Document | Version | Status |
+|----------|---------|--------|
+| Bolt Core v1 | 1.0.0 | Draft |
+| LocalBolt Profile v1 | 1.0.0 | Draft |
 
 ## License
 
