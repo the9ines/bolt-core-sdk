@@ -9,23 +9,23 @@
 
 ## 1. Overview
 
-- Profile for: local network file transfer via browser WebRTC
+- Profile for: local network file transfer via browser peer-to-peer channel
 - Implements: Bolt Protocol Core v1
 - Discovery scope: local network only (see section 7)
 
 ---
 
-## 2. Signaling Transport
+## 2. Rendezvous Transport
 
 - Protocol: WebSocket (JSON messages)
-- Endpoint: local LAN signaling server (`ws://<ip>:3001`)
-- LocalBolt Profile v1 uses local-only signaling by default
-- Signaling is explicitly non-security-critical (see Bolt Core section 12)
+- Endpoint: local LAN rendezvous server (`ws://<ip>:3001`)
+- LocalBolt Profile v1 uses local-only rendezvous by default
+- Rendezvous is explicitly non-security-critical (see Bolt Core section 12)
 - Transport provides: message boundary preservation (WebSocket frames), TLS confidentiality when using `wss://` (defense-in-depth only)
 
 ### Cloud Discovery Extension
 
-Cloud signaling (`wss://...`) is a separate optional extension. When enabled, it broadens discovery beyond the local network.
+Cloud rendezvous (`wss://...`) is a separate optional extension. When enabled, it broadens discovery beyond the local network.
 
 Implementations using cloud discovery:
 
@@ -37,7 +37,7 @@ This extension does not change the Bolt Core protocol.
 
 ---
 
-## 3. Signaling Wire Format
+## 3. Rendezvous Wire Format
 
 ### Client -> Server
 
@@ -63,25 +63,20 @@ This extension does not change the Bolt Core protocol.
 
 ---
 
-## 4. Data Transport
+## 4. Peer Channel
 
-- WebRTC DataChannel
+- Browser peer-to-peer data channel
   - Label: `"fileTransfer"`
   - Ordered: `true`
   - Reliable: `true`
   - `binaryType`: `"arraybuffer"`
-- RTCConfiguration:
-  - `iceCandidatePoolSize`: 10
-  - `bundlePolicy`: `"max-bundle"`
-  - `rtcpMuxPolicy`: `"require"`
-  - `iceTransportPolicy`: `"all"`
 
 ---
 
-## 5. ICE Configuration
+## 5. Connectivity Policy
 
-- STUN servers: `stun:stun.l.google.com:19302`, `stun:stun1.l.google.com:19302`
-- TURN servers: none (local-only policy)
+- Uses public STUN servers
+- No relay servers configured (local-only policy)
 - Candidate filtering: `host` and `srflx` only; `relay` candidates BLOCKED
 
 ---
@@ -90,7 +85,7 @@ This extension does not change the Bolt Core protocol.
 
 All protected Bolt messages MUST be transmitted as encrypted envelopes.
 
-Encoding identifier for HELLO negotiation: `json-envelope-v1`
+Encoding identifier negotiated via HELLO: `json-envelope-v1`
 
 ### Envelope Wire Format
 
@@ -105,7 +100,13 @@ Encoding identifier for HELLO negotiation: `json-envelope-v1`
 
 ### Plaintext Message Serialization
 
-The decrypted payload MUST be UTF-8 JSON representing exactly one canonical Bolt message.
+- The decrypted payload MUST be UTF-8 JSON representing exactly one canonical Bolt message.
+- Canonical JSON for this profile:
+  - Keys MUST be emitted in lexicographic order
+  - No insignificant whitespace
+  - UTF-8 encoding
+  - Numbers MUST be base-10 without leading zeros
+- This profile uses camelCase field names mapping from Core snake_case fields
 
 ### Byte Fields Encoding (inside decrypted plaintext)
 
@@ -116,7 +117,7 @@ The decrypted payload MUST be UTF-8 JSON representing exactly one canonical Bolt
 | `file_hash` (bytes32) | Hex string (64 hex chars) |
 | `payload` (bytes) | Base64 string |
 
-### Example: Decrypted HELLO
+### Example: Decrypted HELLO (with optional limits)
 
 ```json
 {
@@ -124,11 +125,16 @@ The decrypted payload MUST be UTF-8 JSON representing exactly one canonical Bolt
   "boltVersion": 1,
   "capabilities": ["bolt.file-hash"],
   "encoding": "json-envelope-v1",
-  "identityKey": "<base64, 32 bytes>"
+  "identityKey": "<base64, 32 bytes>",
+  "limits": {
+    "maxFileSize": 10737418240,
+    "maxTotalChunks": 655360,
+    "maxConcurrentTransfers": 1
+  }
 }
 ```
 
-### Example: Decrypted FILE_OFFER
+### Example: Decrypted FILE_OFFER (with file hash)
 
 ```json
 {
@@ -154,7 +160,7 @@ The decrypted payload MUST be UTF-8 JSON representing exactly one canonical Bolt
 }
 ```
 
-### Example: Decrypted FILE_FINISH
+### Example: Decrypted FILE_FINISH (optional file hash echo)
 
 ```json
 {
@@ -169,13 +175,15 @@ The decrypted payload MUST be UTF-8 JSON representing exactly one canonical Bolt
 ```json
 { "type": "pause", "transferId": "..." }
 { "type": "resume", "transferId": "..." }
-{ "type": "cancel", "transferId": "...", "cancelledBy": "sender" }
+{ "type": "cancel", "transferId": "...", "cancelledBy": "initiator" }
 ```
 
 ### HELLO Exchange
 
-- The first application message sent over the DataChannel MUST be an encrypted envelope containing HELLO
+- The first application message sent over the peer channel MUST be an encrypted envelope containing HELLO
+- Each peer MUST send exactly one HELLO per connection attempt
 - Handshake completes only after both peers successfully decrypt HELLO
+- Before handshake completion, only HELLO/ERROR envelopes and plaintext ping/pong are accepted (per Bolt Core)
 
 ### Plaintext Messages
 
@@ -196,8 +204,8 @@ LocalBolt prefers local network connections. This is a HEURISTIC, not enforcemen
 
 ### Mechanisms
 
-- IP-based room grouping: signaling server groups private IPs into shared "local" room
-- Relay candidate blocking: no TURN servers configured, relay ICE candidates dropped
+- IP-based room grouping: rendezvous server groups private IPs into shared "local" room
+- Relay candidate blocking: no relay servers configured, relay candidates dropped
 - Private IP recognition: RFC 1918, link-local, CGNAT/Tailscale (100.64/10), IPv6 ULA/link-local
 
 ### Known Limitations
@@ -228,11 +236,9 @@ LocalBolt prefers local network connections. This is a HEURISTIC, not enforcemen
 
 ## 10. Key Exchange Binding
 
-The authoritative ephemeral key used for Bolt encryption is the `senderEphemeralKey` field present in each envelope.
-
-Transport-level key carriage (e.g. SDP exchange) MAY be used as an optimization but MUST NOT be required for correctness.
-
-Implementations MAY compare transport-carried keys with observed envelope keys and warn on mismatch.
+- The authoritative ephemeral key used for Bolt encryption is the `senderEphemeralKey` field present in each envelope.
+- Transport-level key carriage (e.g. offer/answer metadata) MAY be used as an optimization but MUST NOT be required for correctness.
+- Implementations MAY compare transport-carried keys with observed envelope keys and warn on mismatch.
 
 ---
 

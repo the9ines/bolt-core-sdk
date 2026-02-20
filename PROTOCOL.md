@@ -8,18 +8,36 @@
 
 ## 1. Overview
 
-- Protocol scope: identity, pairing, session security, transfer, state machines
-- Out of scope: transport, discovery mechanism, application UI, storage
+- Protocol scope: identity, pairing, session security, message semantics, transfer state machines, conformance rules
+- Out of scope: transport selection, discovery mechanism, rendezvous details, application UI, storage format
 - Design principles: no novel crypto, proven primitives, minimal complexity
 
 ### 1.1 Wire Model
 
-- Bolt Core defines message semantics and state machines
-- Profiles define framing (datagram vs stream) and encoding (json-envelope-v1, bin-v1, etc.)
-- Core requires that Profiles provide:
-  - (a) message boundary preservation, or
-  - (b) a deterministic framing layer
-- Core requires that a Profile declare whether the transport provides confidentiality and integrity (defense-in-depth only; Bolt does not depend on transport-layer security)
+Bolt Core defines:
+
+- message semantics
+- security requirements (Bolt-layer protection)
+- state machines and conformance rules
+
+A Profile defines:
+
+- transport bindings (how bytes move between peers)
+- framing (datagram vs stream, and how message boundaries are preserved)
+- encoding identifiers and serialization formats
+- rendezvous mechanism (if any) used to establish a peer channel
+- resource limit defaults and platform policies
+
+Core requirements for Profiles:
+
+- Profiles MUST provide either:
+  - message boundary preservation, or
+  - a deterministic framing layer suitable for unambiguous envelope extraction
+- Profiles MUST define a deterministic canonical serialization for each encoding:
+  - Two equivalent messages MUST serialize to identical byte sequences before encryption
+- Profiles MUST declare whether the underlying transport provides confidentiality and integrity
+  - This is defense-in-depth only
+  - Bolt does not depend on transport-layer security for correctness or confidentiality
 
 ---
 
@@ -31,15 +49,21 @@
   - A device is trusted by recognizing its pinned public key from a prior session
   - This is authenticated key agreement by prior trust, not cryptographic identity verification via signatures
 - v2 note: Ed25519 identity keys for signed assertions and mutual authentication
-- Peer code is NOT identity: it is a rendezvous token or signaling address
-- Peer code: 6-char from 32-char unambiguous alphabet (`ABCDEFGHJKMNPQRSTUVWXYZ23456789`)
+- Peer code is NOT identity: it is a rendezvous token used by a Profile to route connection requests
+- Peer code: 6 characters from 32-char unambiguous alphabet (`ABCDEFGHJKMNPQRSTUVWXYZ23456789`)
 - Device metadata: name (string), type (`phone` | `tablet` | `laptop` | `desktop`)
 
 ### TOFU Flow
 
-- **First contact** (unknown key): implementation SHOULD prompt SAS verification. If user accepts, pin the remote public key for future sessions.
+- **First contact** (unknown key): implementation SHOULD prompt SAS verification. If user accepts, pin the remote identity public key for future sessions.
 - **Known key match**: proceed without user interaction.
-- **Key mismatch** (pinned key differs from received key): implementation MUST send `ENVELOPE(ERROR(KEY_MISMATCH))` and close the session. Implementation MUST present a clear warning to the user. To reconnect, the user must explicitly approve re-pairing, which MUST delete the old pinned key, store the new key, and MUST require SAS confirmation.
+- **Key mismatch** (pinned key differs from received key):
+  - implementation MUST send `ENVELOPE(ERROR(KEY_MISMATCH))` and close the session
+  - implementation MUST present a clear warning to the user
+  - to reconnect, the user must explicitly approve re-pairing, which MUST:
+    - delete the old pinned key
+    - store the new key
+    - require SAS confirmation
 
 ### Pinning Scope
 
@@ -52,18 +76,19 @@
 ## 3. Session Establishment
 
 - Each connection generates a fresh ephemeral X25519 keypair
-- Persistent identity keys are exchanged for TOFU verification
-- Ephemeral keys are used for Bolt-layer message encryption
-- Profiles define transport setup; Core defines key exchange and gating behavior
+- Persistent identity keys are exchanged (inside encrypted HELLO) for TOFU verification
+- Ephemeral keys are used for Bolt-layer message protection and provide forward secrecy
+- Profiles define peer-channel setup; Core defines key usage and handshake gating
 
 ### Key Roles
 
-- **Persistent identity keypair:**
+- **Persistent identity keypair**
   - Used only for TOFU key pinning and SAS computation
   - MUST NOT be used directly for bulk encryption of Bolt messages
-- **Ephemeral session keypair:**
+- **Ephemeral session keypair**
   - Fresh per connection
   - Used for encryption of all protected Bolt messages (control and data)
+  - MUST NOT be rotated mid-session in v1
 
 ### Encryption Key Usage
 
@@ -79,25 +104,26 @@
   - A MUST encrypt using `box(plaintext, nonce, B_eph_pub, A_eph_sec)`
   - The envelope MUST include `sender_ephemeral_key = A_eph_pub`
   - B MUST decrypt using `box.open(ciphertext, nonce, A_eph_pub, B_eph_sec)`
-- The same keypairs are used for both directions; directionality comes from which pub and sec are applied
+- The same ephemeral keypairs are used for both directions; directionality comes from which pub and sec are applied
 
 ### Bootstrap Rule
 
-- The first protected message after transport establishment MUST be an encrypted HELLO inside an envelope
+- The first protected message after peer-channel establishment MUST be an encrypted HELLO inside an envelope
 - Each envelope carries `sender_ephemeral_key` in cleartext, allowing decryption without any transport-specific key exchange
+- Each peer MUST send exactly one HELLO per connection attempt
 
 ### Handshake Completion Rule (Normative)
 
 Handshake is complete only after:
 
-- Both peers successfully exchange and decrypt HELLO messages
-- Identity verification and TOFU checks succeed
+- both peers successfully exchange and decrypt HELLO messages
+- identity verification and TOFU checks succeed
 
 Before handshake completion, a peer MUST accept only:
 
 - `PING` and `PONG` (plaintext)
-- Encrypted envelopes containing `HELLO`
-- Encrypted envelopes containing `ERROR`
+- encrypted envelopes containing `HELLO`
+- encrypted envelopes containing `ERROR`
 
 All other messages MUST be rejected with `ENVELOPE(ERROR(INVALID_STATE))`.
 
@@ -106,6 +132,14 @@ All other messages MUST be rejected with `ENVELOPE(ERROR(INVALID_STATE))`.
 - Short Authentication String for user confirmation of key exchange
 - SAS binds identity and ephemeral keys
 - `sort32(a,b)`: lexicographically sort two 32-byte values and concatenate
+
+SAS inputs in v1:
+
+- `identity_A`, `identity_B`: raw identity public keys from decrypted HELLO messages
+- `ephemeral_A`, `ephemeral_B`: raw ephemeral public keys from the envelope headers that carried those HELLO messages
+
+Computation:
+
 - `SAS_input = SHA-256( sort32(identity_A, identity_B) || sort32(ephemeral_A, ephemeral_B) )`
 - Display first 6 hex chars uppercase
 - SAS MUST be computed over raw 32-byte keys, not encoded representations
@@ -123,7 +157,7 @@ All other messages MUST be rejected with `ENVELOPE(ERROR(INVALID_STATE))`.
 
 ## 4. Version and Capability Negotiation
 
-- HELLO message is sent as the first encrypted envelope after transport opens
+- HELLO message is sent as the first encrypted envelope after peer-channel open
 - Highest common version selected
 - Unknown fields within known message types MUST be ignored
 - Unknown message types:
@@ -138,7 +172,7 @@ All other messages MUST be rejected with `ENVELOPE(ERROR(INVALID_STATE))`.
 |-------|------|----------|-------------|
 | `bolt_version` | uint32 | required | Protocol version (1 for this spec) |
 | `capabilities` | string[] | required | List of supported capabilities |
-| `encoding` | string | required | Message encoding (e.g. `json-envelope-v1`) |
+| `encoding` | string | required | Encoding identifier |
 | `identity_key` | bytes32 | required | Persistent X25519 public key |
 | `limits` | object | optional | Receiver resource limits |
 | `limits.max_file_size` | uint64 | optional | Maximum file size in bytes |
@@ -151,7 +185,7 @@ If limits are present, the sender MUST respect the receiver's limits. If absent,
 
 ## 5. Connection Approval
 
-Connection approval happens via signaling before the encrypted channel is established.
+Connection approval happens via rendezvous (Profile-defined) before the encrypted peer channel is established.
 
 ### CONNECTION_REQUEST
 
@@ -174,7 +208,7 @@ Connection approval happens via signaling before the encrypted channel is establ
 | `from` | string | required | Responder peer code |
 | `reason` | string | required | `user_declined` \| `busy` \| `cancelled` |
 
-**Sequence:** `CONNECTION_REQUEST` -> `CONNECTION_ACCEPTED` -> transport setup -> HELLO exchange.
+**Sequence:** `CONNECTION_REQUEST` -> `CONNECTION_ACCEPTED` -> peer-channel setup -> HELLO exchange.
 
 ---
 
@@ -201,10 +235,10 @@ Unprotected messages MUST NOT contain sensitive data.
 
 Bolt-layer protection provides:
 
-- Confidentiality from signaling servers
-- Confidentiality from transport intermediaries
-- Integrity and authenticity of control and transfer metadata
-- Transport-independent security
+- confidentiality from untrusted rendezvous infrastructure
+- confidentiality from transport intermediaries
+- integrity and authenticity of control and transfer metadata
+- transport-independent security guarantees
 
 Transport encryption is defense-in-depth only.
 
@@ -238,10 +272,11 @@ ciphertext = NaCl box(
 
 Implementations MUST:
 
-- Generate a fresh 24-byte random nonce per envelope
+- generate a fresh 24-byte random nonce per envelope
+- use a cryptographically secure random number generator for nonce generation
 - NEVER reuse a nonce with the same ephemeral keypair
-- Generate a fresh ephemeral keypair per connection
-- Discard ephemeral keys after session termination
+- generate a fresh ephemeral keypair per connection
+- discard ephemeral keys after session termination
 
 #### Decryption Rules
 
@@ -250,7 +285,7 @@ Implementations MUST:
 
 #### Decrypt Failure Handling
 
-- If decrypt fails after receiver has the sender's ephemeral public key, receiver SHOULD send `ENVELOPE(ERROR(ENCRYPTION_FAILED))` and MAY terminate the session
+- If decrypt fails, receiver SHOULD send `ENVELOPE(ERROR(ENCRYPTION_FAILED))` and MAY terminate the session
 - If receiver cannot safely respond, it MAY terminate the session without response
 
 #### Rationale
@@ -266,9 +301,7 @@ All transfer messages include a `transfer_id` to avoid filename collisions.
 - `transfer_id`: bytes16, random via CSPRNG (encoding profile-defined)
 - `identity_key`: bytes32, X25519 public key (encoding profile-defined)
 
-### Canonical Message Schemas
-
-Plaintext inside envelope:
+### Canonical Message Schemas (plaintext inside envelope)
 
 #### HELLO
 
@@ -276,7 +309,7 @@ Plaintext inside envelope:
 |-------|------|----------|-------------|
 | `bolt_version` | uint32 | required | Protocol version |
 | `capabilities` | string[] | required | Supported capabilities |
-| `encoding` | string | required | Message encoding |
+| `encoding` | string | required | Encoding identifier |
 | `identity_key` | bytes32 | required | Persistent identity key |
 | `limits` | object | optional | Receiver resource limits |
 
@@ -311,7 +344,7 @@ Plaintext inside envelope:
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `transfer_id` | bytes16 | required | Identifies the transfer |
-| `file_hash` | bytes32 | conditional | Echo of `FILE_OFFER` hash; present only if `bolt.file-hash` negotiated |
+| `file_hash` | bytes32 | optional | Echo of `FILE_OFFER` hash (only if `bolt.file-hash` negotiated) |
 
 The `FILE_OFFER` `file_hash` is the authoritative expected value. The receiver computes SHA-256 of the reassembled plaintext and verifies against the `FILE_OFFER` hash. `FILE_FINISH` MAY echo the hash for debugging, but the receiver MUST use the `FILE_OFFER` hash as the verification target.
 
@@ -379,6 +412,7 @@ When `bolt.file-hash` is not negotiated:
 
 ### Replay Protection
 
+- Replay detection is scoped per `(transfer_id, chunk_index)`
 - Receiver MUST reject duplicate `chunk_index` for the same `transfer_id`
 - Receiver MUST reject `chunk_index >= total_chunks`
 
@@ -386,9 +420,9 @@ When `bolt.file-hash` is not negotiated:
 
 - Implementations MUST enforce limits to prevent DoS
 - MUST bound:
-  - Maximum file size per transfer
-  - Maximum `total_chunks` per transfer
-  - Maximum concurrent transfers per session
+  - maximum file size per transfer
+  - maximum `total_chunks` per transfer
+  - maximum concurrent transfers per session
 - `FILE_OFFER` exceeding limits MUST be rejected with `ERROR(LIMIT_EXCEEDED)`
 - Limits MAY be advertised in HELLO; sender MUST respect receiver limits when present
 
@@ -400,7 +434,7 @@ No retry/resume in v1 (future via `bolt.resume`).
 
 ## 9. State Machines
 
-### Signaling State
+### Signaling State (Profile-defined rendezvous)
 
 ```
 DISCONNECTED -> CONNECTING -> CONNECTED <-> RECONNECTING
@@ -415,7 +449,7 @@ IDLE -> REQUEST_SENT -> APPROVED -> TRANSPORT_CONNECTING -> HANDSHAKING -> CONNE
 Transitions:
 
 - Enter `TRANSPORT_CONNECTING` when approval granted
-- Enter `HANDSHAKING` when transport channel open
+- Enter `HANDSHAKING` when peer channel open
 - Exit `HANDSHAKING` only when mutual HELLO and TOFU verification succeed
 - Enter `CONNECTED` after successful handshake completion
 
@@ -442,7 +476,7 @@ Protocol error codes (sent inside encrypted envelopes):
 | `TRANSFER_FAILED` | Chunk reassembly, I/O, or storage error |
 | `LIMIT_EXCEEDED` | File size, chunk count, or concurrent transfer limit exceeded |
 | `CONNECTION_LOST` | Transport disconnected during transfer |
-| `PEER_NOT_FOUND` | Signaling target does not exist |
+| `PEER_NOT_FOUND` | Rendezvous target does not exist |
 | `ALREADY_CONNECTED` | Peer is busy with another connection |
 | `INVALID_STATE` | Message received in wrong state (e.g. before handshake) |
 | `KEY_MISMATCH` | Remote identity key does not match pinned key |
@@ -465,27 +499,27 @@ Implementations MAY wrap these in language-specific error types.
 
 ## 11. Security Properties
 
-- **Bolt-layer encryption**: all protected messages encrypted via envelope
-- **Per-message authentication**: Poly1305 MAC on every envelope
-- **File integrity**: SHA-256 after reassembly when `bolt.file-hash` negotiated
-- **TOFU key pinning**: persistent identity across sessions
-- **Nonce freshness**: random nonce per envelope, no reuse
-- **Replay protection**: duplicate chunk indices rejected
-- **Forward secrecy**: ephemeral keys discarded after disconnect
-- **SAS verification**: optional user confirmation (24-bit)
-- **Transport independence**: security does not depend on transport encryption
+- Bolt-layer encryption: all protected messages encrypted via envelope
+- Per-message authentication: Poly1305 MAC on every envelope
+- File integrity: SHA-256 after reassembly when `bolt.file-hash` negotiated
+- TOFU key pinning: persistent identity across sessions
+- Nonce freshness: random nonce per envelope, no reuse
+- Replay protection: duplicate chunk indices rejected
+- Forward secrecy: ephemeral keys discarded after disconnect
+- SAS verification: optional user confirmation (24-bit)
+- Transport independence: security does not depend on transport encryption
 
 ---
 
 ## 12. Threat Model
 
-- Signaling server is UNTRUSTED for confidentiality and integrity
-- Signaling server MAY observe: peer codes, IP addresses, timing, connection patterns
-- Signaling server MUST NOT observe: file contents, filenames, encryption keys, or transfer metadata (encrypted at Bolt layer)
-- MITM on signaling is probabilistically detectable via SAS
+- Rendezvous infrastructure is UNTRUSTED for confidentiality and integrity
+- Rendezvous infrastructure MAY observe: peer codes, IP addresses, timing, connection patterns
+- Rendezvous infrastructure MUST NOT observe: file contents, filenames, encryption keys, or transfer metadata (encrypted at Bolt layer)
+- MITM at rendezvous is probabilistically detectable via SAS
 - Network observers may still infer activity via traffic timing and sizes
 - Bolt does NOT attempt traffic analysis resistance
-- **Device compromise**: exfiltration of identity secret key enables impersonation in future sessions until re-pair. Past sessions remain safe due to ephemeral session keys. Implementations MUST allow unpair and re-pair.
+- Device compromise: exfiltration of identity secret key enables impersonation in future sessions until re-pair. Past sessions remain safe due to ephemeral session keys. Implementations MUST allow unpair and re-pair.
 
 ---
 
@@ -500,11 +534,13 @@ Implementations MAY wrap these in language-specific error types.
 - MUST: send `ERROR` only inside an encrypted envelope
 - MUST: reject protected messages received outside an envelope
 - MUST: use fresh ephemeral keys per connection
+- MUST: NOT rotate ephemeral keys mid-session in v1
 - MUST: verify envelope MAC before processing contents
-- MUST: generate fresh random nonce per envelope and never reuse it
+- MUST: generate fresh random nonce per envelope using a CSPRNG and never reuse it
 - MUST: complete handshake before sending transfer messages
+- MUST: send exactly one HELLO per connection attempt
 - MUST: use `transfer_id` to identify transfers
-- MUST: reject duplicate chunk indices
+- MUST: reject duplicate chunk indices (scoped per `(transfer_id, chunk_index)`)
 - MUST: reject `chunk_index >= total_chunks`
 - MUST: verify remote identity matches pinned key when previously seen
 - MUST: ignore unknown fields within known message types
@@ -541,9 +577,9 @@ Implementations MAY wrap these in language-specific error types.
 ## Appendix A: Profile System
 
 - Bolt Core is transport-agnostic
-- Profiles define signaling, transport, encoding, framing, limits, and policies
+- Profiles define rendezvous, transport, encoding, framing, limits, and policies
 - Known profiles: LocalBolt Profile v1, ByteBolt Profile (future)
-- ByteBolt MUST support LocalBolt Profile when it detects a LocalBolt peer on LAN
+- A ByteBolt implementation SHOULD support the LocalBolt Profile for LAN interoperability
 
 ## Appendix B: Key Rotation (out of scope for v1)
 
@@ -551,10 +587,10 @@ Key rotation is not defined in Bolt Core v1. Implementations re-key by unpairing
 
 ## Appendix C: Conformance Tests
 
-1. **Handshake gating**: reject `FILE_OFFER` before HELLO completion -> `ERROR(INVALID_STATE)`
-2. **Key mismatch**: pinned key differs -> `ERROR(KEY_MISMATCH)` then close
-3. **Replay**: duplicate `chunk_index` -> `ERROR(REPLAY_DETECTED)`
-4. **Limit**: oversize offer -> `ERROR(LIMIT_EXCEEDED)`
-5. **SAS vectors**: raw identity and ephemeral keys -> expected 6 hex chars
-6. **Envelope**: protected message outside envelope -> reject
-7. **Plaintext leak**: `PING`/`PONG` contain no sensitive data
+1. Handshake gating: reject `FILE_OFFER` before HELLO completion -> `ERROR(INVALID_STATE)`
+2. Key mismatch: pinned key differs -> `ERROR(KEY_MISMATCH)` then close
+3. Replay: duplicate `(transfer_id, chunk_index)` -> `ERROR(REPLAY_DETECTED)`
+4. Limit: oversize offer -> `ERROR(LIMIT_EXCEEDED)`
+5. SAS vectors: raw identity keys + envelope-header ephemeral keys -> expected 6 hex chars
+6. Envelope: protected message outside envelope -> reject
+7. Plaintext leak: `PING`/`PONG` contain no sensitive data
