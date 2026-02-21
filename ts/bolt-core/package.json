@@ -1,6 +1,6 @@
 {
   "name": "@the9ines/bolt-core",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "Bolt Protocol core crypto primitives and utilities",
   "type": "module",
   "main": "./dist/index.js",
@@ -27,5 +27,12 @@
   "files": [
     "dist"
   ],
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/the9ines/bolt-core-sdk.git"
+  },
   "license": "MIT"
 }
