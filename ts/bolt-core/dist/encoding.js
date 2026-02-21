@@ -1,4 +1,5 @@
-import { encodeBase64, decodeBase64 } from 'tweetnacl-util';
+import tweetnacl_util from 'tweetnacl-util';
+const { encodeBase64, decodeBase64 } = tweetnacl_util;
 /** Encode a Uint8Array to a base64 string */
 export function toBase64(data) {
     return encodeBase64(data);

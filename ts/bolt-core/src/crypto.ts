@@ -1,4 +1,5 @@
-import { box, randomBytes } from 'tweetnacl';
+import tweetnacl from 'tweetnacl';
+const { box, randomBytes } = tweetnacl;
 import { toBase64, fromBase64 } from './encoding.js';
 import { EncryptionError } from './errors.js';
 
