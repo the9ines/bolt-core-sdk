@@ -1,6 +1,10 @@
-# Bolt Protocol Contract
+# Bolt Protocol Contract — SDK Conformance Clarifications
 
-Canonical reference for the Bolt Core protocol layer. This document defines the byte-level invariants that all implementations (TypeScript, Rust, etc.) must satisfy.
+This document provides conformance clarifications and implementation notes for the `@the9ines/bolt-core` SDK. It is **not** a second specification.
+
+**Normative authority**: `PROTOCOL.md` in `bolt-protocol` (or temporarily `bolt-core-sdk`) is the single source of truth for wire formats, byte layouts, and protocol semantics. This document clarifies how the TypeScript SDK implements those requirements and defines the test vector contract for cross-implementation verification.
+
+If this document and `PROTOCOL.md` conflict, `PROTOCOL.md` wins.
 
 Protocol version: **1** (`BOLT_VERSION`).
 
@@ -23,10 +27,11 @@ Total raw bytes before base64 encoding: `24 + plaintext_length + 16`.
 
 ### Base64 encoding
 
-- Standard base64 (RFC 4648, alphabet `A-Za-z0-9+/`).
-- Padding with `=` is included.
-- No URL-safe variant. No line breaks.
-- Implementation: `tweetnacl-util.encodeBase64` / `decodeBase64` (TypeScript SDK).
+- **RFC 4648 standard base64** (alphabet `A-Za-z0-9+/`).
+- Padding with `=` is **required**.
+- **Not base64url.** The `+` and `/` characters are used, not `-` and `_`. If a future transport requires URL-safe encoding, that decision must be made explicitly in `PROTOCOL.md` and will require a version bump.
+- No line breaks or whitespace within the encoded string.
+- Implementation: `tweetnacl-util.encodeBase64` / `decodeBase64` (TypeScript SDK), which delegates to `Buffer.toString('base64')` in Node.js and `btoa()`/`atob()` in browsers.
 
 ### Seal operation
 
@@ -227,5 +232,7 @@ Deterministic test vectors are provided in:
 - `__tests__/vectors/framing.vectors.json` — wire format layout verification
 
 These vectors use fixed keypairs and fixed nonces for cross-implementation reproducibility. See `scripts/print-test-vectors.mjs` for generation.
+
+**WARNING: All keypairs in the vector files are TEST-ONLY fixtures. They are public, deterministic, and MUST NEVER be used in production.** They exist solely for cross-implementation conformance verification.
 
 Any compliant implementation (Rust SDK, libdatachannel peer, webrtc-rs peer) MUST produce identical sealed output given the same inputs and MUST successfully open all valid vectors.

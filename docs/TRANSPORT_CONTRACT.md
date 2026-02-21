@@ -6,11 +6,15 @@ Defines the abstraction boundary between the Bolt protocol layer and transport i
 
 A compliant Bolt transport MUST provide:
 
-### Ordered, reliable byte delivery
+### Ordered, reliable delivery
 
 - Messages arrive in the order they were sent.
 - No message is silently dropped. If delivery fails, the transport reports an error.
-- This matches TCP semantics. Bolt does NOT handle reordering or retransmission at the protocol layer.
+- Bolt does NOT handle reordering or retransmission at the protocol layer.
+
+Any transport that provides ordered, reliable delivery of discrete messages satisfies this requirement. Examples: SCTP reliable-ordered streams (WebRTC DataChannel), TCP with message framing, QUIC unidirectional/bidirectional streams with application-level message boundaries.
+
+Transports that are inherently unreliable (e.g., UDP datagrams, QUIC unreliable datagrams, SCTP unordered/unreliable mode) do NOT satisfy this requirement directly. An unreliable transport MAY be used if an additional ordering and reliability layer is added on top, but that layer is outside the scope of Bolt Core and must be validated independently.
 
 ### Connection lifecycle events
 

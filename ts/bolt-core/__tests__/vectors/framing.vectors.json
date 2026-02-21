@@ -1,5 +1,5 @@
 {
-  "description": "Wire format framing test vectors for @the9ines/bolt-core. Verifies nonce||ciphertext layout.",
+  "description": "Wire format framing test vectors for @the9ines/bolt-core. Verifies nonce||ciphertext layout. WARNING: Sealed payloads use TEST-ONLY keypairs — NEVER use in production.",
   "constants": {
     "nonce_length": 24,
     "box_overhead": 16
