@@ -163,3 +163,53 @@ Contents: `@the9ines:registry=https://npm.pkg.github.com` — no auth tokens.
 - SDK publish triggers on strict semver tags only: `sdk-v<MAJOR>.<MINOR>.<PATCH>`.
 - Suffix tags (e.g. `sdk-v0.0.5-phase2a`) must NOT trigger publish.
 - Product tags follow repo-specific conventions (see ecosystem CLAUDE.md).
+
+## 7. Headless Transport Lane (webrtc-rs Evaluation Plan)
+
+### Why headless matters
+
+Server-side and daemon deployments (bolt-daemon, future CLI tools, automated relay nodes) cannot use browser WebRTC APIs. These deployments need a Rust-native WebRTC implementation that:
+
+- Runs without a browser or GUI.
+- Integrates with Tokio or async-std runtimes.
+- Supports the same DTLS/SCTP/DataChannel stack that browser WebRTC provides.
+- Can interoperate with browser WebRTC peers (standard SDP/ICE signaling).
+
+Current candidate: **webrtc-rs** (`webrtc` crate). Alternative: **libdatachannel** via Rust FFI bindings.
+
+### Graduation criteria
+
+Before webrtc-rs (or any headless transport) is adopted for production use, it MUST:
+
+1. **Pass deterministic vector verification.** Open all valid vectors in `__tests__/vectors/box-payload.vectors.json`. Reject all corrupt vectors. Pass all framing assertions in `framing.vectors.json`.
+
+2. **Pass live interop matrix.** Successfully complete the deterministic message exchange scenario (see `docs/INTEROP_TEST_PLAN.md` §3) against:
+   - Browser WebRTC peer (P0, required)
+   - libdatachannel peer (P1, required if libdatachannel is in production)
+
+3. **Pass LAN-only ICE policy.** Demonstrate that ICE candidate gathering can be restricted to private/link-local addresses only. No TURN. Optionally no public STUN. Verify by inspecting gathered candidates in test transcript.
+
+4. **Demonstrate stable SCTP behavior.** Transfer at least 100 MB of data across 10 sequential connections without:
+   - SCTP association failures
+   - DataChannel premature closure
+   - Message reordering or loss
+   - Memory leaks (RSS stable within 10% over test duration)
+
+5. **No protocol changes.** The webrtc-rs transport MUST work with the existing Bolt protocol layer unchanged. If protocol changes are required, the transport is not ready.
+
+### Non-goals
+
+- webrtc-rs does NOT change the protocol. It is a transport implementation.
+- webrtc-rs does NOT replace browser WebRTC for browser-based products.
+- webrtc-rs evaluation does NOT block SDK 1.0 or any current product release.
+
+### Decision gate
+
+Adoption of webrtc-rs requires:
+
+1. All graduation criteria pass in CI.
+2. At least one week of integration testing with bolt-daemon.
+3. Team review and explicit approval.
+4. Documentation update to `TRANSPORT_CONTRACT.md` adding webrtc-rs as a production transport.
+
+Until the decision gate is passed, webrtc-rs remains "candidate" status. No product may depend on it.
