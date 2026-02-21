@@ -10,8 +10,28 @@ permissions:
   contents: read
 
 jobs:
+  gate:
+    name: Validate release tag
+    runs-on: ubuntu-latest
+    outputs:
+      is_release: ${{ steps.check.outputs.is_release }}
+    steps:
+      - name: Check tag is strict semver
+        id: check
+        run: |
+          TAG="${{ github.ref_name }}"
+          if [[ "$TAG" =~ ^sdk-v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "is_release=true" >> "$GITHUB_OUTPUT"
+            echo "Release tag: $TAG"
+          else
+            echo "is_release=false" >> "$GITHUB_OUTPUT"
+            echo "Non-release tag (skipping publish): $TAG"
+          fi
+
   publish:
     name: Build, Test & Publish
+    needs: gate
+    if: needs.gate.outputs.is_release == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
