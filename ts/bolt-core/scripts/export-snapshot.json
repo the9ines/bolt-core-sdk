@@ -1,0 +1,30 @@
+{
+  "description": "Public API surface of @the9ines/bolt-core. Do not edit manually.",
+  "exports": [
+    "BOLT_VERSION",
+    "BoltError",
+    "ConnectionError",
+    "DEFAULT_CHUNK_SIZE",
+    "EncryptionError",
+    "NONCE_LENGTH",
+    "PEER_CODE_ALPHABET",
+    "PEER_CODE_LENGTH",
+    "PUBLIC_KEY_LENGTH",
+    "SAS_LENGTH",
+    "SECRET_KEY_LENGTH",
+    "TransferError",
+    "bufferToHex",
+    "computeSas",
+    "fromBase64",
+    "generateEphemeralKeyPair",
+    "generateLongPeerCode",
+    "generateSecurePeerCode",
+    "hashFile",
+    "isValidPeerCode",
+    "normalizePeerCode",
+    "openBoxPayload",
+    "sealBoxPayload",
+    "sha256",
+    "toBase64"
+  ]
+}

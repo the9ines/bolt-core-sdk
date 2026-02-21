@@ -32,3 +32,20 @@ jobs:
       - run: npm publish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Smoke test published package
+        working-directory: /tmp/smoke-test
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION=$(node -p "require('${{ github.workspace }}/ts/bolt-core/package.json').version")
+          mkdir -p /tmp/smoke-test && cd /tmp/smoke-test
+          npm init -y
+          echo "@the9ines:registry=https://npm.pkg.github.com" > .npmrc
+          npm install @the9ines/bolt-core@${VERSION}
+          node --input-type=module -e "
+            import { sealBoxPayload, openBoxPayload, generateEphemeralKeyPair, BoltError } from '@the9ines/bolt-core';
+            const kp = generateEphemeralKeyPair();
+            if (!kp.publicKey || !kp.secretKey) process.exit(1);
+            console.log('Smoke test passed: ${VERSION}');
+          "
