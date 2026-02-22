@@ -1,0 +1,40 @@
+{
+  "name": "@the9ines/bolt-transport-web",
+  "version": "0.1.0",
+  "description": "Shared browser transport, signaling, and UI components for Bolt-based web applications",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "clean": "rm -rf dist",
+    "prepublishOnly": "npm run clean && npm run build"
+  },
+  "peerDependencies": {
+    "@the9ines/bolt-core": ">=0.0.5"
+  },
+  "devDependencies": {
+    "@the9ines/bolt-core": "0.1.0",
+    "typescript": "^5.5.3"
+  },
+  "files": [
+    "dist",
+    "API.md",
+    "README.md",
+    "package.json"
+  ],
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/the9ines/bolt-core-sdk.git"
+  },
+  "license": "MIT"
+}
