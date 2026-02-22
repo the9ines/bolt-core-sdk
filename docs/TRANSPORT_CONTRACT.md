@@ -2,6 +2,11 @@
 
 Defines the abstraction boundary between the Bolt protocol layer and transport implementations.
 
+**SDK Stability Alignment:** This document defines behavioral requirements
+for transport implementations. [SDK_STABILITY.md](SDK_STABILITY.md) defines
+API stability for the SDK package. Both documents together form the SDK
+contract for consumers.
+
 ## 1. Transport Requirements
 
 A compliant Bolt transport MUST provide:

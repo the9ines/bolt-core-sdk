@@ -50,6 +50,15 @@ The SDK that all Bolt-based applications embed to speak Bolt Core. One codepath 
 
 ---
 
+## API Stability
+
+As of version 0.1.0, the public API surface is considered stable under
+[Semantic Versioning 2.0.0](https://semver.org/). See
+[docs/SDK_STABILITY.md](docs/SDK_STABILITY.md) for the full stability
+contract, versioning policy, and breaking change checklist.
+
+---
+
 ## Spec Status
 
 | Document | Version | Status |
