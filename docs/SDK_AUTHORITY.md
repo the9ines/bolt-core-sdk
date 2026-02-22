@@ -5,6 +5,15 @@ relate to it, and what gates enforce cross-implementation compatibility.
 
 Keywords: RFC 2119 (MUST, MUST NOT, REQUIRED, SHALL, SHOULD, MAY).
 
+## Core Rule
+
+**Canonical truth = contracts (`PROTOCOL.md`, `TRANSPORT_CONTRACT.md`) +
+golden vectors + Rust crate (`rust/bolt-core/`).**
+
+TypeScript (`@the9ines/bolt-core`) is supported but MUST pass
+compatibility tests against canonical vectors. It does not define
+protocol behavior.
+
 ## 1. Canonical Implementation
 
 The **Rust crate** (`rust/bolt-core/`, package name `bolt-core`) is the
