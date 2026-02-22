@@ -164,7 +164,7 @@ Contents: `@the9ines:registry=https://npm.pkg.github.com` — no auth tokens.
 - Suffix tags (e.g. `sdk-v0.0.5-phase2a`) must NOT trigger publish.
 - Product tags follow repo-specific conventions (see ecosystem CLAUDE.md).
 
-## 7. Headless Transport Lane (webrtc-rs Evaluation Plan)
+## 7. Headless Transport Lane
 
 ### Why headless matters
 
@@ -175,7 +175,22 @@ Server-side and daemon deployments (bolt-daemon, future CLI tools, automated rel
 - Supports the same DTLS/SCTP/DataChannel stack that browser WebRTC provides.
 - Can interoperate with browser WebRTC peers (standard SDP/ICE signaling).
 
-Current candidate: **webrtc-rs** (`webrtc` crate). Alternative: **libdatachannel** via Rust FFI bindings.
+### Current status
+
+**libdatachannel** (via Rust FFI, `datachannel` crate) is the standardized
+headless transport. bolt-daemon uses it in production for all signaling modes
+(file and rendezvous). It is proven for LAN, overlay, and global scopes.
+
+**webrtc-rs** (`webrtc` crate) remains an optional evaluation lane only. It is
+not required for any current product or milestone. If evaluated, it must meet
+the graduation criteria below before adoption.
+
+### Relay lane (future, not MVP)
+
+Relay infrastructure (bytebolt-relay) is a future transport lane for ByteBolt
+as a paid reliability feature. It is not required for LocalBolt, bolt-daemon,
+or any current product. See `TRANSPORT_CONTRACT.md` §8 (P2P-First Policy)
+for the normative constraints on relay optionality.
 
 ### Graduation criteria
 

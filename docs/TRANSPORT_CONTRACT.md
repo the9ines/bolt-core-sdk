@@ -141,7 +141,46 @@ The signaling channel is **untrusted**. All sensitive data (identity keys, file 
 
 The Bolt handshake (HELLO exchange, SAS verification) occurs AFTER the transport channel is established. The transport is just a pipe — Bolt does not rely on transport-level authentication (DTLS fingerprints are not used for peer identity).
 
-## 8. Transport Implementations (Non-Normative)
+## 8. P2P-First Policy and Relay Optionality
+
+### Baseline: Direct P2P
+
+All compliant transport implementations MUST support a direct peer-to-peer
+data path as the baseline operating mode. The Bolt protocol assumes that
+file payload bytes flow directly between peers, never through infrastructure
+operated by us.
+
+### Signaling Is Coordination Only
+
+Signaling servers (bolt-rendezvous) are metadata coordination infrastructure.
+They relay opaque signaling payloads (SDP offers/answers, ICE candidates) and
+provide presence notifications. Signaling servers MUST NOT be required to
+store, inspect, or forward file payload bytes.
+
+### Relay Is Optional and Pluggable
+
+Relay transport (e.g., TURN, a managed relay service) is an OPTIONAL
+reliability enhancement. The following constraints apply:
+
+- Relay support MUST be pluggable. Adding or removing relay capability MUST NOT
+  require changes to the Bolt protocol layer or to sealed payload format.
+- Relays MUST forward opaque ciphertext only. A relay MUST NOT require
+  plaintext access to file contents, encryption keys, or transfer metadata.
+- The transport contract MUST NOT hardcode a specific relay vendor or service.
+  SDK consumers MAY run their own relay infrastructure.
+- Products MAY offer relay as a paid feature (e.g., ByteBolt managed relay)
+  but MUST NOT require it for basic P2P operation.
+
+### SDK Consumer Freedom
+
+SDK consumers are free to choose any combination:
+- P2P only (default, no relay infrastructure needed)
+- P2P with consumer-operated relay fallback
+- P2P with a managed relay service (e.g., future ByteBolt relay)
+
+The SDK and protocol layers MUST remain agnostic to this choice.
+
+## 9. Transport Implementations (Non-Normative)
 
 This section lists known and candidate transport implementations. It is informational and does not constrain the protocol.
 
