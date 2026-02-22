@@ -8,6 +8,13 @@ If this document and `PROTOCOL.md` conflict, `PROTOCOL.md` wins.
 
 Protocol version: **1** (`BOLT_VERSION`).
 
+## 0. Authoritative Specification
+
+- Wire-level formats, byte layouts, message schemas, and handshake rules are normative **only** in `PROTOCOL.md`.
+- This document defines SDK implementation invariants, error contract clarifications, and test vector validation rules.
+- If any statement in this document conflicts with `PROTOCOL.md`, `PROTOCOL.md` is authoritative and this document must be corrected.
+- This document MUST NOT duplicate wire schema tables from `PROTOCOL.md`. Implementation-facing summaries reference the spec without replacing it.
+
 ## 1. Box Payload Format
 
 Bolt uses NaCl `crypto_box` (X25519 key agreement + XSalsa20-Poly1305 AEAD).
@@ -233,6 +240,22 @@ Deterministic test vectors are provided in:
 
 These vectors use fixed keypairs and fixed nonces for cross-implementation reproducibility. See `scripts/print-test-vectors.mjs` for generation.
 
-**WARNING: All keypairs in the vector files are TEST-ONLY fixtures. They are public, deterministic, and MUST NEVER be used in production.** They exist solely for cross-implementation conformance verification.
+```
+╔══════════════════════════════════════════════════════════════════╗
+║  TEST FIXTURES ONLY — NEVER USE IN PRODUCTION                  ║
+║                                                                ║
+║  All keypairs in the vector files are deterministic, publicly   ║
+║  known test fixtures. The fixed secret keys (bytes [1..32],     ║
+║  [33..64], [65..96]) are NOT valid cryptographic material for   ║
+║  real deployments. Using them in production is a fatal security ║
+║  error.                                                        ║
+╚══════════════════════════════════════════════════════════════════╝
+```
+
+### CI enforcement
+
+Committed vectors are verified against the generation script in CI via `npm run check-vectors`. If the committed JSON files do not match regenerated output, CI fails.
+
+### Cross-implementation conformance
 
 Any compliant implementation (Rust SDK, libdatachannel peer, webrtc-rs peer) MUST produce identical sealed output given the same inputs and MUST successfully open all valid vectors.

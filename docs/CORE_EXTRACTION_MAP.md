@@ -31,7 +31,7 @@ This means extraction is a clean lift: one canonical source, no reconciliation n
 
 ## 2. Source File Inventory
 
-All paths relative to workspace root `~/Desktop/the9ines.com/localbolt/`.
+All paths relative to workspace root `~/Desktop/the9ines.com/bolt-ecosystem/`.
 
 ### 2.1 TypeScript — Core Protocol Logic
 

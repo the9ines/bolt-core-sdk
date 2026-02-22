@@ -73,7 +73,19 @@ The transport MUST expose at minimum:
 - **Requirements**: Must satisfy the same ordered/reliable/message-framed contract.
 - **Graduation criteria**: See `ECOSYSTEM_STRATEGY.md` § Headless Transport Lane.
 
-## 3. Transport-Agnostic Protocol Messages
+## 3. Binary Encoding Rule
+
+Any transport that serializes Bolt sealed payloads to text (e.g., JSON wire format) MUST use:
+
+- **RFC 4648 standard base64** (alphabet `A-Za-z0-9+/`).
+- Padding with `=` is **required**.
+- **Not base64url.** The `+` and `/` characters are used, not `-` and `_`.
+- Case-sensitive. `A` and `a` are distinct.
+- No whitespace, line breaks, or other formatting characters within the encoded string.
+
+This applies to all sealed payloads, public key encodings, and any other binary-to-text serialization within the Bolt protocol. Switching to base64url or any other encoding variant requires an explicit decision in `PROTOCOL.md` and a protocol version bump.
+
+## 4. Transport-Agnostic Protocol Messages
 
 All Bolt protocol messages (handshake, payload, control) are transport-agnostic:
 
@@ -83,7 +95,7 @@ All Bolt protocol messages (handshake, payload, control) are transport-agnostic:
 
 **Prohibited**: Embedding transport identifiers (e.g., DataChannel labels, SCTP stream IDs) inside sealed payloads.
 
-## 4. LAN-Only Mode
+## 5. LAN-Only Mode
 
 LAN-only operation is enforced at the **signaling and ICE layer**, not by modifying the protocol.
 
@@ -106,7 +118,7 @@ LAN-only operation is enforced at the **signaling and ICE layer**, not by modify
 
 LAN-only is a **deployment policy**, not a protocol feature. The Bolt protocol itself is network-agnostic. A product may choose to enforce LAN-only via signaling policy, or it may allow WAN connectivity via TURN. The sealed payloads are identical in both cases.
 
-## 5. Signaling
+## 6. Signaling
 
 Signaling (SDP offer/answer exchange, ICE candidate relay) is out of scope for the Bolt Core protocol. It is handled by:
 
@@ -115,7 +127,7 @@ Signaling (SDP offer/answer exchange, ICE candidate relay) is out of scope for t
 
 The signaling channel is **untrusted**. All sensitive data (identity keys, file contents) is protected by the Bolt encryption layer, not by signaling channel security.
 
-## 6. Connection Lifecycle
+## 7. Connection Lifecycle
 
 ```
 [Signaling] → ICE gathering → DTLS handshake → SCTP association → DataChannel open
@@ -128,3 +140,54 @@ The signaling channel is **untrusted**. All sensitive data (identity keys, file 
 ```
 
 The Bolt handshake (HELLO exchange, SAS verification) occurs AFTER the transport channel is established. The transport is just a pipe — Bolt does not rely on transport-level authentication (DTLS fingerprints are not used for peer identity).
+
+## 8. Transport Implementations (Non-Normative)
+
+This section lists known and candidate transport implementations. It is informational and does not constrain the protocol.
+
+**Invariant: No transport implementation may require Bolt protocol modification.** If a transport cannot satisfy the requirements in §1 without protocol changes, it is not a compliant transport.
+
+### Browser WebRTC DataChannel (Baseline)
+
+| Property | Value |
+|----------|-------|
+| Status | Production |
+| Ordered | Yes (`ordered: true`) |
+| Reliable | Yes (no `maxRetransmits`/`maxPacketLifeTime`) |
+| Message framing | SCTP native |
+| Products | localbolt, localbolt-app (web), localbolt-v3 |
+
+### libdatachannel (C++/Rust FFI)
+
+| Property | Value |
+|----------|-------|
+| Status | Planned |
+| Ordered | Yes (configurable) |
+| Reliable | Yes (configurable) |
+| Message framing | SCTP native |
+| Interop | Standard SDP/ICE — interoperable with browser WebRTC |
+| Products | localbolt-app (native), bytebolt-app |
+
+### webrtc-rs (Rust-native)
+
+| Property | Value |
+|----------|-------|
+| Status | Candidate (under evaluation) |
+| Ordered | Yes (configurable) |
+| Reliable | Yes (configurable) |
+| Message framing | SCTP native |
+| Interop | Standard SDP/ICE — must demonstrate interop with browser WebRTC |
+| Products | bolt-daemon (target) |
+| Graduation | See `ECOSYSTEM_STRATEGY.md` § Headless Transport Lane |
+
+### QUIC Stream Transport (Future Possibility)
+
+| Property | Value |
+|----------|-------|
+| Status | Not planned — listed for completeness |
+| Ordered | Yes (per-stream) |
+| Reliable | Yes (per-stream) |
+| Message framing | Application-level (QUIC provides byte streams, not messages) |
+| Notes | Would require application-level message length prefixing. No ICE/DTLS — different signaling model. |
+
+QUIC unreliable datagrams do NOT satisfy the Bolt transport contract without an additional ordering and reliability layer.
