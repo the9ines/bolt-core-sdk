@@ -1,0 +1,36 @@
+name: CI (Rust)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'rust/**'
+      - 'ts/bolt-core/__tests__/vectors/**'
+      - '.github/workflows/ci-rust.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'rust/**'
+      - 'ts/bolt-core/__tests__/vectors/**'
+      - '.github/workflows/ci-rust.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  rust-gates:
+    name: Rust fmt, clippy, test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: rust/bolt-core
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - run: cargo fmt --check
+      - run: cargo clippy -- -W clippy::all
+      - run: cargo test

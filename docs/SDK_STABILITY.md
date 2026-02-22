@@ -154,3 +154,16 @@ The daemon operator surface is defined in bolt-daemon's
 
 Changes to this SDK that would break bolt-daemon compatibility MUST be
 coordinated as a MAJOR version bump with corresponding daemon updates.
+
+## 6. Authority
+
+Canonical behavior is defined by the Rust crate (`rust/bolt-core/`),
+golden test vectors, and protocol contracts (`PROTOCOL.md`,
+`TRANSPORT_CONTRACT.md`).
+
+The TypeScript SDK (`@the9ines/bolt-core`) is a supported adapter
+implementation. It MUST produce identical wire-format outputs for
+identical inputs, verified by shared golden vectors.
+
+See [SDK_AUTHORITY.md](SDK_AUTHORITY.md) for the full authority model,
+interop gates, and versioning rules for both implementations.
