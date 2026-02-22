@@ -2,6 +2,23 @@
 
 All notable changes to bolt-core-sdk are documented here. Newest first.
 
+## [ops-20260222-phase4d] - 2026-02-22
+
+### Added
+- `rust/bolt-core/` — Rust crate skeleton (canonical SDK declaration).
+  Constants matching TS SDK. Scaffold only, no crypto primitives yet.
+- `rust/bolt-core/tests/vector_compat.rs` — plumbing gate that parses
+  existing golden vectors and validates structure, fields, counts, and
+  framing invariants. 4 Rust tests.
+- `docs/SDK_AUTHORITY.md` — authority model: Rust canonical, TS adapter,
+  golden vectors as interop gate. Core rule: canonical truth = contracts +
+  vectors + Rust crate.
+- `.github/workflows/ci-rust.yml` — Rust CI (fmt, clippy, test). Additive,
+  does not affect TS CI.
+
+### Changed
+- `docs/SDK_STABILITY.md` — added §6 Authority section.
+
 ## [sdk-v0.1.0-stable-api] - 2026-02-22
 
 ### Added
