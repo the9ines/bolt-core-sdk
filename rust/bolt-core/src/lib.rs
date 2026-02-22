@@ -5,9 +5,12 @@
 //! is a supported adapter implementation that MUST produce identical
 //! outputs for identical inputs, verified by shared golden test vectors.
 //!
-//! **Status:** Scaffold. Crypto primitives are not yet implemented.
-//! The initial deliverable is vector compatibility verification against
-//! the existing TypeScript golden vectors.
+//! **Status:** Vector authority established. The Rust crate can
+//! deterministically reproduce the golden test vectors. Full crypto
+//! primitives (public API) are not yet exposed.
+
+/// Deterministic golden vector generator (test use only).
+pub mod vectors;
 
 /// Protocol constants.
 pub mod constants {
