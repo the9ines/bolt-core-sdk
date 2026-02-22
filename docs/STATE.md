@@ -4,11 +4,12 @@ Current state of the bolt-core-sdk repository.
 
 ## Current Version
 
-**Tag:** `ops-20260222-phase4d`
-**Commit:** `5c009d1`
+**Tag:** `transport-web-v0.1.0`
+**Commit:** `08ff266`
 **Branch:** `main`
 **TS Package:** `@the9ines/bolt-core` v0.1.0
-**Rust Crate:** `bolt-core` v0.1.0 (scaffold)
+**TS Package:** `@the9ines/bolt-transport-web` v0.1.0
+**Rust Crate:** `bolt-core` v0.1.0 (vectors complete)
 
 ## Authority Model
 
@@ -28,7 +29,9 @@ See [SDK_STABILITY.md](SDK_STABILITY.md) for the stability contract.
 | Bolt Core v1 spec | Draft (`PROTOCOL.md`) |
 | LocalBolt Profile v1 spec | Draft (`LOCALBOLT_PROFILE.md`) |
 | TypeScript SDK (`@the9ines/bolt-core`) | Published (v0.1.0) |
-| Rust crate (`bolt-core`) | Scaffold (`rust/bolt-core/`) |
+| Transport Web (`@the9ines/bolt-transport-web`) | **Published (v0.1.0)** |
+| Rust crate (`bolt-core`) | Vectors complete (`rust/bolt-core/`) |
+| Rust vector generator | Complete (`rust/bolt-core/src/vectors.rs`) |
 | SDK Authority Model | Complete (`docs/SDK_AUTHORITY.md`) |
 | SDK Stability Contract | Complete (`docs/SDK_STABILITY.md`) |
 | Transport Contract | Complete (`docs/TRANSPORT_CONTRACT.md`) |
@@ -36,13 +39,15 @@ See [SDK_STABILITY.md](SDK_STABILITY.md) for the stability contract.
 | Interop Test Plan | Complete (`docs/INTEROP_TEST_PLAN.md`) |
 | Golden test vectors | Complete (`ts/bolt-core/__tests__/vectors/`) |
 | Vector compatibility gate (Rust) | Complete (`rust/bolt-core/tests/vector_compat.rs`) |
+| Vector equivalence gate (Rust) | Complete (`rust/bolt-core/tests/vector_equivalence.rs`) |
 | API surface guard (TS) | Complete (`scripts/audit-exports.mjs`) |
 | Rust CI workflow | Complete (`.github/workflows/ci-rust.yml`) |
+| Transport-web publish workflow | Complete (`.github/workflows/publish-transport-web.yml`) |
 
 ## Test Summary
 
 - TypeScript: 66 tests (vitest), 6 test files
-- Rust: 4 tests (1 unit + 3 vector compat)
+- Rust: 6 tests (1 unit + 3 vector compat + 2 vector equivalence)
 - Golden vector suites: box-payload, framing
 - API surface drift detection: `npm run audit-exports`
 
@@ -56,13 +61,15 @@ See [SDK_STABILITY.md](SDK_STABILITY.md) for the stability contract.
 | Phase 2D | Transport conformance hardening | Complete |
 | Phase 4B | P2P-first transport docs | Complete |
 | Phase 4C | Freeze SDK public API surface | Complete |
-| Phase 4D | Rust canonical SDK declaration | **Complete** |
+| Phase 4D | Rust canonical SDK declaration | Complete |
+| Phase 4E | Rust becomes vector authority | Complete |
+| Phase 4F | Extract shared browser transport | **Complete** (published, products pending) |
 
 ## Downstream Consumers
 
-| Repo | Pinned SDK Version |
-|------|--------------------|
-| localbolt | `0.0.5` (upgrade to 0.1.0 pending) |
-| localbolt-app | `0.0.5` (upgrade to 0.1.0 pending) |
-| localbolt-v3 | `0.0.5` (upgrade to 0.1.0 pending) |
-| bolt-daemon | Compatible (Rust, consumes same types) |
+| Repo | bolt-core Version | bolt-transport-web Version |
+|------|-------------------|---------------------------|
+| localbolt | `0.0.5` (upgrade pending) | local copies (migration pending) |
+| localbolt-app | `0.0.5` (upgrade pending) | local copies (migration pending) |
+| localbolt-v3 | `0.0.5` (upgrade pending) | local copies (migration pending) |
+| bolt-daemon | Compatible (Rust) | N/A |

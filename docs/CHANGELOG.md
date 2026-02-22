@@ -2,6 +2,39 @@
 
 All notable changes to bolt-core-sdk are documented here. Newest first.
 
+## [ops-20260222-phase4e] - 2026-02-22
+
+### Added
+- `rust/bolt-core/src/vectors.rs` — deterministic golden vector generator
+  in Rust. Reproduces all 12 vectors (4 box-payload, 4 corrupt, 4 framing)
+  byte-for-byte equivalent to TypeScript output.
+- `rust/bolt-core/tests/vector_equivalence.rs` — semantic JSON equivalence
+  gate comparing Rust-generated vectors against committed golden vectors.
+- `crypto_box` and `base64` dependencies for NaCl box operations in Rust.
+
+## [transport-web-v0.1.0] - 2026-02-22
+
+### Added
+- `ts/bolt-transport-web/` — new package `@the9ines/bolt-transport-web`.
+  Extracts 17 shared browser source files from localbolt, localbolt-app,
+  and localbolt-v3 into a single published npm package.
+- Components: `createDeviceDiscovery`, `createFileUpload`,
+  `createTransferProgress`, `createConnectionStatus`.
+- Services: `WebRTCService`, `WebSocketSignaling`, `DualSignaling`.
+- Signaling types: `SignalingProvider`, `SignalMessage`, `DiscoveredDevice`.
+- State: `store`, `AppState`, `ConnectionRequest`.
+- UI: `icons`, `showToast`.
+- Lib: `escapeHTML`, `detectDevice`, `getLocalOnlyRTCConfig`,
+  `isPrivateIP`, `isLocalCandidate`.
+- Error types: `SignalingError` (new), plus re-exports from bolt-core.
+- `ts/bolt-transport-web/API.md` — full exported symbol reference.
+- `.github/workflows/publish-transport-web.yml` — CI publish workflow
+  for `transport-web-v*` tags with smoke test.
+
+### Fixed
+- `.github/workflows/publish-bolt-core.yml` — removed invalid
+  `working-directory: /tmp/smoke-test` from smoke test step.
+
 ## [ops-20260222-phase4d] - 2026-02-22
 
 ### Added
