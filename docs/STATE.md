@@ -63,13 +63,14 @@ See [SDK_STABILITY.md](SDK_STABILITY.md) for the stability contract.
 | Phase 4C | Freeze SDK public API surface | Complete |
 | Phase 4D | Rust canonical SDK declaration | Complete |
 | Phase 4E | Rust becomes vector authority | Complete |
-| Phase 4F | Extract shared browser transport | **Complete** (published, products pending) |
+| Phase 4F | Extract shared browser transport | **Complete** (published, consumed by all 3 products) |
+| Phase 4G | Cross-repo transport verification | **Complete** (parity confirmed, drift guards installed) |
 
 ## Downstream Consumers
 
-| Repo | bolt-core Version | bolt-transport-web Version |
-|------|-------------------|---------------------------|
-| localbolt | `0.0.5` (upgrade pending) | local copies (migration pending) |
-| localbolt-app | `0.0.5` (upgrade pending) | local copies (migration pending) |
-| localbolt-v3 | `0.0.5` (upgrade pending) | local copies (migration pending) |
-| bolt-daemon | Compatible (Rust) | N/A |
+| Repo | bolt-core Version | bolt-transport-web Version | Drift Guard |
+|------|-------------------|---------------------------|-------------|
+| localbolt | `0.0.5` | `0.1.0` | CI active |
+| localbolt-app | `0.0.5` | `0.1.0` | CI active |
+| localbolt-v3 | `0.0.5` | `0.1.0` | CI active |
+| bolt-daemon | Compatible (Rust) | N/A | N/A |
