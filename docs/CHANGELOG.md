@@ -2,6 +2,29 @@
 
 All notable changes to bolt-core-sdk are documented here. Newest first.
 
+## [transport-web-v0.1.1-security-hardening] - 2026-02-23
+
+### Fixed
+- **S7: Ephemeral key lifecycle** — `WebRTCService` no longer generates keys
+  at construction. Keys are generated per session in `connect()` / `handleOffer()`,
+  and zeroed + discarded in `disconnect()`. Prevents key reuse across sessions.
+- **S6: Filename XSS** — `transfer-progress.ts` and `toast.ts` now pass
+  user-controlled strings through `escapeHTML()` before insertion into innerHTML.
+  Guards against reflected XSS via crafted filenames.
+- Null-guard on `this.keyPair` in `sendFile()` and `receiveChunk()` —
+  throws `EncryptionError` if key material is missing.
+
+### Added
+- `src/__tests__/security.test.ts` — 17 tests covering S7 ephemeral key
+  lifecycle (7 tests) and S6 escapeHTML / showToast XSS safety (10 tests).
+  Uses vitest + jsdom.
+- `vitest.config.ts` — test configuration (jsdom environment).
+- `package.json` test script (`vitest run`), jsdom and vitest devDependencies.
+- `tsconfig.build.json` excludes `src/__tests__` from production build.
+
+### Changed
+- `@the9ines/bolt-transport-web` version bumped from `0.1.0` to `0.1.1`.
+
 ## [sdk-v0.1.2-sas-canonical] - 2026-02-23
 
 ### Removed

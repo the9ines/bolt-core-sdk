@@ -4,11 +4,11 @@ Current state of the bolt-core-sdk repository.
 
 ## Current Version
 
-**Tag:** `sdk-v0.1.2-sas-canonical`
-**Commit:** `a127693`
+**Tag:** `transport-web-v0.1.1-security-hardening`
+**Commit:** `7ae0c4e`
 **Branch:** `main`
 **TS Package:** `@the9ines/bolt-core` v0.1.0
-**TS Package:** `@the9ines/bolt-transport-web` v0.1.0
+**TS Package:** `@the9ines/bolt-transport-web` v0.1.1
 **Rust Crate:** `bolt-core` v0.1.0 (vectors complete, constants aligned)
 
 ## Authority Model
@@ -29,7 +29,7 @@ See [SDK_STABILITY.md](SDK_STABILITY.md) for the stability contract.
 | Bolt Core v1 spec | Draft (`PROTOCOL.md`) |
 | LocalBolt Profile v1 spec | Draft (`LOCALBOLT_PROFILE.md`) |
 | TypeScript SDK (`@the9ines/bolt-core`) | Published (v0.1.0) |
-| Transport Web (`@the9ines/bolt-transport-web`) | **Published (v0.1.0)** |
+| Transport Web (`@the9ines/bolt-transport-web`) | **Published (v0.1.1)** |
 | Rust crate (`bolt-core`) | Vectors complete (`rust/bolt-core/`) |
 | Rust vector generator | Complete (`rust/bolt-core/src/vectors.rs`) |
 | SDK Authority Model | Complete (`docs/SDK_AUTHORITY.md`) |
@@ -50,7 +50,8 @@ See [SDK_STABILITY.md](SDK_STABILITY.md) for the stability contract.
 
 ## Test Summary
 
-- TypeScript: 66 tests (vitest), 6 test files
+- TypeScript (bolt-core): 66 tests (vitest), 6 test files
+- TypeScript (bolt-transport-web): 17 tests (vitest, jsdom)
 - Rust: 7 tests (2 unit + 3 vector compat + 2 vector equivalence)
 - Golden vector suites: box-payload, framing
 - API surface drift detection: `npm run audit-exports`
@@ -73,6 +74,7 @@ See [SDK_STABILITY.md](SDK_STABILITY.md) for the stability contract.
 | Phase 4H | Release pipeline hardening | **Complete** (upgrade protocol, pin + single-install CI guards) |
 | Phase 6A.1 | Constants alignment (Rust → TS canonical) | **Complete** (PEER_CODE, SAS, alphabet) |
 | Phase 6A.2 | SAS canonicalization | **Complete** (shadow SAS removed, enforcement script) |
+| Phase 6B | Web transport security hardening | **Complete** (S7 ephemeral key lifecycle, S6 filename XSS, 17 tests) |
 
 ## Downstream Consumers
 
