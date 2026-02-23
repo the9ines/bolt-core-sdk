@@ -2,6 +2,33 @@
 
 All notable changes to bolt-core-sdk are documented here. Newest first.
 
+## [sdk-v0.1.2-sas-canonical] - 2026-02-23
+
+### Removed
+- `getVerificationCode()` from `ts/bolt-transport-web/src/services/webrtc/WebRTCService.ts`.
+  Shadow SAS implementation using ephemeral-only keys (diverges from spec).
+  Zero callers across ecosystem. `computeSas()` in bolt-core is the ONLY
+  canonical SAS implementation.
+
+### Added
+- `scripts/verify-no-shadow-sas.sh` — enforcement script ensuring no SAS
+  logic exists in bolt-transport-web.
+- Canonical note in `ts/bolt-core/src/sas.ts` documenting single-source rule.
+
+## [sdk-v0.1.1-constants-alignment] - 2026-02-23
+
+### Fixed
+- Rust `PEER_CODE_LENGTH`: 4 → 6 (aligned to TS canonical value).
+- Rust `SAS_LENGTH`: 4 → 6 (aligned to TS canonical value).
+- Rust `PEER_CODE_ALPHABET`: 36-char ambiguous → 31-char unambiguous
+  (removes 0/O, 1/I/L, aligned to TS canonical value).
+- `PROTOCOL.md` §14: "(32 chars)" → "(31 chars, unambiguous subset: no 0/O, 1/I/L)".
+
+### Added
+- `peer_code_alphabet_length` test asserting 31 chars and no ambiguous characters.
+- `scripts/verify-constants.sh` — cross-language (Rust ↔ TS) constants verification.
+- Root `package.json` with `verify:constants`, `verify:no-shadow-sas`, `verify:all` scripts.
+
 ## [ops-20260222-phase4e] - 2026-02-22
 
 ### Added

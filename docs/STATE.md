@@ -4,12 +4,12 @@ Current state of the bolt-core-sdk repository.
 
 ## Current Version
 
-**Tag:** `transport-web-v0.1.0`
-**Commit:** `08ff266`
+**Tag:** `sdk-v0.1.2-sas-canonical`
+**Commit:** `a127693`
 **Branch:** `main`
 **TS Package:** `@the9ines/bolt-core` v0.1.0
 **TS Package:** `@the9ines/bolt-transport-web` v0.1.0
-**Rust Crate:** `bolt-core` v0.1.0 (vectors complete)
+**Rust Crate:** `bolt-core` v0.1.0 (vectors complete, constants aligned)
 
 ## Authority Model
 
@@ -44,13 +44,17 @@ See [SDK_STABILITY.md](SDK_STABILITY.md) for the stability contract.
 | Rust CI workflow | Complete (`.github/workflows/ci-rust.yml`) |
 | Transport-web publish workflow | Complete (`.github/workflows/publish-transport-web.yml`) |
 | Transport upgrade protocol | Complete (`docs/TRANSPORT_UPGRADE_PROTOCOL.md`) |
+| Constants verification script | Complete (`scripts/verify-constants.sh`) |
+| Shadow SAS enforcement script | Complete (`scripts/verify-no-shadow-sas.sh`) |
+| Root verify scripts (npm) | Complete (`package.json` — `verify:all`) |
 
 ## Test Summary
 
 - TypeScript: 66 tests (vitest), 6 test files
-- Rust: 6 tests (1 unit + 3 vector compat + 2 vector equivalence)
+- Rust: 7 tests (2 unit + 3 vector compat + 2 vector equivalence)
 - Golden vector suites: box-payload, framing
 - API surface drift detection: `npm run audit-exports`
+- Cross-language verification: `npm run verify:all`
 
 ## Phase Status
 
@@ -67,6 +71,8 @@ See [SDK_STABILITY.md](SDK_STABILITY.md) for the stability contract.
 | Phase 4F | Extract shared browser transport | **Complete** (published, consumed by all 3 products) |
 | Phase 4G | Cross-repo transport verification | **Complete** (parity confirmed, drift guards installed) |
 | Phase 4H | Release pipeline hardening | **Complete** (upgrade protocol, pin + single-install CI guards) |
+| Phase 6A.1 | Constants alignment (Rust → TS canonical) | **Complete** (PEER_CODE, SAS, alphabet) |
+| Phase 6A.2 | SAS canonicalization | **Complete** (shadow SAS removed, enforcement script) |
 
 ## Downstream Consumers
 
