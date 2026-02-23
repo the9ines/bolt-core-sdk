@@ -4,4 +4,6 @@ export { generateEphemeralKeyPair, sealBoxPayload, openBoxPayload } from './cryp
 export { generateSecurePeerCode, generateLongPeerCode, isValidPeerCode, normalizePeerCode, } from './peer-code.js';
 export { sha256, bufferToHex, hashFile } from './hash.js';
 export { computeSas } from './sas.js';
+export { generateIdentityKeyPair, KeyMismatchError } from './identity.js';
+export type { IdentityKeyPair } from './identity.js';
 export { BoltError, EncryptionError, ConnectionError, TransferError } from './errors.js';

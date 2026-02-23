@@ -1,6 +1,8 @@
-import { sealBoxPayload, openBoxPayload, generateEphemeralKeyPair, toBase64, fromBase64, DEFAULT_CHUNK_SIZE, EncryptionError } from '@the9ines/bolt-core';
+import { sealBoxPayload, openBoxPayload, generateEphemeralKeyPair, toBase64, fromBase64, DEFAULT_CHUNK_SIZE, EncryptionError, KeyMismatchError } from '@the9ines/bolt-core';
 import { WebRTCError, ConnectionError, SignalingError, TransferError } from '../../types/webrtc-errors.js';
 import { getLocalOnlyRTCConfig } from '../../lib/platform-utils.js';
+import { verifyPinnedIdentity } from '../identity/pin-store.js';
+import type { PinPersistence } from '../identity/pin-store.js';
 import type { SignalingProvider, SignalMessage } from '../signaling/index.js';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -39,6 +41,15 @@ interface FileChunkMessage {
   resumed?: boolean;
 }
 
+export interface WebRTCServiceOptions {
+  /** Local identity public key to send in encrypted HELLO. */
+  identityPublicKey?: Uint8Array;
+  /** Pin store for TOFU peer identity verification. */
+  pinStore?: PinPersistence;
+}
+
+const HELLO_TIMEOUT_MS = 5000;
+
 // ─── WebRTCService ──────────────────────────────────────────────────────────
 
 class WebRTCService {
@@ -76,15 +87,24 @@ class WebRTCService {
   private connectReject: ((err: Error) => void) | null = null;
   private connectTimeout: ReturnType<typeof setTimeout> | null = null;
 
+  // HELLO / TOFU state
+  private options: WebRTCServiceOptions;
+  private helloComplete = false;
+  private sessionLegacy = false;
+  private helloTimeout: ReturnType<typeof setTimeout> | null = null;
+  private helloResolve: (() => void) | null = null;
+
   constructor(
     signaling: SignalingProvider,
     private localPeerCode: string,
     private onReceiveFile: (file: Blob, filename: string) => void,
     private onError: (error: WebRTCError) => void,
-    onProgress?: (progress: TransferProgress) => void
+    onProgress?: (progress: TransferProgress) => void,
+    options?: WebRTCServiceOptions,
   ) {
     console.log('[INIT] WebRTCService with peer code:', localPeerCode);
     this.onProgressCallback = onProgress;
+    this.options = options ?? {};
     this.signaling = signaling;
     this.signaling.onSignal((signal) => this.handleSignal(signal));
   }
@@ -275,7 +295,10 @@ class WebRTCService {
     this.dc = channel;
     this.dc.binaryType = 'arraybuffer';
     this.dc.onmessage = (event) => this.handleMessage(event);
-    this.dc.onopen = () => console.log('[DC] Data channel open');
+    this.dc.onopen = () => {
+      console.log('[DC] Data channel open');
+      this.initiateHello();
+    };
     this.dc.onclose = () => console.log('[DC] Data channel closed');
     this.dc.onerror = (e) => console.error('[DC] Error:', e);
   }
@@ -318,6 +341,102 @@ class WebRTCService {
         this.disconnect();
       }
     }
+  }
+
+  // ─── HELLO Protocol ──────────────────────────────────────────────────────
+
+  private initiateHello() {
+    if (!this.options.identityPublicKey || !this.keyPair || !this.remotePublicKey) {
+      // No identity configured — this node operates in legacy mode
+      this.helloComplete = true;
+      this.sessionLegacy = true;
+      console.log('[HELLO] No identity configured, skipping HELLO');
+      return;
+    }
+
+    // Send encrypted HELLO over DataChannel
+    const hello = JSON.stringify({
+      type: 'hello',
+      version: 1,
+      identityPublicKey: toBase64(this.options.identityPublicKey),
+    });
+    const plaintext = new TextEncoder().encode(hello);
+    const encrypted = sealBoxPayload(plaintext, this.remotePublicKey, this.keyPair.secretKey);
+    this.dc!.send(JSON.stringify({ type: 'hello', payload: encrypted }));
+    console.log('[HELLO] Sent encrypted HELLO');
+
+    // Start timeout — if remote doesn't send HELLO, treat as legacy
+    this.helloTimeout = setTimeout(() => {
+      if (!this.helloComplete) {
+        console.warn('[TOFU_LEGACY_PEER] No HELLO received within timeout, treating as legacy peer');
+        this.helloComplete = true;
+        this.sessionLegacy = true;
+        if (this.helloResolve) {
+          this.helloResolve();
+          this.helloResolve = null;
+        }
+      }
+    }, HELLO_TIMEOUT_MS);
+  }
+
+  private async processHello(msg: { type: 'hello'; payload: string }) {
+    if (!this.keyPair || !this.remotePublicKey) {
+      console.warn('[HELLO] Cannot decrypt — no ephemeral keys');
+      return;
+    }
+
+    const decrypted = openBoxPayload(msg.payload, this.remotePublicKey, this.keyPair.secretKey);
+    const hello = JSON.parse(new TextDecoder().decode(decrypted));
+
+    if (hello.type !== 'hello' || hello.version !== 1 || !hello.identityPublicKey) {
+      console.warn('[HELLO] Invalid HELLO format, ignoring');
+      return;
+    }
+
+    const remoteIdentityKey = fromBase64(hello.identityPublicKey);
+    console.log('[HELLO] Received identity from peer', this.remotePeerCode);
+
+    // TOFU verification
+    if (this.options.pinStore) {
+      const result = await verifyPinnedIdentity(
+        this.options.pinStore,
+        this.remotePeerCode,
+        remoteIdentityKey,
+      );
+      if (result === 'pinned') {
+        console.log('[TOFU] First contact — pinned identity for', this.remotePeerCode);
+      } else {
+        console.log('[TOFU] Identity verified for', this.remotePeerCode);
+      }
+    }
+
+    // HELLO complete
+    if (this.helloTimeout) {
+      clearTimeout(this.helloTimeout);
+      this.helloTimeout = null;
+    }
+    this.helloComplete = true;
+    this.sessionLegacy = false;
+    if (this.helloResolve) {
+      this.helloResolve();
+      this.helloResolve = null;
+    }
+  }
+
+  /**
+   * Wait for the HELLO handshake to complete (or legacy timeout).
+   * Returns immediately if already complete.
+   */
+  waitForHello(): Promise<void> {
+    if (this.helloComplete) return Promise.resolve();
+    return new Promise<void>((resolve) => {
+      this.helloResolve = resolve;
+    });
+  }
+
+  /** Whether the remote peer was identified as legacy (no HELLO). */
+  isLegacySession(): boolean {
+    return this.sessionLegacy;
   }
 
   async connect(remotePeerCode: string): Promise<void> {
@@ -392,11 +511,25 @@ class WebRTCService {
     this.transferPaused = false;
     this.transferCancelled = false;
     this.receiveBuffers.clear();
+
+    // Clear HELLO / TOFU state
+    if (this.helloTimeout) {
+      clearTimeout(this.helloTimeout);
+      this.helloTimeout = null;
+    }
+    this.helloComplete = false;
+    this.sessionLegacy = false;
+    this.helloResolve = null;
   }
 
   // ─── File Transfer (Send) ──────────────────────────────────────────────
 
   async sendFile(file: File): Promise<void> {
+    // Wait for HELLO handshake before allowing file transfer
+    if (!this.helloComplete) {
+      await this.waitForHello();
+    }
+
     if (!this.dc || this.dc.readyState !== 'open') {
       throw new TransferError('Data channel not open');
     }
@@ -470,7 +603,22 @@ class WebRTCService {
 
   private handleMessage(event: MessageEvent) {
     try {
-      const msg: FileChunkMessage = JSON.parse(event.data);
+      const msg = JSON.parse(event.data);
+
+      // Route HELLO messages (encrypted identity exchange)
+      if (msg.type === 'hello' && msg.payload) {
+        this.processHello(msg).catch((error) => {
+          if (error instanceof KeyMismatchError) {
+            console.error('[TOFU] IDENTITY MISMATCH — aborting session:', error.message);
+            this.onError(new ConnectionError('Identity key mismatch (TOFU violation)', error));
+            this.disconnect();
+          } else {
+            console.error('[HELLO] Failed to process:', error);
+          }
+        });
+        return;
+      }
+
       if (msg.type !== 'file-chunk' || !msg.filename) return;
 
       // Control messages

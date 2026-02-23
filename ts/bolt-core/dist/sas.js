@@ -1,5 +1,8 @@
 import { sha256, bufferToHex } from './hash.js';
 import { PUBLIC_KEY_LENGTH, SAS_LENGTH } from './constants.js';
+// CANONICAL: computeSas() is the ONLY SAS implementation in the Bolt ecosystem.
+// SAS verification is not yet surfaced in products. No SAS logic may exist in
+// transport or product packages. See scripts/verify-no-shadow-sas.sh.
 /**
  * Lexicographically sort two 32-byte values and concatenate them.
  */

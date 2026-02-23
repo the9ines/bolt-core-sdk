@@ -10,5 +10,7 @@ export { generateSecurePeerCode, generateLongPeerCode, isValidPeerCode, normaliz
 export { sha256, bufferToHex, hashFile } from './hash.js';
 // SAS
 export { computeSas } from './sas.js';
+// Identity
+export { generateIdentityKeyPair, KeyMismatchError } from './identity.js';
 // Errors
 export { BoltError, EncryptionError, ConnectionError, TransferError } from './errors.js';

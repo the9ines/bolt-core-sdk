@@ -1,6 +1,6 @@
 {
   "name": "@the9ines/bolt-transport-web",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Shared browser transport, signaling, and UI components for Bolt-based web applications",
   "type": "module",
   "main": "./dist/index.js",
@@ -18,10 +18,10 @@
     "prepublishOnly": "npm run clean && npm run build"
   },
   "peerDependencies": {
-    "@the9ines/bolt-core": ">=0.0.5"
+    "@the9ines/bolt-core": ">=0.2.0"
   },
   "devDependencies": {
-    "@the9ines/bolt-core": "0.1.0",
+    "@the9ines/bolt-core": "file:../bolt-core",
     "jsdom": "^25.0.1",
     "typescript": "^5.5.3",
     "vitest": "^4.0.18"

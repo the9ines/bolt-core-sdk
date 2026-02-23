@@ -30,5 +30,9 @@ export { sha256, bufferToHex, hashFile } from './hash.js';
 // SAS
 export { computeSas } from './sas.js';
 
+// Identity
+export { generateIdentityKeyPair, KeyMismatchError } from './identity.js';
+export type { IdentityKeyPair } from './identity.js';
+
 // Errors
 export { BoltError, EncryptionError, ConnectionError, TransferError } from './errors.js';
