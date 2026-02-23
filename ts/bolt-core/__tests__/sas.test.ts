@@ -52,4 +52,42 @@ describe('computeSas', () => {
     await expect(computeSas(shortKey, keyB, ephA, ephB)).rejects.toThrow('32 bytes');
     await expect(computeSas(keyA, keyB, shortKey, ephB)).rejects.toThrow('32 bytes');
   });
+
+  // ─── Golden Vector ──────────────────────────────────────────────────────
+
+  it('golden vector — fixed keys produce known SAS "65434F"', async () => {
+    const sas = await computeSas(keyA, keyB, ephA, ephB);
+    expect(sas).toBe('65434F');
+  });
+
+  it('cross-side equality — swapping A/B roles matches golden vector', async () => {
+    const forward = await computeSas(keyA, keyB, ephA, ephB);
+    const reverse = await computeSas(keyB, keyA, ephB, ephA);
+    expect(forward).toBe(reverse);
+    expect(forward).toBe('65434F');
+  });
+
+  it('sensitivity — changing one byte in any input changes SAS', async () => {
+    const baseline = await computeSas(keyA, keyB, ephA, ephB);
+
+    // Mutate identity key A (byte 15)
+    const mutA = Uint8Array.from(keyA);
+    mutA[15] = 0xFF;
+    expect(await computeSas(mutA, keyB, ephA, ephB)).not.toBe(baseline);
+
+    // Mutate identity key B (byte 15)
+    const mutB = Uint8Array.from(keyB);
+    mutB[15] = 0xFF;
+    expect(await computeSas(keyA, mutB, ephA, ephB)).not.toBe(baseline);
+
+    // Mutate ephemeral key A (byte 15)
+    const mutEA = Uint8Array.from(ephA);
+    mutEA[15] = 0xFF;
+    expect(await computeSas(keyA, keyB, mutEA, ephB)).not.toBe(baseline);
+
+    // Mutate ephemeral key B (byte 15)
+    const mutEB = Uint8Array.from(ephB);
+    mutEB[15] = 0xFF;
+    expect(await computeSas(keyA, keyB, ephA, mutEB)).not.toBe(baseline);
+  });
 });

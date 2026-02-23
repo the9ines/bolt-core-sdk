@@ -12,19 +12,21 @@ export { detectDeviceType, getDeviceName } from './services/signaling/device-det
 
 // WebRTC
 export { default as WebRTCService } from './services/webrtc/WebRTCService.js';
-export type { TransferProgress, TransferStats, WebRTCServiceOptions } from './services/webrtc/WebRTCService.js';
+export type { TransferProgress, TransferStats, WebRTCServiceOptions, VerificationInfo, VerificationState } from './services/webrtc/WebRTCService.js';
 
 // Identity & TOFU
 export { IndexedDBIdentityStore, MemoryIdentityStore, getOrCreateIdentity } from './services/identity/identity-store.js';
 export type { IdentityPersistence } from './services/identity/identity-store.js';
 export { IndexedDBPinStore, MemoryPinStore, verifyPinnedIdentity } from './services/identity/pin-store.js';
-export type { PinPersistence } from './services/identity/pin-store.js';
+export type { PinPersistence, PinRecord, PinVerifyResult } from './services/identity/pin-store.js';
 
 // ── Components ───────────────────────────────────────────────────────────────
 export { createDeviceDiscovery } from './components/device-discovery.js';
 export { createFileUpload, setWebrtcRef } from './components/file-upload.js';
 export { createTransferProgress } from './components/transfer-progress.js';
 export { createConnectionStatus } from './components/connection-status.js';
+export { createVerificationStatus } from './components/verification-status.js';
+export type { VerificationStatusOptions } from './components/verification-status.js';
 
 // ── State ────────────────────────────────────────────────────────────────────
 export { store } from './state/store.js';

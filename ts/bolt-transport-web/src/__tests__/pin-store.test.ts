@@ -19,8 +19,10 @@ describe('MemoryPinStore', () => {
     const key = randomKey();
     await store.setPin('PEER01', key);
 
-    const loaded = await store.getPin('PEER01');
-    expect(loaded).toEqual(key);
+    const pin = await store.getPin('PEER01');
+    expect(pin).not.toBeNull();
+    expect(pin!.identityPub).toEqual(key);
+    expect(pin!.verified).toBe(false);
   });
 
   it('removes a pin', async () => {
@@ -37,30 +39,32 @@ describe('MemoryPinStore', () => {
     await store.setPin('PEER01', k1);
     await store.setPin('PEER02', k2);
 
-    expect(await store.getPin('PEER01')).toEqual(k1);
-    expect(await store.getPin('PEER02')).toEqual(k2);
+    expect((await store.getPin('PEER01'))!.identityPub).toEqual(k1);
+    expect((await store.getPin('PEER02'))!.identityPub).toEqual(k2);
   });
 });
 
 describe('verifyPinnedIdentity', () => {
-  it('pins on first contact and returns "pinned"', async () => {
+  it('pins on first contact and returns outcome "pinned"', async () => {
     const store = new MemoryPinStore();
     const key = randomKey();
 
     const result = await verifyPinnedIdentity(store, 'NEWPEER', key);
-    expect(result).toBe('pinned');
+    expect(result).toEqual({ outcome: 'pinned' });
 
-    // Key is now stored
-    expect(await store.getPin('NEWPEER')).toEqual(key);
+    // Key is now stored with verified=false
+    const pin = await store.getPin('NEWPEER');
+    expect(pin!.identityPub).toEqual(key);
+    expect(pin!.verified).toBe(false);
   });
 
-  it('returns "verified" when pinned key matches', async () => {
+  it('returns outcome "verified" when pinned key matches', async () => {
     const store = new MemoryPinStore();
     const key = randomKey();
     await store.setPin('PEER01', key);
 
     const result = await verifyPinnedIdentity(store, 'PEER01', key);
-    expect(result).toBe('verified');
+    expect(result).toEqual({ outcome: 'verified', verified: false });
   });
 
   it('throws KeyMismatchError when pinned key differs', async () => {

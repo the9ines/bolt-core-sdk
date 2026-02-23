@@ -1,4 +1,4 @@
-import { sealBoxPayload, openBoxPayload, generateEphemeralKeyPair, toBase64, fromBase64, DEFAULT_CHUNK_SIZE, EncryptionError, KeyMismatchError } from '@the9ines/bolt-core';
+import { sealBoxPayload, openBoxPayload, generateEphemeralKeyPair, toBase64, fromBase64, DEFAULT_CHUNK_SIZE, EncryptionError, KeyMismatchError, computeSas } from '@the9ines/bolt-core';
 import { WebRTCError, ConnectionError, SignalingError, TransferError } from '../../types/webrtc-errors.js';
 import { getLocalOnlyRTCConfig } from '../../lib/platform-utils.js';
 import { verifyPinnedIdentity } from '../identity/pin-store.js';
@@ -41,11 +41,20 @@ interface FileChunkMessage {
   resumed?: boolean;
 }
 
+export type VerificationState = 'unverified' | 'verified' | 'legacy';
+
+export interface VerificationInfo {
+  state: VerificationState;
+  sasCode: string | null;
+}
+
 export interface WebRTCServiceOptions {
   /** Local identity public key to send in encrypted HELLO. */
   identityPublicKey?: Uint8Array;
   /** Pin store for TOFU peer identity verification. */
   pinStore?: PinPersistence;
+  /** Callback fired when verification state changes (after HELLO or on legacy timeout). */
+  onVerificationState?: (info: VerificationInfo) => void;
 }
 
 const HELLO_TIMEOUT_MS = 5000;
@@ -93,6 +102,10 @@ class WebRTCService {
   private sessionLegacy = false;
   private helloTimeout: ReturnType<typeof setTimeout> | null = null;
   private helloResolve: (() => void) | null = null;
+
+  // SAS verification state
+  private remoteIdentityKey: Uint8Array | null = null;
+  private verificationInfo: VerificationInfo = { state: 'legacy', sasCode: null };
 
   constructor(
     signaling: SignalingProvider,
@@ -350,6 +363,8 @@ class WebRTCService {
       // No identity configured — this node operates in legacy mode
       this.helloComplete = true;
       this.sessionLegacy = true;
+      this.verificationInfo = { state: 'legacy', sasCode: null };
+      this.options.onVerificationState?.(this.verificationInfo);
       console.log('[HELLO] No identity configured, skipping HELLO');
       return;
     }
@@ -371,6 +386,8 @@ class WebRTCService {
         console.warn('[TOFU_LEGACY_PEER] No HELLO received within timeout, treating as legacy peer');
         this.helloComplete = true;
         this.sessionLegacy = true;
+        this.verificationInfo = { state: 'legacy', sasCode: null };
+        this.options.onVerificationState?.(this.verificationInfo);
         if (this.helloResolve) {
           this.helloResolve();
           this.helloResolve = null;
@@ -394,21 +411,43 @@ class WebRTCService {
     }
 
     const remoteIdentityKey = fromBase64(hello.identityPublicKey);
+    this.remoteIdentityKey = remoteIdentityKey;
     console.log('[HELLO] Received identity from peer', this.remotePeerCode);
 
-    // TOFU verification
+    // TOFU verification — determines verification state
+    let verificationState: VerificationState = 'unverified';
+
     if (this.options.pinStore) {
       const result = await verifyPinnedIdentity(
         this.options.pinStore,
         this.remotePeerCode,
         remoteIdentityKey,
       );
-      if (result === 'pinned') {
+      // KeyMismatchError propagates to caller (handleMessage catch → abort session)
+      if (result.outcome === 'pinned') {
         console.log('[TOFU] First contact — pinned identity for', this.remotePeerCode);
+        verificationState = 'unverified';
       } else {
         console.log('[TOFU] Identity verified for', this.remotePeerCode);
+        verificationState = result.verified ? 'verified' : 'unverified';
       }
     }
+
+    // Compute SAS — only when all 4 keys are available (never in legacy path)
+    let sasCode: string | null = null;
+    if (this.options.identityPublicKey && this.keyPair && this.remotePublicKey) {
+      sasCode = await computeSas(
+        this.options.identityPublicKey,
+        remoteIdentityKey,
+        this.keyPair.publicKey,
+        this.remotePublicKey,
+      );
+      console.log('[SAS] Computed verification code:', sasCode);
+    }
+
+    // Emit verification state exactly once per HELLO
+    this.verificationInfo = { state: verificationState, sasCode };
+    this.options.onVerificationState?.(this.verificationInfo);
 
     // HELLO complete
     if (this.helloTimeout) {
@@ -512,7 +551,7 @@ class WebRTCService {
     this.transferCancelled = false;
     this.receiveBuffers.clear();
 
-    // Clear HELLO / TOFU state
+    // Clear HELLO / TOFU / SAS state
     if (this.helloTimeout) {
       clearTimeout(this.helloTimeout);
       this.helloTimeout = null;
@@ -520,6 +559,8 @@ class WebRTCService {
     this.helloComplete = false;
     this.sessionLegacy = false;
     this.helloResolve = null;
+    this.remoteIdentityKey = null;
+    this.verificationInfo = { state: 'legacy', sasCode: null };
   }
 
   // ─── File Transfer (Send) ──────────────────────────────────────────────
@@ -770,6 +811,19 @@ class WebRTCService {
 
   setConnectionStateHandler(handler: (state: RTCPeerConnectionState) => void) {
     this.connectionStateHandler = handler;
+  }
+
+  /** Get current SAS verification state. */
+  getVerificationInfo(): VerificationInfo {
+    return this.verificationInfo;
+  }
+
+  /** Mark the current peer as verified. Persists to pin store. */
+  async markPeerVerified(): Promise<void> {
+    if (!this.options.pinStore || !this.remotePeerCode) return;
+    await this.options.pinStore.markVerified(this.remotePeerCode);
+    this.verificationInfo = { ...this.verificationInfo, state: 'verified' };
+    this.options.onVerificationState?.(this.verificationInfo);
   }
 }
 

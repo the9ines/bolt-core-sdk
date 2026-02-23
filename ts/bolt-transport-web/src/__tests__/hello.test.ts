@@ -87,8 +87,12 @@ describe('HELLO + TOFU pin verification', () => {
     const identity = generateIdentityKeyPair();
 
     const result = await verifyPinnedIdentity(store, 'REMOTE01', identity.publicKey);
-    expect(result).toBe('pinned');
-    expect(await store.getPin('REMOTE01')).toEqual(identity.publicKey);
+    expect(result).toEqual({ outcome: 'pinned' });
+
+    // Key is now stored with verified=false
+    const pin = await store.getPin('REMOTE01');
+    expect(pin!.identityPub).toEqual(identity.publicKey);
+    expect(pin!.verified).toBe(false);
   });
 
   it('verifies pinned identity on subsequent HELLO', async () => {
@@ -97,7 +101,7 @@ describe('HELLO + TOFU pin verification', () => {
 
     await verifyPinnedIdentity(store, 'REMOTE01', identity.publicKey);
     const result = await verifyPinnedIdentity(store, 'REMOTE01', identity.publicKey);
-    expect(result).toBe('verified');
+    expect(result).toEqual({ outcome: 'verified', verified: false });
   });
 
   it('rejects mismatched identity (fail-closed)', async () => {
