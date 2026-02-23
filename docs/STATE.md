@@ -43,6 +43,7 @@ See [SDK_STABILITY.md](SDK_STABILITY.md) for the stability contract.
 | API surface guard (TS) | Complete (`scripts/audit-exports.mjs`) |
 | Rust CI workflow | Complete (`.github/workflows/ci-rust.yml`) |
 | Transport-web publish workflow | Complete (`.github/workflows/publish-transport-web.yml`) |
+| Transport upgrade protocol | Complete (`docs/TRANSPORT_UPGRADE_PROTOCOL.md`) |
 
 ## Test Summary
 
@@ -65,12 +66,13 @@ See [SDK_STABILITY.md](SDK_STABILITY.md) for the stability contract.
 | Phase 4E | Rust becomes vector authority | Complete |
 | Phase 4F | Extract shared browser transport | **Complete** (published, consumed by all 3 products) |
 | Phase 4G | Cross-repo transport verification | **Complete** (parity confirmed, drift guards installed) |
+| Phase 4H | Release pipeline hardening | **Complete** (upgrade protocol, pin + single-install CI guards) |
 
 ## Downstream Consumers
 
-| Repo | bolt-core Version | bolt-transport-web Version | Drift Guard |
-|------|-------------------|---------------------------|-------------|
-| localbolt | `0.0.5` | `0.1.0` | CI active |
-| localbolt-app | `0.0.5` | `0.1.0` | CI active |
-| localbolt-v3 | `0.0.5` | `0.1.0` | CI active |
-| bolt-daemon | Compatible (Rust) | N/A | N/A |
+| Repo | bolt-core Version | bolt-transport-web Version | Drift Guard | Pin Guard | Single-Install Guard |
+|------|-------------------|---------------------------|-------------|-----------|---------------------|
+| localbolt | `0.0.5` | `0.1.0` | CI active | CI active | CI active |
+| localbolt-app | `0.0.5` | `0.1.0` | CI active | CI active | CI active |
+| localbolt-v3 | `0.0.5` | `0.1.0` | CI active | CI active | CI active |
+| bolt-daemon | Compatible (Rust) | N/A | N/A | N/A | N/A |
