@@ -2,6 +2,76 @@
 
 All notable changes to bolt-core-sdk are documented here. Newest first.
 
+## [sdk-v0.2.0-identity-primitives / transport-web-v0.2.0-hello-tofu-foundation] - 2026-02-23
+
+Phase 7A: Encrypted HELLO and TOFU identity pinning.
+
+### Added (bolt-core)
+- `src/identity.ts` — X25519 identity keypair generation (`generateIdentityKeyPair`)
+  and `KeyMismatchError` for TOFU violations. Identity keys are long-lived and
+  persisted by the transport layer. They MUST NOT traverse the signaling server.
+- `IdentityKeyPair` type, `generateIdentityKeyPair`, `KeyMismatchError` exported
+  from package index.
+- `__tests__/identity.test.ts` — 4 tests (keypair generation, distinctness,
+  non-zero, KeyMismatchError semantics).
+- `export-snapshot.json` updated with `generateIdentityKeyPair` and
+  `KeyMismatchError`.
+- Canonical comment added to `dist/sas.js`.
+
+### Added (bolt-transport-web)
+- `src/services/identity/identity-store.ts` — `IdentityPersistence` interface,
+  `IndexedDBIdentityStore` (browser), `MemoryIdentityStore` (tests),
+  `getOrCreateIdentity()` helper. Manages long-lived local identity keypairs.
+- `src/services/identity/pin-store.ts` — `PinPersistence` interface,
+  `IndexedDBPinStore` (browser), `MemoryPinStore` (tests),
+  `verifyPinnedIdentity()` — TOFU verification (pin on first contact,
+  verify on subsequent, fail-closed `KeyMismatchError` on mismatch).
+- `src/__tests__/hello.test.ts` — 6 tests covering encrypted HELLO message
+  round-trip, wrong-key rejection, identity-not-in-outer-envelope,
+  full two-peer HELLO exchange, HELLO+TOFU pin/verify/reject integration.
+- `src/__tests__/identity-store.test.ts` — 5 tests for MemoryIdentityStore
+  and getOrCreateIdentity.
+- `src/__tests__/pin-store.test.ts` — 10 tests for MemoryPinStore and
+  verifyPinnedIdentity (pin, verify, reject, KeyMismatchError fields).
+- `WebRTCServiceOptions` interface — `identityPublicKey` and `pinStore`
+  constructor options.
+- `WebRTCService` HELLO protocol: encrypted HELLO sent over DataChannel
+  on open, `processHello()` decrypts and runs TOFU verification,
+  5s legacy timeout for peers without HELLO support, `waitForHello()`
+  gate before file transfer, `isLegacySession()` accessor.
+- TOFU violation handling: `KeyMismatchError` triggers `ConnectionError`
+  and `disconnect()`.
+- Identity & TOFU symbols exported from package index.
+
+### Changed
+- `@the9ines/bolt-core` version bumped from `0.1.0` to `0.2.0`.
+- `@the9ines/bolt-transport-web` version bumped from `0.1.1` to `0.2.0`.
+- `@the9ines/bolt-transport-web` peerDependency on bolt-core raised to `>=0.2.0`.
+- bolt-core devDependency linked via `file:../bolt-core` for monorepo development.
+
+### Files Changed
+- `ts/bolt-core/src/identity.ts` (new)
+- `ts/bolt-core/src/index.ts`
+- `ts/bolt-core/dist/identity.js` (new)
+- `ts/bolt-core/dist/identity.d.ts` (new)
+- `ts/bolt-core/dist/index.js`
+- `ts/bolt-core/dist/index.d.ts`
+- `ts/bolt-core/dist/sas.js`
+- `ts/bolt-core/package.json`
+- `ts/bolt-core/scripts/export-snapshot.json`
+- `ts/bolt-core/__tests__/identity.test.ts` (new)
+- `ts/bolt-transport-web/src/services/identity/identity-store.ts` (new)
+- `ts/bolt-transport-web/src/services/identity/pin-store.ts` (new)
+- `ts/bolt-transport-web/src/services/webrtc/WebRTCService.ts`
+- `ts/bolt-transport-web/src/index.ts`
+- `ts/bolt-transport-web/src/__tests__/hello.test.ts` (new)
+- `ts/bolt-transport-web/src/__tests__/identity-store.test.ts` (new)
+- `ts/bolt-transport-web/src/__tests__/pin-store.test.ts` (new)
+- `ts/bolt-transport-web/package.json`
+- `ts/bolt-transport-web/package-lock.json`
+
+**Commit:** `192424b`
+
 ## [transport-web-v0.1.1-security-hardening] - 2026-02-23
 
 ### Fixed
