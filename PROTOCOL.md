@@ -564,7 +564,7 @@ Implementations MAY wrap these in language-specific error types.
 | `DEFAULT_CHUNK_SIZE` | 16384 bytes |
 | `TRANSFER_ID_LENGTH` | 16 bytes |
 | `PEER_CODE_LENGTH` | 6 characters |
-| `PEER_CODE_ALPHABET` | `ABCDEFGHJKMNPQRSTUVWXYZ23456789` (32 chars) |
+| `PEER_CODE_ALPHABET` | `ABCDEFGHJKMNPQRSTUVWXYZ23456789` (31 chars, unambiguous subset: no 0/O, 1/I/L) |
 | `SAS_LENGTH` | 6 hex characters (uppercase) |
 | `SAS_ENTROPY` | 24 bits |
 | `FILE_HASH_ALGORITHM` | SHA-256 |

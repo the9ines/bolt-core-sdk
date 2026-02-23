@@ -1,0 +1,10 @@
+{
+  "private": true,
+  "name": "bolt-core-sdk",
+  "description": "Bolt Protocol SDK — cross-language verification scripts",
+  "scripts": {
+    "verify:constants": "bash scripts/verify-constants.sh",
+    "verify:no-shadow-sas": "bash scripts/verify-no-shadow-sas.sh",
+    "verify:all": "npm run verify:constants && npm run verify:no-shadow-sas"
+  }
+}

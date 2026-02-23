@@ -27,13 +27,13 @@ pub mod constants {
     pub const DEFAULT_CHUNK_SIZE: usize = 16_384;
 
     /// Peer code length (characters).
-    pub const PEER_CODE_LENGTH: usize = 4;
+    pub const PEER_CODE_LENGTH: usize = 6;
 
-    /// Peer code alphabet.
-    pub const PEER_CODE_ALPHABET: &str = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    /// Peer code alphabet (31 chars, unambiguous base32 subset: no 0/O, 1/I/L).
+    pub const PEER_CODE_ALPHABET: &str = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
 
-    /// SAS (Short Authentication String) length in characters.
-    pub const SAS_LENGTH: usize = 4;
+    /// SAS (Short Authentication String) length in hex characters.
+    pub const SAS_LENGTH: usize = 6;
 
     /// NaCl box overhead (Poly1305 MAC).
     pub const BOX_OVERHEAD: usize = 16;
@@ -49,9 +49,20 @@ mod tests {
         assert_eq!(PUBLIC_KEY_LENGTH, 32);
         assert_eq!(SECRET_KEY_LENGTH, 32);
         assert_eq!(DEFAULT_CHUNK_SIZE, 16_384);
-        assert_eq!(PEER_CODE_LENGTH, 4);
-        assert_eq!(PEER_CODE_ALPHABET, "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789");
-        assert_eq!(SAS_LENGTH, 4);
+        assert_eq!(PEER_CODE_LENGTH, 6);
+        assert_eq!(PEER_CODE_ALPHABET, "ABCDEFGHJKMNPQRSTUVWXYZ23456789");
+        assert_eq!(SAS_LENGTH, 6);
         assert_eq!(BOX_OVERHEAD, 16);
+    }
+
+    #[test]
+    fn peer_code_alphabet_length() {
+        assert_eq!(PEER_CODE_ALPHABET.len(), 31);
+        // Must not contain ambiguous characters: 0, O, 1, I, L
+        assert!(!PEER_CODE_ALPHABET.contains('0'));
+        assert!(!PEER_CODE_ALPHABET.contains('O'));
+        assert!(!PEER_CODE_ALPHABET.contains('1'));
+        assert!(!PEER_CODE_ALPHABET.contains('I'));
+        assert!(!PEER_CODE_ALPHABET.contains('L'));
     }
 }
