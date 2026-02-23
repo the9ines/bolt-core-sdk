@@ -1,3 +1,5 @@
+import { escapeHTML } from '../lib/sanitize.js';
+
 let container: HTMLElement | null = null;
 
 function getContainer(): HTMLElement {
@@ -24,8 +26,8 @@ export function showToast(
   `;
 
   toast.innerHTML = `
-    <p class="text-sm font-medium">${title}</p>
-    ${description ? `<p class="text-xs mt-0.5 opacity-70">${description}</p>` : ''}
+    <p class="text-sm font-medium">${escapeHTML(title)}</p>
+    ${description ? `<p class="text-xs mt-0.5 opacity-70">${escapeHTML(description)}</p>` : ''}
   `;
 
   const parent = getContainer();

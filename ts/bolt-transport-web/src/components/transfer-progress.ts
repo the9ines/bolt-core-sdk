@@ -1,4 +1,5 @@
 import { icons } from '../ui/icons.js';
+import { escapeHTML } from '../lib/sanitize.js';
 import type { TransferProgress } from '../services/webrtc/WebRTCService.js';
 
 function formatSpeed(bytesPerSecond: number): string {
@@ -45,7 +46,7 @@ export function createTransferProgress(
     <div class="flex items-center gap-2 w-full bg-dark-accent rounded-lg p-3">
       ${icons.file('w-5 h-5 shrink-0 text-white/50')}
       <div class="flex flex-col flex-1 min-w-0">
-        <span class="truncate text-sm">${progress.filename}</span>
+        <span class="truncate text-sm">${escapeHTML(progress.filename)}</span>
         <span class="text-xs text-white/50">${formatSize(progress.loaded)} of ${formatSize(progress.total)} (${pct}%)</span>
       </div>
     </div>

@@ -47,8 +47,8 @@ class WebRTCService {
   private dc: RTCDataChannel | null = null;
   private signaling: SignalingProvider;
 
-  // Encryption
-  private keyPair: { publicKey: Uint8Array; secretKey: Uint8Array };
+  // Encryption — generated per session in connect() / handleOffer()
+  private keyPair: { publicKey: Uint8Array; secretKey: Uint8Array } | null = null;
   private remotePublicKey: Uint8Array | null = null;
 
   // Peer codes
@@ -84,7 +84,6 @@ class WebRTCService {
     onProgress?: (progress: TransferProgress) => void
   ) {
     console.log('[INIT] WebRTCService with peer code:', localPeerCode);
-    this.keyPair = generateEphemeralKeyPair();
     this.onProgressCallback = onProgress;
     this.signaling = signaling;
     this.signaling.onSignal((signal) => this.handleSignal(signal));
@@ -124,6 +123,7 @@ class WebRTCService {
   }
 
   private async handleOffer(signal: SignalMessage) {
+    this.keyPair = generateEphemeralKeyPair();
     console.log('[SIGNALING] Processing offer from', signal.from);
     this.remotePublicKey = fromBase64(signal.data.publicKey);
 
@@ -137,7 +137,7 @@ class WebRTCService {
 
     await this.sendSignal('answer', {
       answer,
-      publicKey: toBase64(this.keyPair.publicKey),
+      publicKey: toBase64(this.keyPair!.publicKey),
       peerCode: this.localPeerCode,
     }, signal.from);
 
@@ -321,6 +321,7 @@ class WebRTCService {
   }
 
   async connect(remotePeerCode: string): Promise<void> {
+    this.keyPair = generateEphemeralKeyPair();
     console.log('[WEBRTC] Connecting to peer:', remotePeerCode);
     this.remotePeerCode = remotePeerCode;
     const pc = this.createPeerConnection();
@@ -334,7 +335,7 @@ class WebRTCService {
 
     await this.sendSignal('offer', {
       offer,
-      publicKey: toBase64(this.keyPair.publicKey),
+      publicKey: toBase64(this.keyPair!.publicKey),
       peerCode: this.localPeerCode,
     }, remotePeerCode);
 
@@ -361,6 +362,11 @@ class WebRTCService {
 
   disconnect() {
     console.log('[WEBRTC] Disconnecting');
+    // Zero and discard ephemeral key material
+    if (this.keyPair) {
+      this.keyPair.secretKey.fill(0);
+      this.keyPair = null;
+    }
     // Clear any pending connect promise
     if (this.connectTimeout) clearTimeout(this.connectTimeout);
     this.connectResolve = null;
@@ -419,6 +425,7 @@ class WebRTCService {
         const end = Math.min(start + DEFAULT_CHUNK_SIZE, file.size);
         const raw = new Uint8Array(await file.slice(start, end).arrayBuffer());
 
+        if (!this.keyPair) throw new EncryptionError('No ephemeral key pair');
         const encrypted = sealBoxPayload(raw, this.remotePublicKey!, this.keyPair.secretKey);
 
         const msg: FileChunkMessage = {
@@ -511,6 +518,7 @@ class WebRTCService {
     }
 
     try {
+      if (!this.keyPair) throw new EncryptionError('No ephemeral key pair');
       const decrypted = openBoxPayload(chunk, this.remotePublicKey, this.keyPair.secretKey);
       const buffer = this.receiveBuffers.get(filename)!;
       buffer[chunkIndex] = new Blob([decrypted as BlobPart]);
