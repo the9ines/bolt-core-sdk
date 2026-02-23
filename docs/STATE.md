@@ -4,11 +4,11 @@ Current state of the bolt-core-sdk repository.
 
 ## Current Version
 
-**Tags:** `sdk-v0.2.0-identity-primitives`, `transport-web-v0.2.0-hello-tofu-foundation`
-**Commit:** `192424b`
+**Tags:** `transport-web-v0.3.0-sas-verification`
+**Commit:** `ec0b878`
 **Branch:** `main`
 **TS Package:** `@the9ines/bolt-core` v0.2.0
-**TS Package:** `@the9ines/bolt-transport-web` v0.2.0
+**TS Package:** `@the9ines/bolt-transport-web` v0.3.0
 **Rust Crate:** `bolt-core` v0.1.0 (vectors complete, constants aligned)
 
 ## Authority Model
@@ -29,7 +29,7 @@ See [SDK_STABILITY.md](SDK_STABILITY.md) for the stability contract.
 | Bolt Core v1 spec | Draft (`PROTOCOL.md`) |
 | LocalBolt Profile v1 spec | Draft (`LOCALBOLT_PROFILE.md`) |
 | TypeScript SDK (`@the9ines/bolt-core`) | Published (v0.2.0) |
-| Transport Web (`@the9ines/bolt-transport-web`) | **Published (v0.2.0)** |
+| Transport Web (`@the9ines/bolt-transport-web`) | **Published (v0.3.0)** |
 | Rust crate (`bolt-core`) | Vectors complete (`rust/bolt-core/`) |
 | Rust vector generator | Complete (`rust/bolt-core/src/vectors.rs`) |
 | SDK Authority Model | Complete (`docs/SDK_AUTHORITY.md`) |
@@ -51,11 +51,14 @@ See [SDK_STABILITY.md](SDK_STABILITY.md) for the stability contract.
 | Identity persistence (transport-web) | Complete (`src/services/identity/identity-store.ts`) |
 | TOFU pin store (transport-web) | Complete (`src/services/identity/pin-store.ts`) |
 | HELLO protocol (transport-web) | Complete (`WebRTCService` — encrypted identity exchange) |
+| SAS verification (transport-web) | Complete (`WebRTCService` — computeSas after TOFU, verification UI) |
+| Pin store schema v2 (transport-web) | Complete (`pin-store.ts` — PinRecord with verified flag, lazy migration) |
+| Verification status component (transport-web) | Complete (`verification-status.ts` — imperative DOM component) |
 
 ## Test Summary
 
-- TypeScript (bolt-core): 70 tests (vitest), 7 test files
-- TypeScript (bolt-transport-web): 38 tests (vitest, jsdom)
+- TypeScript (bolt-core): 73 tests (vitest), 8 test files
+- TypeScript (bolt-transport-web): 53 tests (vitest, jsdom)
 - Rust: 7 tests (2 unit + 3 vector compat + 2 vector equivalence)
 - Golden vector suites: box-payload, framing
 - API surface drift detection: `npm run audit-exports`
@@ -80,6 +83,7 @@ See [SDK_STABILITY.md](SDK_STABILITY.md) for the stability contract.
 | Phase 6A.2 | SAS canonicalization | **Complete** (shadow SAS removed, enforcement script) |
 | Phase 6B | Web transport security hardening | **Complete** (S7 ephemeral key lifecycle, S6 filename XSS, 17 tests) |
 | Phase 7A | Encrypted HELLO + TOFU identity pinning | **Complete** (identity primitives, HELLO protocol, pin stores, 21 new tests) |
+| Phase 7B | SAS verification surface | **Complete** (pin store schema evolution, SAS after HELLO, verification UI, 15 new tests) |
 
 ## Downstream Consumers
 

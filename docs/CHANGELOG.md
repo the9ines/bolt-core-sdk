@@ -2,6 +2,43 @@
 
 All notable changes to bolt-core-sdk are documented here. Newest first.
 
+## [transport-web-v0.3.0-sas-verification] - 2026-02-23
+
+Phase 7B: Surface SAS verification to users.
+
+Surfaces the existing canonical `computeSas()` to users without modifying
+the SAS algorithm. Adds pin store schema evolution, SAS computation in
+WebRTCService after HELLO, verification status UI component, and golden
+vector tests.
+
+### Added (bolt-core)
+- 3 golden vector tests (`65434F` from fixed keys) for SAS computation.
+- `sas.ts` untouched — canonical implementation unchanged.
+
+### Added (bolt-transport-web)
+- `PinRecord` with `verified` boolean, `PinVerifyResult` type,
+  `markVerified()` in pin store.
+- IndexedDB lazy migration from v1 string format with immediate writeback.
+- `WebRTCService`: `computeSas` after TOFU, `VerificationInfo` /
+  `VerificationState` types, `onVerificationState` callback,
+  `getVerificationInfo()`, `markPeerVerified()`.
+- `verification-status.ts` — imperative DOM component
+  (verified / unverified / legacy states).
+- New public exports: `VerificationInfo`, `VerificationState`, `PinRecord`,
+  `PinVerifyResult`, `createVerificationStatus`, `VerificationStatusOptions`.
+
+### Changed
+- `@the9ines/bolt-transport-web` version bumped from `0.2.0` to `0.3.0`
+  (new public API surface).
+
+### Tests
+- bolt-core: 73 tests (was 70, +3 SAS golden vector tests).
+- bolt-transport-web: 53 tests (was 38, +15 verification tests).
+- `verify-no-shadow-sas`: PASS.
+- `verify-constants`: PASS.
+
+**Commit:** `ec0b878`
+
 ## [sdk-v0.2.0-identity-primitives / transport-web-v0.2.0-hello-tofu-foundation] - 2026-02-23
 
 Phase 7A: Encrypted HELLO and TOFU identity pinning.
