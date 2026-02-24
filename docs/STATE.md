@@ -5,11 +5,11 @@ Current state of the bolt-core-sdk repository.
 ## Current Version
 
 **Tags:** `sdk-v0.4.0-dead-exports-cleanup`
-**Commit:** `2ed5cce`
+**Commit:** `064bfe0`
 **Branch:** `main`
 **TS Package:** `@the9ines/bolt-core` v0.4.0 (dead exports removed, 21 public exports)
 **TS Package:** `@the9ines/bolt-transport-web` v0.6.0 (Profile Envelope v1)
-**Rust Crate:** `bolt-core` v0.3.0 (R2 identity + sas + hash parity, 7/8 modules complete)
+**Rust Crate:** `bolt-core` v0.4.0 (R0-R3 complete, all 8 modules at full TS parity)
 
 ## Authority Model
 
@@ -30,7 +30,7 @@ See [SDK_STABILITY.md](SDK_STABILITY.md) for the stability contract.
 | LocalBolt Profile v1 spec | Draft (`LOCALBOLT_PROFILE.md`) |
 | TypeScript SDK (`@the9ines/bolt-core`) | Published (v0.4.0) |
 | Transport Web (`@the9ines/bolt-transport-web`) | **v0.6.0** (Profile Envelope v1) |
-| Rust crate (`bolt-core`) | v0.3.0 — hash, identity, sas, encoding, crypto complete (`rust/bolt-core/`) |
+| Rust crate (`bolt-core`) | v0.4.0 — all 8 modules complete, full TS parity (`rust/bolt-core/`) |
 | Rust vector generator | Complete (`rust/bolt-core/src/vectors.rs`) |
 | SDK Authority Model | Complete (`docs/SDK_AUTHORITY.md`) |
 | SDK Stability Contract | Complete (`docs/SDK_STABILITY.md`) |
@@ -71,7 +71,7 @@ See [SDK_STABILITY.md](SDK_STABILITY.md) for the stability contract.
 
 - TypeScript (bolt-core): 76 tests (vitest), 7 test files
 - TypeScript (bolt-transport-web): 117 tests (vitest, jsdom), 11 test files
-- Rust: 52 tests (47 unit + 3 vector compat + 2 vector equivalence)
+- Rust: 59 tests (54 unit + 3 vector compat + 2 vector equivalence)
 - Golden vector suites: box-payload, framing
 - API surface drift detection: `npm run audit-exports`
 - Cross-language verification: `npm run verify:all`
@@ -108,6 +108,7 @@ See [SDK_STABILITY.md](SDK_STABILITY.md) for the stability contract.
 | Phase R0 | Rust core scaffold + CI gates | **Complete** (8 modules, feature-gated vectors, lean default deps, 28 tests) |
 | Phase R1 | Rust crypto + encoding parity | **Complete** (base64, seal/open, keygen, 41 tests, golden vector parity) |
 | Phase R2 | Rust identity + sas + hash parity | **Complete** (sha256, identity keygen, compute_sas, 52 tests) |
+| Phase R3 | Rust peer code generation parity | **Complete** (rejection sampling, all 8 modules complete, 59 tests) |
 
 ## Downstream Consumers
 

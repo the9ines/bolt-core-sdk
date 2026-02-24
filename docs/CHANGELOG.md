@@ -2,6 +2,27 @@
 
 All notable changes to bolt-core-sdk are documented here. Newest first.
 
+## [Rust Core R3 Peer Code Generation Parity] - 2026-02-24
+
+Implement peer code generation in the Rust crate using rejection sampling,
+closing the R0-R3 migration. All 8 modules now at full parity with TS.
+
+### Changed (Rust crate)
+- `bolt-core` v0.3.0 → v0.4.0 (all modules complete).
+- Module status: `peer_code` marked Complete in `lib.rs`.
+
+### Added (Rust crate)
+- `peer_code::generate_secure_peer_code()` — 6-char code via rejection
+  sampling (REJECTION_MAX=248, no modulo bias).
+- `peer_code::generate_long_peer_code()` — `XXXX-XXXX` format (8 chars + dash).
+- `peer_code::fill_unbiased()` internal helper — batch rejection sampling
+  matching TS `fillUnbiased()`.
+- 7 new unit tests (length, alphabet, format, dash position, validation,
+  rejection max constant).
+- Tests: 54 unit (default), 59 total (with vectors feature).
+
+**Commits:** `baa361f` (R3), `064bfe0` (merge)
+
 ## [Rust Core R2 Identity + SAS + Hash Parity] - 2026-02-24
 
 Implement SHA-256 hashing, identity keypair generation, and SAS computation
