@@ -9,7 +9,7 @@ Current state of the bolt-core-sdk repository.
 **Branch:** `main`
 **TS Package:** `@the9ines/bolt-core` v0.4.0 (dead exports removed, 21 public exports)
 **TS Package:** `@the9ines/bolt-transport-web` v0.6.0 (Profile Envelope v1)
-**Rust Crate:** `bolt-core` v0.1.0 (vectors complete, constants aligned)
+**Rust Crate:** `bolt-core` v0.1.1 (R0 scaffold, 8 modules, feature-gated vectors)
 
 ## Authority Model
 
@@ -64,12 +64,14 @@ See [SDK_STABILITY.md](SDK_STABILITY.md) for the stability contract.
 | File integrity verification (spec) | Complete (`LOCALBOLT_PROFILE.md` §13 — capability gate, wire format, backward compat) |
 | Audit tracker | Complete (`docs/AUDIT_TRACKER.md` — 26 findings, 22 DONE, 3 DEFERRED) |
 | Security posture declaration | Complete (`docs/SECURITY_POSTURE.md` — WebRTC DataChannel profile) |
+| Rust core plan | Complete (`docs/ecosystem/RUST_CORE_PLAN.md` — crate layout, API, phased milestones) |
+| Ecosystem docs index | Complete (`docs/ecosystem/README.md`) |
 
 ## Test Summary
 
 - TypeScript (bolt-core): 76 tests (vitest), 7 test files
 - TypeScript (bolt-transport-web): 117 tests (vitest, jsdom), 11 test files
-- Rust: 7 tests (2 unit + 3 vector compat + 2 vector equivalence)
+- Rust: 28 tests (23 unit + 3 vector compat + 2 vector equivalence)
 - Golden vector suites: box-payload, framing
 - API surface drift detection: `npm run audit-exports`
 - Cross-language verification: `npm run verify:all`
@@ -103,6 +105,7 @@ See [SDK_STABILITY.md](SDK_STABILITY.md) for the stability contract.
 | Phase M1 | Profile Envelope v1 | **Complete** (bolt.envelope capability, versioned metadata wrapping, 14 new tests) |
 | Phase M2 | File integrity hash wiring | **Complete** (bolt.file-hash capability, SHA-256 verification, fail-closed, 16 new tests) |
 | Phase A1 | Export governance + dead-export cleanup | **Complete** (7 unused constants removed from public API, 28→21 exports, v0.3.0→v0.4.0) |
+| Phase R0 | Rust core scaffold + CI gates | **Complete** (8 modules, feature-gated vectors, lean default deps, 28 tests) |
 
 ## Downstream Consumers
 
