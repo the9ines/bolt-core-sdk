@@ -2,6 +2,28 @@
 
 All notable changes to bolt-core-sdk are documented here. Newest first.
 
+## [Rust Core R0 Scaffold + Ecosystem Docs] - 2026-02-24
+
+Rust canonical core crate scaffold (Phase R0) and ecosystem docs landing.
+
+### Added (Rust crate)
+- Scaffolded `rust/bolt-core` v0.1.1 with 8 module files: `constants.rs`,
+  `errors.rs`, `encoding.rs`, `crypto.rs`, `hash.rs`, `identity.rs`,
+  `sas.rs`, `peer_code.rs`. All stubs except constants, errors, hex
+  encoding, peer code validation, and normalize.
+- Feature-gated `vectors` module behind `vectors` cargo feature
+  (crypto_box, base64, serde, serde_json are optional).
+- CI tightened: clippy `-D warnings`, dual-pass (default + vectors).
+- 23 unit tests (default), 28 total (with vectors feature).
+
+### Added (Docs)
+- `docs/ecosystem/README.md` — cross-repo docs index.
+- `docs/ecosystem/RUST_CORE_PLAN.md` — Rust canonical core design memo
+  (crate layout, API surface, interop strategy, phased milestones R0-R4,
+  invariants, risks, non-goals).
+
+**Commits:** `cb17b6a` (R0), `ae2477a` (R0.1), `08c0f7b` (merge)
+
 ## [Audit Close + Security Posture Baseline] - 2026-02-24
 
 Docs-only. Formal audit closeout and security posture declaration.
