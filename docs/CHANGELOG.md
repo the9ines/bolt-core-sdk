@@ -2,6 +2,32 @@
 
 All notable changes to bolt-core-sdk are documented here. Newest first.
 
+## [transport-web-v0.4.2-strict-handshake-gating] - 2026-02-23
+
+Phase 8D: Strict Handshake Gating (S4 audit item close).
+
+Makes receive-side handshake gating fail-closed. Any non-HELLO message
+received before `helloComplete` now triggers `[INVALID_STATE]` error,
+sends plaintext error control message, and calls `disconnect()`.
+
+### Changed (bolt-transport-web)
+- `handleMessage()` now rejects all non-HELLO messages before
+  `helloComplete` with `ConnectionError`, error control message
+  (`{ type: "error", code: "INVALID_STATE" }`), and `disconnect()`.
+- Previously: non-HELLO messages were silently ignored (control messages
+  like `paused`/`cancelled` could mutate transfer state pre-handshake).
+- Version bumped from `0.4.1` to `0.4.2`.
+
+### Changed (LOCALBOLT_PROFILE.md)
+- HELLO Exchange section: added normative MUST/SHOULD for pre-handshake
+  rejection and note on plaintext error format.
+
+### Tests
+- New: `webrtcservice-handshake-gating.test.ts` (6 tests).
+- Updated: `webrtcservice-lifecycle.test.ts` (added `helloComplete = true`
+  to control message routing test for Phase 8D compatibility).
+- bolt-transport-web: 80 tests (was 74, +6 handshake gating tests).
+
 ## [transport-web-v0.4.1-lifecycle-tests] - 2026-02-23
 
 Phase 8B.1: WebRTCService Test Harness + Lifecycle Coverage.

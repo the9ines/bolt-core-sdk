@@ -4,11 +4,11 @@ Current state of the bolt-core-sdk repository.
 
 ## Current Version
 
-**Tags:** `transport-web-v0.4.1-lifecycle-tests`
-**Commit:** `154685c`
+**Tags:** `transport-web-v0.4.2-strict-handshake-gating`
+**Commit:** `03729de`
 **Branch:** `main`
 **TS Package:** `@the9ines/bolt-core` v0.2.0
-**TS Package:** `@the9ines/bolt-transport-web` v0.4.1
+**TS Package:** `@the9ines/bolt-transport-web` v0.4.2
 **Rust Crate:** `bolt-core` v0.1.0 (vectors complete, constants aligned)
 
 ## Authority Model
@@ -29,7 +29,7 @@ See [SDK_STABILITY.md](SDK_STABILITY.md) for the stability contract.
 | Bolt Core v1 spec | Draft (`PROTOCOL.md`) |
 | LocalBolt Profile v1 spec | Draft (`LOCALBOLT_PROFILE.md`) |
 | TypeScript SDK (`@the9ines/bolt-core`) | Published (v0.2.0) |
-| Transport Web (`@the9ines/bolt-transport-web`) | **v0.4.1** (lifecycle tests) |
+| Transport Web (`@the9ines/bolt-transport-web`) | **v0.4.2** (strict handshake gating) |
 | Rust crate (`bolt-core`) | Vectors complete (`rust/bolt-core/`) |
 | Rust vector generator | Complete (`rust/bolt-core/src/vectors.rs`) |
 | SDK Authority Model | Complete (`docs/SDK_AUTHORITY.md`) |
@@ -55,11 +55,12 @@ See [SDK_STABILITY.md](SDK_STABILITY.md) for the stability contract.
 | Pin store schema v2 (transport-web) | Complete (`pin-store.ts` — PinRecord with verified flag, lazy migration) |
 | Verification status component (transport-web) | Complete (`verification-status.ts` — imperative DOM component) |
 | Replay protection (transport-web) | Complete (`WebRTCService` — transferId, dedup, bounds, identity binding) |
+| Strict handshake gating (transport-web) | Complete (`WebRTCService` — INVALID_STATE + disconnect for pre-handshake messages) |
 
 ## Test Summary
 
 - TypeScript (bolt-core): 73 tests (vitest), 8 test files
-- TypeScript (bolt-transport-web): 74 tests (vitest, jsdom)
+- TypeScript (bolt-transport-web): 80 tests (vitest, jsdom)
 - Rust: 7 tests (2 unit + 3 vector compat + 2 vector equivalence)
 - Golden vector suites: box-payload, framing
 - API surface drift detection: `npm run audit-exports`
@@ -87,6 +88,7 @@ See [SDK_STABILITY.md](SDK_STABILITY.md) for the stability contract.
 | Phase 7B | SAS verification surface | **Complete** (pin store schema evolution, SAS after HELLO, verification UI, 15 new tests) |
 | Phase 8A | Replay protection + chunk bounds | **Complete** (transferId, dedup, bounds, identity binding, legacy compat, 9 new tests) |
 | Phase 8B.1 | WebRTCService lifecycle test coverage | **Complete** (12 tests: sender flow, receiver paths, control msgs, cleanup, error paths) |
+| Phase 8D | Strict handshake gating (S4 close) | **Complete** (fail-closed INVALID_STATE + disconnect, 6 new tests) |
 
 ## Downstream Consumers
 
