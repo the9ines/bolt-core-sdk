@@ -1,3 +1,4 @@
+#![cfg(feature = "vectors")]
 //! Vector equivalence gate.
 //!
 //! Regenerates golden vectors from Rust and compares against committed

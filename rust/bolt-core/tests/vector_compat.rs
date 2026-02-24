@@ -1,3 +1,4 @@
+#![cfg(feature = "vectors")]
 //! Vector compatibility gate.
 //!
 //! Parses the golden test vectors produced by the TypeScript SDK and
