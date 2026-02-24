@@ -2,6 +2,32 @@
 
 All notable changes to bolt-core-sdk are documented here. Newest first.
 
+## [Rust Core R1 Crypto + Encoding Parity] - 2026-02-24
+
+Implement base64 encoding and NaCl box crypto in the Rust crate, achieving
+full parity with the TypeScript SDK for the encoding and crypto modules.
+
+### Changed (Rust crate)
+- `bolt-core` v0.1.1 → v0.2.0 (encoding + crypto now implemented).
+- `crypto_box` and `base64` promoted from optional to required dependencies.
+- `rand_core` (getrandom) added for CSPRNG nonce and key generation.
+- `serde`/`serde_json` remain optional behind `vectors` feature.
+- Module status: `encoding` and `crypto` marked Complete in `lib.rs`.
+
+### Added (Rust crate)
+- `encoding::to_base64` / `encoding::from_base64` — RFC 4648 STANDARD,
+  matches TS `tweetnacl-util` output exactly.
+- `crypto::generate_ephemeral_keypair` — X25519 via OS CSPRNG.
+- `crypto::seal_box_payload` — XSalsa20-Poly1305, wire format
+  `base64(nonce || ciphertext)`, matches TS `sealBoxPayload`.
+- `crypto::open_box_payload` — decrypts sealed payloads, fail-closed on
+  tampered/truncated/wrong-key input.
+- 10 new unit tests (2 encoding, 8 crypto) including golden vector
+  parity tests against committed `box-payload.vectors.json`.
+- Tests: 36 unit (default), 41 total (with vectors feature).
+
+**Commits:** `73b0ea1` (R1), `f6b08d3` (merge)
+
 ## [Rust Core R0 Scaffold + Ecosystem Docs] - 2026-02-24
 
 Rust canonical core crate scaffold (Phase R0) and ecosystem docs landing.

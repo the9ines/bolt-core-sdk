@@ -5,11 +5,11 @@ Current state of the bolt-core-sdk repository.
 ## Current Version
 
 **Tags:** `sdk-v0.4.0-dead-exports-cleanup`
-**Commit:** `34f9e27`
+**Commit:** `f6b08d3`
 **Branch:** `main`
 **TS Package:** `@the9ines/bolt-core` v0.4.0 (dead exports removed, 21 public exports)
 **TS Package:** `@the9ines/bolt-transport-web` v0.6.0 (Profile Envelope v1)
-**Rust Crate:** `bolt-core` v0.1.1 (R0 scaffold, 8 modules, feature-gated vectors)
+**Rust Crate:** `bolt-core` v0.2.0 (R1 crypto + encoding parity, 8 modules)
 
 ## Authority Model
 
@@ -30,7 +30,7 @@ See [SDK_STABILITY.md](SDK_STABILITY.md) for the stability contract.
 | LocalBolt Profile v1 spec | Draft (`LOCALBOLT_PROFILE.md`) |
 | TypeScript SDK (`@the9ines/bolt-core`) | Published (v0.4.0) |
 | Transport Web (`@the9ines/bolt-transport-web`) | **v0.6.0** (Profile Envelope v1) |
-| Rust crate (`bolt-core`) | Vectors complete (`rust/bolt-core/`) |
+| Rust crate (`bolt-core`) | v0.2.0 — encoding + crypto complete (`rust/bolt-core/`) |
 | Rust vector generator | Complete (`rust/bolt-core/src/vectors.rs`) |
 | SDK Authority Model | Complete (`docs/SDK_AUTHORITY.md`) |
 | SDK Stability Contract | Complete (`docs/SDK_STABILITY.md`) |
@@ -71,7 +71,7 @@ See [SDK_STABILITY.md](SDK_STABILITY.md) for the stability contract.
 
 - TypeScript (bolt-core): 76 tests (vitest), 7 test files
 - TypeScript (bolt-transport-web): 117 tests (vitest, jsdom), 11 test files
-- Rust: 28 tests (23 unit + 3 vector compat + 2 vector equivalence)
+- Rust: 41 tests (36 unit + 3 vector compat + 2 vector equivalence)
 - Golden vector suites: box-payload, framing
 - API surface drift detection: `npm run audit-exports`
 - Cross-language verification: `npm run verify:all`
@@ -106,6 +106,7 @@ See [SDK_STABILITY.md](SDK_STABILITY.md) for the stability contract.
 | Phase M2 | File integrity hash wiring | **Complete** (bolt.file-hash capability, SHA-256 verification, fail-closed, 16 new tests) |
 | Phase A1 | Export governance + dead-export cleanup | **Complete** (7 unused constants removed from public API, 28→21 exports, v0.3.0→v0.4.0) |
 | Phase R0 | Rust core scaffold + CI gates | **Complete** (8 modules, feature-gated vectors, lean default deps, 28 tests) |
+| Phase R1 | Rust crypto + encoding parity | **Complete** (base64, seal/open, keygen, 41 tests, golden vector parity) |
 
 ## Downstream Consumers
 
