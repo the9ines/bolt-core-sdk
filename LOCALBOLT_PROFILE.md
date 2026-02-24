@@ -197,6 +197,14 @@ Encoding identifier negotiated via HELLO: `json-envelope-v1`
 - Receivers MUST reject any non-HELLO message before handshake completion with `ERROR(INVALID_STATE)` and SHOULD close the connection (fail-closed)
 - At the Profile layer this error is currently plaintext JSON (`{ "type": "error", "code": "INVALID_STATE", "message": "..." }`). Bolt envelope wrapping is not yet implemented.
 
+### Capabilities Negotiation
+
+- HELLO payload MAY include a `capabilities` field (array of strings)
+- Receivers MUST treat a missing `capabilities` field as an empty array (backward compatibility with pre-capabilities peers)
+- Each peer computes the negotiated capability set as the intersection of local and remote capabilities
+- No capability-based gating is enforced in Phase 0; negotiation is plumbing only
+- Capabilities follow the `bolt.<name>` namespace convention (e.g. `bolt.file-hash`, `bolt.envelope-v1`)
+
 ### Plaintext Messages
 
 Only the following are sent without encryption:
