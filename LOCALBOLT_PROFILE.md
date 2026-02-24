@@ -184,6 +184,8 @@ Encoding identifier negotiated via HELLO: `json-envelope-v1`
 - Each peer MUST send exactly one HELLO per connection attempt
 - Handshake completes only after both peers successfully decrypt HELLO
 - Before handshake completion, only HELLO/ERROR envelopes and plaintext ping/pong are accepted (per Bolt Core)
+- Receivers MUST reject any non-HELLO message before handshake completion with `ERROR(INVALID_STATE)` and SHOULD close the connection (fail-closed)
+- At the Profile layer this error is currently plaintext JSON (`{ "type": "error", "code": "INVALID_STATE", "message": "..." }`). Bolt envelope wrapping is not yet implemented.
 
 ### Plaintext Messages
 

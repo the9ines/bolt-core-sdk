@@ -690,6 +690,25 @@ class WebRTCService {
         return;
       }
 
+      // Strict handshake gating (S4): reject any non-HELLO message before
+      // handshake completion. This is a Profile-layer narrowing of the broader
+      // PROTOCOL.md pre-handshake allowlist (which also permits PING/PONG and
+      // ERROR envelopes — those are rendezvous-level or not yet implemented at
+      // the Profile layer).
+      if (!this.helloComplete) {
+        console.warn('[INVALID_STATE] non-HELLO message before handshake complete — disconnecting');
+        this.onError(new ConnectionError('Received message before handshake complete'));
+        if (this.dc && this.dc.readyState === 'open') {
+          this.dc.send(JSON.stringify({
+            type: 'error',
+            code: 'INVALID_STATE',
+            message: 'Handshake not complete',
+          }));
+        }
+        this.disconnect();
+        return;
+      }
+
       if (msg.type !== 'file-chunk' || !msg.filename) return;
 
       // Control messages
