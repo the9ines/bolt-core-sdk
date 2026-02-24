@@ -129,6 +129,11 @@ class WebRTCService {
   private remoteIdentityKey: Uint8Array | null = null;
   private verificationInfo: VerificationInfo = { state: 'legacy', sasCode: null };
 
+  // Capabilities negotiation (Phase 0: empty local set)
+  private localCapabilities: string[] = [];
+  private remoteCapabilities: string[] = [];
+  private negotiatedCapabilities: string[] = [];
+
   constructor(
     signaling: SignalingProvider,
     private localPeerCode: string,
@@ -396,6 +401,7 @@ class WebRTCService {
       type: 'hello',
       version: 1,
       identityPublicKey: toBase64(this.options.identityPublicKey),
+      capabilities: this.localCapabilities,
     });
     const plaintext = new TextEncoder().encode(hello);
     const encrypted = sealBoxPayload(plaintext, this.remotePublicKey, this.keyPair.secretKey);
@@ -434,6 +440,13 @@ class WebRTCService {
 
     const remoteIdentityKey = fromBase64(hello.identityPublicKey);
     this.remoteIdentityKey = remoteIdentityKey;
+
+    // Capabilities negotiation — missing field treated as empty (backward compat)
+    this.remoteCapabilities = Array.isArray(hello.capabilities) ? hello.capabilities : [];
+    const localSet = new Set(this.localCapabilities);
+    this.negotiatedCapabilities = this.remoteCapabilities.filter((c: string) => localSet.has(c));
+    console.log('[HELLO] Remote capabilities:', this.remoteCapabilities, '→ negotiated:', this.negotiatedCapabilities);
+
     console.log('[HELLO] Received identity from peer', this.remotePeerCode);
 
     // TOFU verification — determines verification state
@@ -586,6 +599,10 @@ class WebRTCService {
     this.helloResolve = null;
     this.remoteIdentityKey = null;
     this.verificationInfo = { state: 'legacy', sasCode: null };
+
+    // Clear capabilities
+    this.remoteCapabilities = [];
+    this.negotiatedCapabilities = [];
   }
 
   // ─── File Transfer (Send) ──────────────────────────────────────────────
@@ -977,6 +994,11 @@ class WebRTCService {
   /** Get current SAS verification state. */
   getVerificationInfo(): VerificationInfo {
     return this.verificationInfo;
+  }
+
+  /** Check whether a capability was successfully negotiated with the remote peer. */
+  hasCapability(name: string): boolean {
+    return this.negotiatedCapabilities.includes(name);
   }
 
   /** Mark the current peer as verified. Persists to pin store. */
