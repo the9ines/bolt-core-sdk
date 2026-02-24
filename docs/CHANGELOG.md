@@ -2,6 +2,27 @@
 
 All notable changes to bolt-core-sdk are documented here. Newest first.
 
+## [sdk-v0.2.1-peer-code-bias-fix] - 2026-02-24
+
+Phase 8E: Peer Code Modulo Bias Elimination.
+
+Replaces biased `byte % 31` peer code generation with rejection sampling.
+The old algorithm overrepresented alphabet indices 0–7 by 12.5% because
+256 is not divisible by 31. The fix discards bytes >= 248
+(`floor(256/31)*31`) and uses `byte % 31` only for survivors.
+
+### Changed (bolt-core)
+- `generateSecurePeerCode()` and `generateLongPeerCode()` now use
+  rejection sampling via internal `fillUnbiased()` helper.
+- No public API change. Alphabet, output length, and long format
+  (XXXX-XXXX) are preserved.
+- Version bumped from `0.2.0` to `0.2.1`.
+
+### Tests
+- New: 3 rejection sampling invariant tests (MAX=248 for N=31, stress
+  tests for both generators).
+- bolt-core: 76 tests (was 73, +3 rejection sampling tests).
+
 ## [transport-web-v0.4.2-strict-handshake-gating] - 2026-02-23
 
 Phase 8D: Strict Handshake Gating (S4 audit item close).
