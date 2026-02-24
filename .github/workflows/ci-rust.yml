@@ -34,8 +34,14 @@ jobs:
       - name: cargo fmt --check
         run: cargo fmt --check
 
-      - name: cargo clippy (deny warnings)
+      - name: cargo clippy (default features, deny warnings)
         run: cargo clippy -- -D warnings
 
-      - name: cargo test
+      - name: cargo clippy (vectors feature, deny warnings)
+        run: cargo clippy --features vectors -- -D warnings
+
+      - name: cargo test (default features)
         run: cargo test
+
+      - name: cargo test (vectors feature)
+        run: cargo test --features vectors

@@ -50,4 +50,6 @@ pub mod sas;
 pub mod peer_code;
 
 /// Deterministic golden vector generator (test use only).
+/// Requires the `vectors` feature: `cargo test --features vectors`.
+#[cfg(feature = "vectors")]
 pub mod vectors;
