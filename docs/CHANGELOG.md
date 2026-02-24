@@ -2,6 +2,46 @@
 
 All notable changes to bolt-core-sdk are documented here. Newest first.
 
+## [Phase 0 — HELLO Capabilities Plumbing] - 2026-02-24
+
+Adds capability negotiation to the encrypted HELLO handshake. Phase 0
+advertises empty capabilities `[]`; Phase M2 will add `bolt.file-hash`
+when file hash verification code lands. Backward compatible with
+deployed peers (missing `capabilities` treated as `[]`).
+
+### Added (bolt-transport-web)
+- `localCapabilities`, `remoteCapabilities`, `negotiatedCapabilities`
+  fields on `WebRTCService`.
+- `hasCapability(name: string): boolean` accessor for querying
+  negotiated capability set.
+- HELLO payload now includes `capabilities: []` in encrypted envelope.
+- `processHello()` parses remote capabilities, computes intersection.
+- `disconnect()` clears all capability state.
+- `capabilities.test.ts` — 7 tests (HELLO payload, missing caps,
+  intersection, sendFile regression, gating regression, bad shape, disconnect).
+
+### Changed (LOCALBOLT_PROFILE.md)
+- Section 6: Added "Capabilities Negotiation" subsection — `bolt.<name>`
+  namespace convention, missing field backward compat, intersection rule.
+
+### Tests
+- bolt-transport-web: 87 tests (was 80, +7 capabilities tests).
+
+**Commit:** `15ef626`
+
+## [Phase 9C — Conformance Mapping] - 2026-02-24
+
+Adds traceability document mapping 5 security behaviors from Bolt Core
+v1 / LocalBolt Profile v1 specs to their test evidence.
+
+### Added
+- `docs/conformance/LOCALBOLT_CONFORMANCE.md` — maps HELLO gating (S4),
+  TOFU fail-closed (S1), SAS golden vector (S2), replay protection (S3),
+  and transferId legacy path to spec sections and 31 test cases.
+  All 5 behaviors: CONFORMANT.
+
+**Commit:** `e988cb2`
+
 ## [sdk-v0.2.1-peer-code-security-model] - 2026-02-24
 
 Spec: Peer Code Security Model locked into PROTOCOL.md.

@@ -5,10 +5,10 @@ Current state of the bolt-core-sdk repository.
 ## Current Version
 
 **Tags:** `sdk-v0.2.1-peer-code-bias-fix`
-**Commit:** `9906687`
+**Commit:** `15ef626`
 **Branch:** `main`
 **TS Package:** `@the9ines/bolt-core` v0.2.1
-**TS Package:** `@the9ines/bolt-transport-web` v0.4.2
+**TS Package:** `@the9ines/bolt-transport-web` v0.4.2 (+ capabilities plumbing)
 **Rust Crate:** `bolt-core` v0.1.0 (vectors complete, constants aligned)
 
 ## Authority Model
@@ -57,11 +57,13 @@ See [SDK_STABILITY.md](SDK_STABILITY.md) for the stability contract.
 | Replay protection (transport-web) | Complete (`WebRTCService` — transferId, dedup, bounds, identity binding) |
 | Strict handshake gating (transport-web) | Complete (`WebRTCService` — INVALID_STATE + disconnect for pre-handshake messages) |
 | Peer code security model (PROTOCOL.md) | Complete (§2 — routing hint, not auth secret; length policy locked) |
+| HELLO capabilities plumbing (transport-web) | Complete (`WebRTCService` — capabilities negotiation, `hasCapability()` accessor) |
+| Conformance mapping (docs) | Complete (`docs/conformance/LOCALBOLT_CONFORMANCE.md` — 5 behaviors, 31 tests) |
 
 ## Test Summary
 
 - TypeScript (bolt-core): 76 tests (vitest), 7 test files
-- TypeScript (bolt-transport-web): 80 tests (vitest, jsdom)
+- TypeScript (bolt-transport-web): 87 tests (vitest, jsdom), 9 test files
 - Rust: 7 tests (2 unit + 3 vector compat + 2 vector equivalence)
 - Golden vector suites: box-payload, framing
 - API surface drift detection: `npm run audit-exports`
@@ -91,6 +93,8 @@ See [SDK_STABILITY.md](SDK_STABILITY.md) for the stability contract.
 | Phase 8B.1 | WebRTCService lifecycle test coverage | **Complete** (12 tests: sender flow, receiver paths, control msgs, cleanup, error paths) |
 | Phase 8D | Strict handshake gating (S4 close) | **Complete** (fail-closed INVALID_STATE + disconnect, 6 new tests) |
 | Phase 8E | Peer code modulo bias elimination | **Complete** (rejection sampling, 3 new tests) |
+| Phase 9C | Conformance mapping | **Complete** (5 behaviors, 31 test cases, all CONFORMANT) |
+| Phase 0 | HELLO capabilities plumbing | **Complete** (capabilities negotiation in encrypted HELLO, 7 new tests) |
 
 ## Downstream Consumers
 
