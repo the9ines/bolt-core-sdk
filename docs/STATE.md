@@ -4,11 +4,11 @@ Current state of the bolt-core-sdk repository.
 
 ## Current Version
 
-**Tags:** `sdk-v0.2.1-peer-code-bias-fix`
-**Commit:** `15ef626`
+**Tags:** `sdk-v0.2.2-file-hash-wiring`, `transport-web-v0.5.0-file-hash-wiring`
+**Commit:** `cdf05ec`
 **Branch:** `main`
-**TS Package:** `@the9ines/bolt-core` v0.2.1
-**TS Package:** `@the9ines/bolt-transport-web` v0.4.2 (+ capabilities plumbing)
+**TS Package:** `@the9ines/bolt-core` v0.2.2
+**TS Package:** `@the9ines/bolt-transport-web` v0.5.0 (file integrity hash wiring)
 **Rust Crate:** `bolt-core` v0.1.0 (vectors complete, constants aligned)
 
 ## Authority Model
@@ -28,8 +28,8 @@ See [SDK_STABILITY.md](SDK_STABILITY.md) for the stability contract.
 |------|--------|
 | Bolt Core v1 spec | Draft (`PROTOCOL.md`) |
 | LocalBolt Profile v1 spec | Draft (`LOCALBOLT_PROFILE.md`) |
-| TypeScript SDK (`@the9ines/bolt-core`) | Published (v0.2.1) |
-| Transport Web (`@the9ines/bolt-transport-web`) | **v0.4.2** (strict handshake gating) |
+| TypeScript SDK (`@the9ines/bolt-core`) | Published (v0.2.2) |
+| Transport Web (`@the9ines/bolt-transport-web`) | **v0.5.0** (file integrity hash wiring) |
 | Rust crate (`bolt-core`) | Vectors complete (`rust/bolt-core/`) |
 | Rust vector generator | Complete (`rust/bolt-core/src/vectors.rs`) |
 | SDK Authority Model | Complete (`docs/SDK_AUTHORITY.md`) |
@@ -59,11 +59,14 @@ See [SDK_STABILITY.md](SDK_STABILITY.md) for the stability contract.
 | Peer code security model (PROTOCOL.md) | Complete (§2 — routing hint, not auth secret; length policy locked) |
 | HELLO capabilities plumbing (transport-web) | Complete (`WebRTCService` — capabilities negotiation, `hasCapability()` accessor) |
 | Conformance mapping (docs) | Complete (`docs/conformance/LOCALBOLT_CONFORMANCE.md` — 5 behaviors, 31 tests) |
+| File integrity verification (bolt-core) | Complete (`hashFile` widened to Blob, `IntegrityError` added) |
+| File integrity verification (transport-web) | Complete (`WebRTCService` — `bolt.file-hash` capability, sender hash, receiver verify, fail-closed) |
+| File integrity verification (spec) | Complete (`LOCALBOLT_PROFILE.md` §13 — capability gate, wire format, backward compat) |
 
 ## Test Summary
 
 - TypeScript (bolt-core): 76 tests (vitest), 7 test files
-- TypeScript (bolt-transport-web): 87 tests (vitest, jsdom), 9 test files
+- TypeScript (bolt-transport-web): 103 tests (vitest, jsdom), 10 test files
 - Rust: 7 tests (2 unit + 3 vector compat + 2 vector equivalence)
 - Golden vector suites: box-payload, framing
 - API surface drift detection: `npm run audit-exports`
@@ -95,6 +98,7 @@ See [SDK_STABILITY.md](SDK_STABILITY.md) for the stability contract.
 | Phase 8E | Peer code modulo bias elimination | **Complete** (rejection sampling, 3 new tests) |
 | Phase 9C | Conformance mapping | **Complete** (5 behaviors, 31 test cases, all CONFORMANT) |
 | Phase 0 | HELLO capabilities plumbing | **Complete** (capabilities negotiation in encrypted HELLO, 7 new tests) |
+| Phase M2 | File integrity hash wiring | **Complete** (bolt.file-hash capability, SHA-256 verification, fail-closed, 16 new tests) |
 
 ## Downstream Consumers
 

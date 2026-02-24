@@ -2,6 +2,49 @@
 
 All notable changes to bolt-core-sdk are documented here. Newest first.
 
+## [sdk-v0.2.2 / transport-web-v0.5.0 — File Hash Wiring] - 2026-02-24
+
+Phase M2: File Integrity Hash Wiring.
+
+Implements optional SHA-256 file integrity verification gated by HELLO
+capability `bolt.file-hash`. Both peers must negotiate the capability
+for verification to activate. Backward compatible with peers that do
+not support the capability.
+
+### Changed (bolt-core)
+- `hashFile()` signature widened from `File` to `Blob` (accepts both).
+- `IntegrityError` added (extends `BoltError`).
+- Export snapshot updated (27 → 28 exports).
+- Version bumped from `0.2.1` to `0.2.2`.
+
+### Changed (bolt-transport-web)
+- `localCapabilities` now advertises `["bolt.file-hash"]`.
+- `sendFile()` computes `SHA-256(file)` once when capability negotiated;
+  includes `fileHash` (64 hex chars) on first chunk (`chunkIndex === 0`).
+- `processChunkGuarded()` stores `expectedHash` per `transferId` from
+  first chunk; verifies after full reassembly.
+- Hash mismatch: `[INTEGRITY_MISMATCH]` log, `IntegrityError` via
+  `onError`, `INTEGRITY_FAILED` error control message, `disconnect()`
+  (fail-closed). `onReceiveFile` NOT called.
+- Hash match: `[INTEGRITY_OK]` log, normal completion.
+- Missing hash (legacy sender or capability not negotiated): no
+  verification, existing behavior preserved.
+- Version bumped from `0.4.2` to `0.5.0`.
+
+### Changed (LOCALBOLT_PROFILE.md)
+- New section 13: File Integrity Verification — capability gate, sender
+  behavior (SHA-256 on first chunk), receiver behavior (verify after
+  reassembly, fail-closed on mismatch), wire format, backward compat.
+
+### Tests
+- New: `file-hash.test.ts` — 16 tests covering negotiation (4),
+  success (2), failure (4), regression protection (4), sender (2).
+- Existing test mocks updated for `IntegrityError` + `hashFile`.
+- bolt-core: 76 tests (unchanged).
+- bolt-transport-web: 103 tests (was 87, +16 file hash tests).
+
+**Commit:** `cf2a04f` (feature), `cdf05ec` (merge to main)
+
 ## [Phase 0 — HELLO Capabilities Plumbing] - 2026-02-24
 
 Adds capability negotiation to the encrypted HELLO handshake. Phase 0
