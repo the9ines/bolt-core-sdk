@@ -4,11 +4,11 @@ Current state of the bolt-core-sdk repository.
 
 ## Current Version
 
-**Tags:** `sdk-v0.2.2-file-hash-wiring`, `transport-web-v0.5.0-file-hash-wiring`
-**Commit:** `cdf05ec`
+**Tags:** `sdk-v0.4.0-dead-exports-cleanup`
+**Commit:** `74074ba`
 **Branch:** `main`
-**TS Package:** `@the9ines/bolt-core` v0.2.2
-**TS Package:** `@the9ines/bolt-transport-web` v0.5.0 (file integrity hash wiring)
+**TS Package:** `@the9ines/bolt-core` v0.4.0 (dead exports removed, 21 public exports)
+**TS Package:** `@the9ines/bolt-transport-web` v0.6.0 (Profile Envelope v1)
 **Rust Crate:** `bolt-core` v0.1.0 (vectors complete, constants aligned)
 
 ## Authority Model
@@ -28,8 +28,8 @@ See [SDK_STABILITY.md](SDK_STABILITY.md) for the stability contract.
 |------|--------|
 | Bolt Core v1 spec | Draft (`PROTOCOL.md`) |
 | LocalBolt Profile v1 spec | Draft (`LOCALBOLT_PROFILE.md`) |
-| TypeScript SDK (`@the9ines/bolt-core`) | Published (v0.2.2) |
-| Transport Web (`@the9ines/bolt-transport-web`) | **v0.5.0** (file integrity hash wiring) |
+| TypeScript SDK (`@the9ines/bolt-core`) | Published (v0.4.0) |
+| Transport Web (`@the9ines/bolt-transport-web`) | **v0.6.0** (Profile Envelope v1) |
 | Rust crate (`bolt-core`) | Vectors complete (`rust/bolt-core/`) |
 | Rust vector generator | Complete (`rust/bolt-core/src/vectors.rs`) |
 | SDK Authority Model | Complete (`docs/SDK_AUTHORITY.md`) |
@@ -66,7 +66,7 @@ See [SDK_STABILITY.md](SDK_STABILITY.md) for the stability contract.
 ## Test Summary
 
 - TypeScript (bolt-core): 76 tests (vitest), 7 test files
-- TypeScript (bolt-transport-web): 103 tests (vitest, jsdom), 10 test files
+- TypeScript (bolt-transport-web): 117 tests (vitest, jsdom), 11 test files
 - Rust: 7 tests (2 unit + 3 vector compat + 2 vector equivalence)
 - Golden vector suites: box-payload, framing
 - API surface drift detection: `npm run audit-exports`
@@ -98,13 +98,15 @@ See [SDK_STABILITY.md](SDK_STABILITY.md) for the stability contract.
 | Phase 8E | Peer code modulo bias elimination | **Complete** (rejection sampling, 3 new tests) |
 | Phase 9C | Conformance mapping | **Complete** (5 behaviors, 31 test cases, all CONFORMANT) |
 | Phase 0 | HELLO capabilities plumbing | **Complete** (capabilities negotiation in encrypted HELLO, 7 new tests) |
+| Phase M1 | Profile Envelope v1 | **Complete** (bolt.envelope capability, versioned metadata wrapping, 14 new tests) |
 | Phase M2 | File integrity hash wiring | **Complete** (bolt.file-hash capability, SHA-256 verification, fail-closed, 16 new tests) |
+| Phase A1 | Export governance + dead-export cleanup | **Complete** (7 unused constants removed from public API, 28→21 exports, v0.3.0→v0.4.0) |
 
 ## Downstream Consumers
 
 | Repo | bolt-core Version | bolt-transport-web Version | Drift Guard | Pin Guard | Single-Install Guard |
 |------|-------------------|---------------------------|-------------|-----------|---------------------|
-| localbolt | `0.0.5` | `0.1.0` | CI active | CI active | CI active |
-| localbolt-app | `0.0.5` | `0.1.0` | CI active | CI active | CI active |
-| localbolt-v3 | `0.0.5` | `0.1.0` | CI active | CI active | CI active |
+| localbolt | `0.3.0` | `0.6.0` | CI active | CI active | CI active |
+| localbolt-app | `0.3.0` | `0.6.0` | CI active | CI active | CI active |
+| localbolt-v3 | `0.3.0` | `0.6.0` | CI active | CI active | CI active |
 | bolt-daemon | Compatible (Rust) | N/A | N/A | N/A | N/A |

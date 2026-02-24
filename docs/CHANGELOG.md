@@ -2,6 +2,58 @@
 
 All notable changes to bolt-core-sdk are documented here. Newest first.
 
+## [sdk-v0.4.0-dead-exports-cleanup] - 2026-02-24
+
+Phase A1 close: Export governance and dead-export cleanup.
+
+Removes 7 unused constant exports from the bolt-core public API surface.
+All removed constants had zero consumers across the entire ecosystem
+(bolt-transport-web, localbolt, localbolt-app, localbolt-v3, bolt-daemon).
+Internal module definitions retained for Rust parity.
+
+### Changed (bolt-core)
+- Removed from `index.ts` re-exports: `BOLT_VERSION`, `NONCE_LENGTH`,
+  `PEER_CODE_ALPHABET`, `PEER_CODE_LENGTH`, `PUBLIC_KEY_LENGTH`,
+  `SAS_LENGTH`, `SECRET_KEY_LENGTH`.
+- `DEFAULT_CHUNK_SIZE` retained (consumed by bolt-transport-web).
+- Internal tests updated to import removed constants from `../src/constants.js`
+  instead of the public barrel export.
+- Export snapshot updated (28 → 21 exports).
+- Version bumped from `0.3.0` to `0.4.0` (minor bump, pre-1.0 semver).
+
+### Tests
+- bolt-core: 76/76 pass.
+- bolt-transport-web: 117/117 pass (zero downstream breakage).
+
+**Commit:** `211fbab` (feature), `74074ba` (merge to main)
+
+## [sdk-v0.3.0 / transport-web-v0.6.0 — Profile Envelope v1] - 2026-02-24
+
+Phase M1: Profile Envelope v1 — metadata protection.
+
+Wraps every DataChannel message in a versioned `bolt-envelope` with
+encrypted metadata (profile name, version). Negotiated via HELLO
+capability `bolt.envelope`. Backward compatible with peers that do
+not support the envelope.
+
+### Changed (bolt-core)
+- `toBase64()` and `fromBase64()` accept both `Uint8Array` and `ArrayBuffer`.
+- Version bumped from `0.2.2` to `0.3.0`.
+
+### Changed (bolt-transport-web)
+- `localCapabilities` now advertises `["bolt.file-hash", "bolt.envelope"]`.
+- All outgoing messages wrapped in `bolt-envelope` when negotiated.
+- Incoming messages unwrapped transparently; non-envelope messages accepted
+  for backward compatibility.
+- `LOCALBOLT_PROFILE.md` §14: Profile Envelope v1 specification.
+- Version bumped from `0.5.0` to `0.6.0`.
+
+### Tests
+- bolt-core: 76 tests.
+- bolt-transport-web: 117 tests (was 103, +14 envelope tests).
+
+**Commit:** `a305a1e` (feature), `1d41e6f` (merge to main)
+
 ## [sdk-v0.2.2 / transport-web-v0.5.0 — File Hash Wiring] - 2026-02-24
 
 Phase M2: File Integrity Hash Wiring.
