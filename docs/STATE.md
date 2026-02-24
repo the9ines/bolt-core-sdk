@@ -5,7 +5,7 @@ Current state of the bolt-core-sdk repository.
 ## Current Version
 
 **Tags:** `transport-web-v0.4.1-lifecycle-tests`
-**Commit:** *pending*
+**Commit:** `154685c`
 **Branch:** `main`
 **TS Package:** `@the9ines/bolt-core` v0.2.0
 **TS Package:** `@the9ines/bolt-transport-web` v0.4.1
