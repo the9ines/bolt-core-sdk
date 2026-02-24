@@ -302,3 +302,57 @@ Duplicate chunks do NOT abort the transfer (ignore-and-continue policy).
 - Legacy mode logs: `[REPLAY_UNGUARDED] chunk received without transferId`
 - Legacy chunks MUST NOT create or mutate guarded transfer state
 - Future versions MAY make `transferId` mandatory (fail-closed)
+
+---
+
+## 13. File Integrity Verification
+
+### Capability Gate
+
+File integrity verification is gated by the `bolt.file-hash` capability. Both peers MUST advertise `bolt.file-hash` in their HELLO `capabilities` array for verification to be active. If either peer does not advertise the capability, file transfers proceed without hash verification (backward compatible).
+
+### Sender Behavior
+
+When `bolt.file-hash` is negotiated:
+
+- Sender computes `SHA-256(file)` once before chunking, producing a 64-character hex string (`fileHash`)
+- Sender includes `fileHash` on the **first chunk** (`chunkIndex === 0`) of the transfer
+- Subsequent chunks do NOT include `fileHash` (bandwidth optimization)
+
+### Wire Format
+
+First chunk with `fileHash`:
+
+```json
+{
+  "type": "file-chunk",
+  "filename": "example.pdf",
+  "transferId": "<hex, 32 chars>",
+  "chunkIndex": 0,
+  "totalChunks": 42,
+  "fileSize": 688128,
+  "fileHash": "<hex, 64 chars>",
+  "chunk": "<base64, encrypted chunk>"
+}
+```
+
+### Receiver Behavior
+
+When `bolt.file-hash` is negotiated AND `fileHash` was present on the first chunk:
+
+1. Receiver stores `expectedHash` per `transferId` in guarded transfer state
+2. After full reassembly, receiver computes `SHA-256(assembled_blob)`
+3. If `actual !== expectedHash`:
+   - Log `[INTEGRITY_MISMATCH]` with expected and actual hashes
+   - Emit `IntegrityError` via `onError`
+   - Send error control message: `{ "type": "error", "code": "INTEGRITY_FAILED", "message": "..." }`
+   - Call `disconnect()` (fail-closed)
+   - Do NOT call `onReceiveFile`
+4. If hashes match: log `[INTEGRITY_OK]`, proceed with `onReceiveFile`
+
+### Backward Compatibility
+
+- If `bolt.file-hash` is NOT negotiated: no hash computation, no verification, existing behavior preserved
+- If `fileHash` field is absent on first chunk (legacy sender): no verification for that transfer
+- `fileHash` is OPTIONAL at the wire level; its presence is gated by capability negotiation
+- `IntegrityError` is a new error type in `@the9ines/bolt-core` (extends `BoltError`)

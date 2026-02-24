@@ -1,11 +1,12 @@
 /**
  * Generate a cryptographically secure 6-character peer code.
- * Uses crypto.getRandomValues() for secure random generation.
+ * Uses rejection sampling to eliminate modulo bias.
  */
 export declare function generateSecurePeerCode(): string;
 /**
  * Generate a longer peer code with dash separator.
  * Format: XXXX-XXXX (~40 bits of entropy)
+ * Uses rejection sampling to eliminate modulo bias.
  */
 export declare function generateLongPeerCode(): string;
 /**

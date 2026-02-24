@@ -13,4 +13,4 @@ export { computeSas } from './sas.js';
 // Identity
 export { generateIdentityKeyPair, KeyMismatchError } from './identity.js';
 // Errors
-export { BoltError, EncryptionError, ConnectionError, TransferError } from './errors.js';
+export { BoltError, EncryptionError, ConnectionError, TransferError, IntegrityError } from './errors.js';

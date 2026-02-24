@@ -39,12 +39,16 @@ vi.mock('@the9ines/bolt-core', () => ({
   TransferError: class extends MockBoltError {
     constructor(m: string, d?: unknown) { super(m, d); this.name = 'TransferError'; }
   },
+  IntegrityError: class extends MockBoltError {
+    constructor(m: string = 'File integrity check failed') { super(m); this.name = 'IntegrityError'; }
+  },
   KeyMismatchError: class extends MockBoltError {
     constructor(m: string, d?: unknown) { super(m, d); this.name = 'KeyMismatchError'; }
   },
   computeSas: () => 'AABBCC',
   bufferToHex: (buffer: ArrayBuffer) =>
     Array.from(new Uint8Array(buffer)).map(b => b.toString(16).padStart(2, '0')).join(''),
+  hashFile: async () => 'a'.repeat(64),
 }));
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -140,7 +144,7 @@ describe('Phase 0: HELLO Capabilities Plumbing', () => {
     // The stub sealBoxPayload returns 'encrypted-stub', so we cannot decrypt.
     // Instead, verify the JSON that was passed to sealBoxPayload by inspecting
     // the localCapabilities field directly — it should be empty array.
-    expect((service as any).localCapabilities).toEqual([]);
+    expect((service as any).localCapabilities).toEqual(['bolt.file-hash']);
 
     // Additionally, verify the HELLO JSON structure by calling the code path
     // that builds the payload. We can check via a spy on sealBoxPayload.

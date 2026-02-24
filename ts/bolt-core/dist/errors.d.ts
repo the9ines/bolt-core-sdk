@@ -11,3 +11,6 @@ export declare class ConnectionError extends BoltError {
 export declare class TransferError extends BoltError {
     constructor(message: string, details?: unknown);
 }
+export declare class IntegrityError extends BoltError {
+    constructor(message?: string);
+}
