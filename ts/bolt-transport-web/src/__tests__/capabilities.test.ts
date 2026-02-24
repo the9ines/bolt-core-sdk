@@ -144,7 +144,7 @@ describe('Phase 0: HELLO Capabilities Plumbing', () => {
     // The stub sealBoxPayload returns 'encrypted-stub', so we cannot decrypt.
     // Instead, verify the JSON that was passed to sealBoxPayload by inspecting
     // the localCapabilities field directly — it should be empty array.
-    expect((service as any).localCapabilities).toEqual(['bolt.file-hash']);
+    expect((service as any).localCapabilities).toEqual(['bolt.file-hash', 'bolt.profile-envelope-v1']);
 
     // Additionally, verify the HELLO JSON structure by calling the code path
     // that builds the payload. We can check via a spy on sealBoxPayload.

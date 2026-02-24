@@ -356,3 +356,66 @@ When `bolt.file-hash` is negotiated AND `fileHash` was present on the first chun
 - If `fileHash` field is absent on first chunk (legacy sender): no verification for that transfer
 - `fileHash` is OPTIONAL at the wire level; its presence is gated by capability negotiation
 - `IntegrityError` is a new error type in `@the9ines/bolt-core` (extends `BoltError`)
+
+---
+
+## 14. Profile Envelope v1
+
+### Capability Gate
+
+Profile Envelope v1 is gated by the `bolt.profile-envelope-v1` capability. Both peers MUST advertise this capability in their HELLO `capabilities` array for envelope wrapping to be active. If either peer does not advertise the capability, all DataChannel messages are sent as legacy plaintext JSON (backward compatible).
+
+### Outer Wire Format
+
+When `bolt.profile-envelope-v1` is negotiated, all post-handshake DataChannel messages (file chunks, control messages, error messages) are wrapped in an encrypted envelope:
+
+```json
+{
+  "type": "profile-envelope",
+  "version": 1,
+  "encoding": "base64",
+  "payload": "<base64 string from sealBoxPayload>"
+}
+```
+
+- `version` is fixed to `1` for this specification version
+- `encoding` is self-documenting metadata, fixed to `"base64"` for v1
+- `payload` is the return value of `sealBoxPayload(innerBytes, remotePublicKey, senderSecretKey)` — a base64 string. Implementations MUST NOT double-encode this value.
+
+### Crypto Usage
+
+- **Encrypt**: `payload = sealBoxPayload(UTF8Encode(JSON.stringify(innerMsg)), remotePublicKey, senderSecretKey)`
+- **Decrypt**: `innerMsg = JSON.parse(UTF8Decode(openBoxPayload(payload, senderPublicKey, receiverSecretKey)))`
+- Uses the same ephemeral key pair established during WebRTC signaling
+- No additional key derivation or nonce management beyond what `sealBoxPayload`/`openBoxPayload` provide internally
+
+### Receiver Behavior
+
+1. **HELLO always plaintext**: HELLO messages are always sent and received as plaintext (they use their own encryption layer). Profile envelope MUST NOT wrap HELLO.
+2. **Pre-handshake gating**: A `profile-envelope` received before `helloComplete` is treated as a non-HELLO message and triggers `INVALID_STATE` + disconnect (Phase 8D rule).
+3. **Envelope unwrapping**: After handshake, if `msg.type === 'profile-envelope'`:
+   - If NOT negotiated: log `[ENVELOPE_UNNEGOTIATED]`, send error, disconnect (fail-closed)
+   - If negotiated but `version !== 1` or `encoding !== 'base64'`: log `[ENVELOPE_INVALID]`, send error, disconnect
+   - If decryption fails: log `[ENVELOPE_DECRYPT_FAIL]`, send error, disconnect
+   - On success: route decrypted inner message through normal message handling
+4. **Legacy plaintext accepted**: Even when envelope is negotiated, the receiver MUST still accept legacy plaintext messages (mixed-peer compatibility). This ensures graceful degradation when one peer upgrades before the other.
+
+### Error Codes
+
+| Code | Condition | Action |
+|------|-----------|--------|
+| `ENVELOPE_UNNEGOTIATED` | Envelope received but capability not negotiated | Log, send error, disconnect |
+| `ENVELOPE_INVALID` | Invalid version or encoding | Log, send error, disconnect |
+| `ENVELOPE_DECRYPT_FAIL` | Decryption or JSON parse failure | Log, send error, disconnect |
+
+### Security Properties
+
+- **Metadata protection**: File names, sizes, transfer IDs, and control flags are no longer visible as plaintext JSON on the DataChannel. An intermediary observing the DataChannel would see only `type: "profile-envelope"` and an opaque encrypted payload.
+- **Defense-in-depth**: This is a Profile-layer measure. It does not replace the Bolt Core envelope (which operates at the protocol level and is not yet implemented). It provides immediate value for the WebRTC DataChannel transport.
+- **Forward compatibility**: Future relay/intermediary scenarios benefit from metadata being encrypted at the profile layer, reducing the trust surface of relay nodes.
+
+### Explicit Non-Goals
+
+- This is NOT the global Bolt envelope from PROTOCOL.md section 6. That operates at the protocol layer with its own nonce/key management.
+- This does NOT encrypt rendezvous-level signaling (offer/answer/ICE). Those operate over WebSocket, outside the DataChannel.
+- This does NOT change the HELLO encryption mechanism, which has its own envelope format.

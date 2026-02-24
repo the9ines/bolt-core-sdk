@@ -43,6 +43,14 @@ interface FileChunkMessage {
   resumed?: boolean;
 }
 
+/** Profile Envelope v1 wire format — encrypts inner messages over DataChannel. */
+interface ProfileEnvelopeV1 {
+  type: 'profile-envelope';
+  version: 1;
+  encoding: 'base64';
+  payload: string;
+}
+
 /** Receiver-side state for a guarded transfer (transferId present). */
 interface ActiveTransfer {
   transferId: string;
@@ -132,7 +140,7 @@ class WebRTCService {
   private verificationInfo: VerificationInfo = { state: 'legacy', sasCode: null };
 
   // Capabilities negotiation
-  private localCapabilities: string[] = ['bolt.file-hash'];
+  private localCapabilities: string[] = ['bolt.file-hash', 'bolt.profile-envelope-v1'];
   private remoteCapabilities: string[] = [];
   private negotiatedCapabilities: string[] = [];
 
@@ -678,7 +686,7 @@ class WebRTCService {
 
         if (this.transferCancelled) throw new TransferError('Transfer cancelled by user');
 
-        this.dc!.send(JSON.stringify(msg));
+        this.dcSendMessage(msg);
         this.emitProgress(file.name, i + 1, totalChunks, end, file.size, 'transferring');
       }
 
@@ -721,7 +729,7 @@ class WebRTCService {
       // handshake completion. This is a Profile-layer narrowing of the broader
       // PROTOCOL.md pre-handshake allowlist (which also permits PING/PONG and
       // ERROR envelopes — those are rendezvous-level or not yet implemented at
-      // the Profile layer).
+      // the Profile layer). Profile-envelope before helloComplete is also rejected.
       if (!this.helloComplete) {
         console.warn('[INVALID_STATE] non-HELLO message before handshake complete — disconnecting');
         this.onError(new ConnectionError('Received message before handshake complete'));
@@ -736,29 +744,61 @@ class WebRTCService {
         return;
       }
 
-      if (msg.type !== 'file-chunk' || !msg.filename) return;
+      // Profile Envelope v1: unwrap if negotiated
+      if (msg.type === 'profile-envelope') {
+        if (!this.negotiatedEnvelopeV1()) {
+          console.warn('[ENVELOPE_UNNEGOTIATED] profile-envelope received but not negotiated — disconnecting');
+          this.dcSendMessage({ type: 'error', code: 'ENVELOPE_UNNEGOTIATED', message: 'Profile envelope not negotiated' });
+          this.disconnect();
+          return;
+        }
+        if (msg.version !== 1 || msg.encoding !== 'base64' || typeof msg.payload !== 'string') {
+          console.warn('[ENVELOPE_INVALID] invalid profile-envelope version/encoding — disconnecting');
+          this.dcSendMessage({ type: 'error', code: 'ENVELOPE_INVALID', message: 'Invalid profile envelope format' });
+          this.disconnect();
+          return;
+        }
+        const inner = this.decodeProfileEnvelopeV1(msg as ProfileEnvelopeV1);
+        if (!inner) {
+          console.warn('[ENVELOPE_DECRYPT_FAIL] failed to decrypt profile-envelope — disconnecting');
+          this.dcSendMessage({ type: 'error', code: 'ENVELOPE_DECRYPT_FAIL', message: 'Failed to decrypt profile envelope' });
+          this.disconnect();
+          return;
+        }
+        // Route the decrypted inner message
+        this.routeInnerMessage(inner);
+        return;
+      }
 
-      // Control messages
-      if (msg.paused) {
-        this.transferPaused = true;
-        this.emitProgress(msg.filename, 0, 0, 0, 0, 'paused');
-        return;
-      }
-      if (msg.resumed) {
-        this.transferPaused = false;
-        this.emitProgress(msg.filename, 0, 0, 0, 0, 'transferring');
-        return;
-      }
-      if (msg.cancelled) {
-        this.handleRemoteCancel(msg);
-        return;
-      }
-
-      // Data chunk
-      this.processChunk(msg);
+      // Legacy plaintext path — accepted even when envelope is negotiated (mixed-peer compat)
+      this.routeInnerMessage(msg);
     } catch (error) {
       console.error('[RECV] Error processing message:', error);
     }
+  }
+
+  /** Route a decoded inner message (from envelope or legacy plaintext). */
+  private routeInnerMessage(msg: any) {
+    if (msg.type !== 'file-chunk' || !msg.filename) return;
+
+    // Control messages
+    if (msg.paused) {
+      this.transferPaused = true;
+      this.emitProgress(msg.filename, 0, 0, 0, 0, 'paused');
+      return;
+    }
+    if (msg.resumed) {
+      this.transferPaused = false;
+      this.emitProgress(msg.filename, 0, 0, 0, 0, 'transferring');
+      return;
+    }
+    if (msg.cancelled) {
+      this.handleRemoteCancel(msg);
+      return;
+    }
+
+    // Data chunk
+    this.processChunk(msg);
   }
 
   private handleRemoteCancel(msg: FileChunkMessage) {
@@ -871,13 +911,11 @@ class WebRTCService {
               this.recvTransferIds.delete(filename);
               this.emitProgress(filename, 0, totalChunks!, 0, fileSize!, 'error');
               this.onError(new IntegrityError('File integrity check failed: hash mismatch'));
-              if (this.dc && this.dc.readyState === 'open') {
-                this.dc.send(JSON.stringify({
-                  type: 'error',
-                  code: 'INTEGRITY_FAILED',
-                  message: 'File integrity check failed: hash mismatch',
-                }));
-              }
+              this.dcSendMessage({
+                type: 'error',
+                code: 'INTEGRITY_FAILED',
+                message: 'File integrity check failed: hash mismatch',
+              });
               this.disconnect();
               return;
             }
@@ -988,7 +1026,7 @@ class WebRTCService {
 
   private sendControlMessage(filename: string, fields: Partial<FileChunkMessage>) {
     if (!this.dc || this.dc.readyState !== 'open') return;
-    this.dc.send(JSON.stringify({ type: 'file-chunk', filename, ...fields }));
+    this.dcSendMessage({ type: 'file-chunk', filename, ...fields });
   }
 
   // ─── Progress ──────────────────────────────────────────────────────────
@@ -1049,6 +1087,48 @@ class WebRTCService {
   /** Check whether a capability was successfully negotiated with the remote peer. */
   hasCapability(name: string): boolean {
     return this.negotiatedCapabilities.includes(name);
+  }
+
+  // ─── Profile Envelope v1 ─────────────────────────────────────────────
+
+  /** Whether profile-envelope-v1 was mutually negotiated. */
+  private negotiatedEnvelopeV1(): boolean {
+    return this.hasCapability('bolt.profile-envelope-v1');
+  }
+
+  /** Encrypt an inner message into a ProfileEnvelopeV1 wire object. */
+  private encodeProfileEnvelopeV1(innerMsg: object): ProfileEnvelopeV1 {
+    const innerJson = JSON.stringify(innerMsg);
+    const innerBytes = new TextEncoder().encode(innerJson);
+    const payload = sealBoxPayload(innerBytes, this.remotePublicKey!, this.keyPair!.secretKey);
+    return { type: 'profile-envelope', version: 1, encoding: 'base64', payload };
+  }
+
+  /** Decrypt a ProfileEnvelopeV1 to the inner message object, or null on failure. */
+  private decodeProfileEnvelopeV1(env: ProfileEnvelopeV1): any | null {
+    if (env.type !== 'profile-envelope' || env.version !== 1 || env.encoding !== 'base64' || typeof env.payload !== 'string') {
+      return null;
+    }
+    try {
+      const innerBytes = openBoxPayload(env.payload, this.remotePublicKey!, this.keyPair!.secretKey);
+      const innerJson = new TextDecoder().decode(innerBytes);
+      return JSON.parse(innerJson);
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Send a message over the DataChannel, wrapping in profile-envelope when negotiated.
+   * MUST only be called after helloComplete === true (except for pre-handshake error messages).
+   */
+  private dcSendMessage(innerMsg: any): void {
+    if (!this.dc || this.dc.readyState !== 'open') return;
+    if (this.negotiatedEnvelopeV1() && this.helloComplete && this.keyPair && this.remotePublicKey) {
+      this.dc.send(JSON.stringify(this.encodeProfileEnvelopeV1(innerMsg)));
+    } else {
+      this.dc.send(JSON.stringify(innerMsg));
+    }
   }
 
   /** Mark the current peer as verified. Persists to pin store. */

@@ -1,6 +1,6 @@
 {
   "name": "@the9ines/bolt-core",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "description": "Bolt Protocol core crypto primitives and utilities",
   "type": "module",
   "main": "./dist/index.js",
