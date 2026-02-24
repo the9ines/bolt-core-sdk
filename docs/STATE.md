@@ -5,7 +5,7 @@ Current state of the bolt-core-sdk repository.
 ## Current Version
 
 **Tags:** `sdk-v0.2.1-peer-code-bias-fix`
-**Commit:** `09f6054`
+**Commit:** `9906687`
 **Branch:** `main`
 **TS Package:** `@the9ines/bolt-core` v0.2.1
 **TS Package:** `@the9ines/bolt-transport-web` v0.4.2
@@ -56,6 +56,7 @@ See [SDK_STABILITY.md](SDK_STABILITY.md) for the stability contract.
 | Verification status component (transport-web) | Complete (`verification-status.ts` — imperative DOM component) |
 | Replay protection (transport-web) | Complete (`WebRTCService` — transferId, dedup, bounds, identity binding) |
 | Strict handshake gating (transport-web) | Complete (`WebRTCService` — INVALID_STATE + disconnect for pre-handshake messages) |
+| Peer code security model (PROTOCOL.md) | Complete (§2 — routing hint, not auth secret; length policy locked) |
 
 ## Test Summary
 

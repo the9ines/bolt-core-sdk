@@ -2,6 +2,20 @@
 
 All notable changes to bolt-core-sdk are documented here. Newest first.
 
+## [sdk-v0.2.1-peer-code-security-model] - 2026-02-24
+
+Spec: Peer Code Security Model locked into PROTOCOL.md.
+
+### Changed (PROTOCOL.md)
+- New §2 subsection: "Peer Code Security Model" — normative policy
+  defining peer code as a routing hint (not auth secret), authoritative
+  security chain (HELLO → TOFU → SAS), default length policy (6 local,
+  8 remote), abuse mitigation, and non-goals.
+
+### Changed (LOCALBOLT_PROFILE.md)
+- §3: Cross-reference to PROTOCOL.md peer code security model.
+- Confirms LocalBolt uses 6-char default, 8-char for cloud extensions.
+
 ## [sdk-v0.2.1-peer-code-bias-fix] - 2026-02-24
 
 Phase 8E: Peer Code Modulo Bias Elimination.
