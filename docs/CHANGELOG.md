@@ -2,6 +2,32 @@
 
 All notable changes to bolt-core-sdk are documented here. Newest first.
 
+## [Rust Core R2 Identity + SAS + Hash Parity] - 2026-02-24
+
+Implement SHA-256 hashing, identity keypair generation, and SAS computation
+in the Rust crate, achieving full parity with TS for hash, identity, and sas
+modules. Only peer_code stubs remain (R3).
+
+### Changed (Rust crate)
+- `bolt-core` v0.2.0 → v0.3.0 (hash, identity, sas now implemented).
+- `sha2` v0.10 added as normal dependency.
+- `compute_sas` returns `String` (not `Result`) — key length enforced
+  by type system (`&[u8; 32]`).
+- Module status: `hash`, `identity`, `sas` marked Complete in `lib.rs`.
+
+### Added (Rust crate)
+- `hash::sha256(data) -> [u8; 32]` — synchronous SHA-256.
+- `hash::sha256_hex(data) -> String` — convenience hex wrapper.
+- `identity::generate_identity_keypair()` — delegates to X25519 keygen.
+- `sas::compute_sas(id_a, id_b, eph_a, eph_b) -> String` — 6-char
+  uppercase hex SAS matching TS `computeSas` exactly.
+- `sas::sort32` internal helper — lexicographic 32-byte sort+concat.
+- 11 new unit tests (3 hash, 2 identity, 6 SAS including 2 golden
+  vector parity tests using box-payload.vectors.json keypairs).
+- Tests: 47 unit (default), 52 total (with vectors feature).
+
+**Commits:** `37b9b8a` (R2), `2ed5cce` (merge)
+
 ## [Rust Core R1 Crypto + Encoding Parity] - 2026-02-24
 
 Implement base64 encoding and NaCl box crypto in the Rust crate, achieving
