@@ -5,7 +5,7 @@ Current state of the bolt-core-sdk repository.
 ## Current Version
 
 **Tags:** `sdk-v0.4.0-dead-exports-cleanup`
-**Commit:** `74074ba`
+**Commit:** `34f9e27`
 **Branch:** `main`
 **TS Package:** `@the9ines/bolt-core` v0.4.0 (dead exports removed, 21 public exports)
 **TS Package:** `@the9ines/bolt-transport-web` v0.6.0 (Profile Envelope v1)
@@ -62,6 +62,8 @@ See [SDK_STABILITY.md](SDK_STABILITY.md) for the stability contract.
 | File integrity verification (bolt-core) | Complete (`hashFile` widened to Blob, `IntegrityError` added) |
 | File integrity verification (transport-web) | Complete (`WebRTCService` — `bolt.file-hash` capability, sender hash, receiver verify, fail-closed) |
 | File integrity verification (spec) | Complete (`LOCALBOLT_PROFILE.md` §13 — capability gate, wire format, backward compat) |
+| Audit tracker | Complete (`docs/AUDIT_TRACKER.md` — 26 findings, 22 DONE, 3 DEFERRED) |
+| Security posture declaration | Complete (`docs/SECURITY_POSTURE.md` — WebRTC DataChannel profile) |
 
 ## Test Summary
 

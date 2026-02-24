@@ -2,6 +2,20 @@
 
 All notable changes to bolt-core-sdk are documented here. Newest first.
 
+## [Audit Close + Security Posture Baseline] - 2026-02-24
+
+Docs-only. Formal audit closeout and security posture declaration.
+
+### Added
+- `docs/AUDIT_TRACKER.md` — authoritative audit tracker with 26
+  findings across 6 categories (22 DONE, 3 DEFERRED).
+- `docs/SECURITY_POSTURE.md` — security posture declaration for the
+  WebRTC DataChannel profile. Covers TOFU, SAS, replay/dedup,
+  file integrity, metadata confidentiality, handshake gating,
+  capability negotiation, operational constraints, and residual risks.
+
+**Commit:** `1bdadcc` (feature), `34f9e27` (merge to main)
+
 ## [sdk-v0.4.0-dead-exports-cleanup] - 2026-02-24
 
 Phase A1 close: Export governance and dead-export cleanup.
