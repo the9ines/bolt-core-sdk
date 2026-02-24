@@ -16,7 +16,7 @@ export function bufferToHex(buffer) {
         .join('');
 }
 /**
- * Compute SHA-256 hash of a File and return hex string.
+ * Compute SHA-256 hash of a File or Blob and return hex string.
  */
 export async function hashFile(file) {
     const buffer = await file.arrayBuffer();

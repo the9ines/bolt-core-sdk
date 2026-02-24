@@ -41,12 +41,16 @@ vi.mock('@the9ines/bolt-core', () => ({
   TransferError: class extends MockBoltError {
     constructor(m: string, d?: unknown) { super(m, d); this.name = 'TransferError'; }
   },
+  IntegrityError: class extends MockBoltError {
+    constructor(m: string = 'File integrity check failed') { super(m); this.name = 'IntegrityError'; }
+  },
   KeyMismatchError: class extends MockBoltError {
     constructor(m: string, d?: unknown) { super(m, d); this.name = 'KeyMismatchError'; }
   },
   computeSas: () => 'AABBCC',
   bufferToHex: (buffer: ArrayBuffer) =>
     Array.from(new Uint8Array(buffer)).map(b => b.toString(16).padStart(2, '0')).join(''),
+  hashFile: async () => 'a'.repeat(64),
 }));
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────

@@ -6,6 +6,7 @@
     "ConnectionError",
     "DEFAULT_CHUNK_SIZE",
     "EncryptionError",
+    "IntegrityError",
     "KeyMismatchError",
     "NONCE_LENGTH",
     "PEER_CODE_ALPHABET",

@@ -35,4 +35,4 @@ export { generateIdentityKeyPair, KeyMismatchError } from './identity.js';
 export type { IdentityKeyPair } from './identity.js';
 
 // Errors
-export { BoltError, EncryptionError, ConnectionError, TransferError } from './errors.js';
+export { BoltError, EncryptionError, ConnectionError, TransferError, IntegrityError } from './errors.js';

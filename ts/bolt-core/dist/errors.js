@@ -23,3 +23,9 @@ export class TransferError extends BoltError {
         this.name = 'TransferError';
     }
 }
+export class IntegrityError extends BoltError {
+    constructor(message = 'File integrity check failed') {
+        super(message);
+        this.name = 'IntegrityError';
+    }
+}

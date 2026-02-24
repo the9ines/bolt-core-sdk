@@ -1,4 +1,4 @@
-import { sealBoxPayload, openBoxPayload, generateEphemeralKeyPair, toBase64, fromBase64, DEFAULT_CHUNK_SIZE, EncryptionError, KeyMismatchError, computeSas, bufferToHex } from '@the9ines/bolt-core';
+import { sealBoxPayload, openBoxPayload, generateEphemeralKeyPair, toBase64, fromBase64, DEFAULT_CHUNK_SIZE, EncryptionError, IntegrityError, KeyMismatchError, computeSas, bufferToHex, hashFile } from '@the9ines/bolt-core';
 import { WebRTCError, ConnectionError, SignalingError, TransferError } from '../../types/webrtc-errors.js';
 import { getLocalOnlyRTCConfig } from '../../lib/platform-utils.js';
 import { verifyPinnedIdentity } from '../identity/pin-store.js';
@@ -36,6 +36,7 @@ interface FileChunkMessage {
   totalChunks?: number;
   fileSize?: number;
   transferId?: string;
+  fileHash?: string;
   cancelled?: boolean;
   cancelledBy?: 'sender' | 'receiver';
   paused?: boolean;
@@ -51,6 +52,7 @@ interface ActiveTransfer {
   buffer: (Blob | null)[];
   receivedSet: Set<number>;
   remoteIdentityKey: string;
+  expectedHash?: string;
 }
 
 /** Generate a spec-compliant transfer_id (bytes16 → hex, 32 chars). */
@@ -129,8 +131,8 @@ class WebRTCService {
   private remoteIdentityKey: Uint8Array | null = null;
   private verificationInfo: VerificationInfo = { state: 'legacy', sasCode: null };
 
-  // Capabilities negotiation (Phase 0: empty local set)
-  private localCapabilities: string[] = [];
+  // Capabilities negotiation
+  private localCapabilities: string[] = ['bolt.file-hash'];
   private remoteCapabilities: string[] = [];
   private negotiatedCapabilities: string[] = [];
 
@@ -623,6 +625,13 @@ class WebRTCService {
     const totalChunks = Math.ceil(file.size / DEFAULT_CHUNK_SIZE);
     const transferId = generateTransferId();
     this.sendTransferIds.set(file.name, transferId);
+
+    // Compute file hash if bolt.file-hash was negotiated
+    let fileHash: string | undefined;
+    if (this.hasCapability('bolt.file-hash')) {
+      fileHash = await hashFile(file);
+    }
+
     console.log(`[TRANSFER] Sending ${file.name} (${file.size} bytes, ${totalChunks} chunks, tid=${transferId})`);
     this.transferCancelled = false;
     this.transferPaused = false;
@@ -654,6 +663,7 @@ class WebRTCService {
           totalChunks,
           fileSize: file.size,
           transferId,
+          ...(fileHash && i === 0 ? { fileHash } : {}),
         };
 
         // Backpressure — wait for buffer to drain
@@ -788,7 +798,10 @@ class WebRTCService {
     if (!this.isValidChunkFields(msg)) return;
 
     if (msg.transferId && this.helloComplete) {
-      this.processChunkGuarded(msg);
+      this.processChunkGuarded(msg).catch((error) => {
+        console.error(`[TRANSFER] Unhandled error in guarded path:`, error);
+        this.onError(error instanceof WebRTCError ? error : new TransferError('Chunk processing failed', error));
+      });
     } else {
       if (msg.transferId && !this.helloComplete) {
         console.warn('[REPLAY_UNGUARDED] transferId present but HELLO incomplete — falling back to legacy');
@@ -799,7 +812,7 @@ class WebRTCService {
     }
   }
 
-  private processChunkGuarded(msg: FileChunkMessage) {
+  private async processChunkGuarded(msg: FileChunkMessage) {
     const { filename, chunk, chunkIndex, totalChunks, fileSize, transferId } = msg;
     const identityKey = this.remoteIdentityKey ? toBase64(this.remoteIdentityKey) : '';
 
@@ -807,6 +820,8 @@ class WebRTCService {
     let transfer = this.guardedTransfers.get(transferId!);
     if (!transfer) {
       console.log(`[TRANSFER] Receiving ${filename} (${fileSize} bytes, ${totalChunks} chunks, tid=${transferId})`);
+      // Store expectedHash from first chunk if bolt.file-hash negotiated
+      const expectedHash = (this.hasCapability('bolt.file-hash') && msg.fileHash) ? msg.fileHash : undefined;
       transfer = {
         transferId: transferId!,
         filename: filename,
@@ -815,6 +830,7 @@ class WebRTCService {
         buffer: new Array(totalChunks!).fill(null),
         receivedSet: new Set(),
         remoteIdentityKey: identityKey,
+        expectedHash,
       };
       this.guardedTransfers.set(transferId!, transfer);
       this.recvTransferIds.set(filename, transferId!);
@@ -843,12 +859,46 @@ class WebRTCService {
 
       // Check completion
       if (received === totalChunks!) {
+        const assembledBlob = new Blob(transfer.buffer as Blob[]);
+
+        // Verify file integrity if expectedHash was provided (bolt.file-hash negotiated)
+        if (transfer.expectedHash) {
+          try {
+            const actual = await hashFile(assembledBlob);
+            if (actual !== transfer.expectedHash) {
+              console.error(`[INTEGRITY_MISMATCH] expected=${transfer.expectedHash} actual=${actual} (tid=${transferId})`);
+              this.guardedTransfers.delete(transferId!);
+              this.recvTransferIds.delete(filename);
+              this.emitProgress(filename, 0, totalChunks!, 0, fileSize!, 'error');
+              this.onError(new IntegrityError('File integrity check failed: hash mismatch'));
+              if (this.dc && this.dc.readyState === 'open') {
+                this.dc.send(JSON.stringify({
+                  type: 'error',
+                  code: 'INTEGRITY_FAILED',
+                  message: 'File integrity check failed: hash mismatch',
+                }));
+              }
+              this.disconnect();
+              return;
+            }
+            console.log(`[INTEGRITY_OK] hash verified for ${filename} (tid=${transferId})`);
+          } catch (hashError) {
+            console.error(`[INTEGRITY_ERROR] failed to compute hash for ${filename}:`, hashError);
+            // Fail-closed: treat hash computation failure as integrity failure
+            this.guardedTransfers.delete(transferId!);
+            this.recvTransferIds.delete(filename);
+            this.emitProgress(filename, 0, totalChunks!, 0, fileSize!, 'error');
+            this.onError(new IntegrityError('File integrity check failed: hash computation error'));
+            this.disconnect();
+            return;
+          }
+        }
+
         console.log(`[TRANSFER] Completed receiving ${filename} (tid=${transferId})`);
-        const file = new Blob(transfer.buffer as Blob[]);
         this.guardedTransfers.delete(transferId!);
         this.recvTransferIds.delete(filename);
         this.emitProgress(filename, totalChunks!, totalChunks!, fileSize!, fileSize!, 'completed');
-        this.onReceiveFile(file, filename);
+        this.onReceiveFile(assembledBlob, filename);
       }
     } catch (error) {
       console.error(`[TRANSFER] Error processing chunk ${chunkIndex} of ${filename} (tid=${transferId}):`, error);

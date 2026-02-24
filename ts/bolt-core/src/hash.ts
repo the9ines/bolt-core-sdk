@@ -18,9 +18,9 @@ export function bufferToHex(buffer: ArrayBuffer): string {
 }
 
 /**
- * Compute SHA-256 hash of a File and return hex string.
+ * Compute SHA-256 hash of a File or Blob and return hex string.
  */
-export async function hashFile(file: File): Promise<string> {
+export async function hashFile(file: Blob): Promise<string> {
   const buffer = await file.arrayBuffer();
   const hash = await sha256(buffer);
   return bufferToHex(hash);
