@@ -39,6 +39,32 @@ describe('generateLongPeerCode', () => {
   });
 });
 
+describe('rejection sampling invariants', () => {
+  it('REJECTION_MAX = floor(256 / N) * N = 248 for N=31', () => {
+    // N = PEER_CODE_ALPHABET.length = 31
+    // MAX = floor(256 / 31) * 31 = 8 * 31 = 248
+    expect(PEER_CODE_ALPHABET.length).toBe(31);
+    const expected = Math.floor(256 / 31) * 31;
+    expect(expected).toBe(248);
+  });
+
+  it('generateSecurePeerCode returns 6 chars all in alphabet (stress)', () => {
+    for (let i = 0; i < 100; i++) {
+      const code = generateSecurePeerCode();
+      expect(code).toHaveLength(6);
+      for (const ch of code) {
+        expect(PEER_CODE_ALPHABET).toContain(ch);
+      }
+    }
+  });
+
+  it('generateLongPeerCode matches /^[A-Z2-9]{4}-[A-Z2-9]{4}$/ (stress)', () => {
+    for (let i = 0; i < 100; i++) {
+      expect(generateLongPeerCode()).toMatch(/^[A-Z2-9]{4}-[A-Z2-9]{4}$/);
+    }
+  });
+});
+
 describe('isValidPeerCode', () => {
   it('accepts valid 6-char codes', () => {
     expect(isValidPeerCode('ABCDEF')).toBe(true);

@@ -1,36 +1,45 @@
 import { PEER_CODE_ALPHABET } from './constants.js';
 
+// Rejection sampling threshold: largest multiple of N that fits in a byte.
+// N = 31 (PEER_CODE_ALPHABET.length), MAX = floor(256/31) * 31 = 248.
+// Bytes >= MAX are discarded to eliminate modulo bias.
+const REJECTION_MAX = Math.floor(256 / PEER_CODE_ALPHABET.length) * PEER_CODE_ALPHABET.length;
+
+/**
+ * Fill `out` with `count` unbiased alphabet indices via rejection sampling.
+ * Bytes >= REJECTION_MAX are discarded; survivors use byte % N.
+ */
+function fillUnbiased(count: number): string[] {
+  const N = PEER_CODE_ALPHABET.length;
+  const result: string[] = [];
+  while (result.length < count) {
+    const batch = new Uint8Array(count - result.length + 4); // small over-request
+    crypto.getRandomValues(batch);
+    for (let i = 0; i < batch.length && result.length < count; i++) {
+      if (batch[i] < REJECTION_MAX) {
+        result.push(PEER_CODE_ALPHABET[batch[i] % N]);
+      }
+    }
+  }
+  return result;
+}
+
 /**
  * Generate a cryptographically secure 6-character peer code.
- * Uses crypto.getRandomValues() for secure random generation.
+ * Uses rejection sampling to eliminate modulo bias.
  */
 export function generateSecurePeerCode(): string {
-  const array = new Uint8Array(6);
-  crypto.getRandomValues(array);
-
-  let code = '';
-  for (let i = 0; i < 6; i++) {
-    code += PEER_CODE_ALPHABET[array[i] % PEER_CODE_ALPHABET.length];
-  }
-
-  return code;
+  return fillUnbiased(6).join('');
 }
 
 /**
  * Generate a longer peer code with dash separator.
  * Format: XXXX-XXXX (~40 bits of entropy)
+ * Uses rejection sampling to eliminate modulo bias.
  */
 export function generateLongPeerCode(): string {
-  const array = new Uint8Array(8);
-  crypto.getRandomValues(array);
-
-  let code = '';
-  for (let i = 0; i < 8; i++) {
-    code += PEER_CODE_ALPHABET[array[i] % PEER_CODE_ALPHABET.length];
-    if (i === 3) code += '-';
-  }
-
-  return code;
+  const chars = fillUnbiased(8);
+  return chars.slice(0, 4).join('') + '-' + chars.slice(4).join('');
 }
 
 /**
