@@ -2,6 +2,43 @@
 
 All notable changes to bolt-core-sdk are documented here. Newest first.
 
+## [transport-web-v0.4.0-replay-protection] - 2026-02-23
+
+Phase 8A: Replay Protection + Chunk Bounds (S3 audit item).
+
+Adds protocol-level replay defenses to the file transfer path. Sender
+generates a `transferId` (bytes16, hex) per transfer; receiver tracks
+state per `transferId` with bounds checks, dedup, and sender-identity
+binding. Legacy peers (no `transferId`) still work via unguarded path
+with deprecation warning.
+
+### Added (bolt-transport-web)
+- `transferId` field on `FileChunkMessage` (optional, hex, 32 chars).
+- `ActiveTransfer` receiver-side state with `receivedSet` for O(1) dedup.
+- `generateTransferId()` — `crypto.getRandomValues(16)` → hex via `bufferToHex`.
+- `guardedTransfers: Map<string, ActiveTransfer>` keyed by `transferId`.
+- `sendTransferIds` / `recvTransferIds` maps for O(1) filename→tid lookup.
+- `isValidChunkFields()` bounds validator (shared by guarded + legacy).
+- `processChunkGuarded()` — dedup (`[REPLAY_DUP]`), bounds (`[REPLAY_OOB]`),
+  sender-identity binding (`[REPLAY_XFER_MISMATCH]`).
+- `processChunkLegacy()` — existing logic with bounds checks, `[REPLAY_UNGUARDED]` warning.
+- 9 new tests in `replay-protection.test.ts` (guarded: dup, OOB, identity mismatch,
+  new transfer, out-of-order, completion reset; legacy: accept, warning; sender: tid format).
+
+### Changed (bolt-transport-web)
+- `sendFile()` generates and includes `transferId` in every chunk message.
+- `processChunk()` refactored into dispatcher → guarded/legacy paths.
+- `cancelTransfer()`, `pauseTransfer()`, `resumeTransfer()` include `transferId` when present.
+- `handleRemoteCancel()`, `disconnect()` clean up `guardedTransfers` state.
+- Version bumped from `0.3.0` to `0.4.0` (backward-compatible feature addition).
+
+### Changed (LOCALBOLT_PROFILE.md)
+- Added section 12: Replay Protection — documents `transferId` semantics,
+  receiver guards, dedup policy, and backward compatibility mode.
+
+### Tests
+- bolt-transport-web: 62 tests (was 53, +9 replay protection tests).
+
 ## [transport-web-v0.3.0-sas-verification] - 2026-02-23
 
 Phase 7B: Surface SAS verification to users.

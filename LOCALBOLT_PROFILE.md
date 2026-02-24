@@ -250,3 +250,35 @@ LocalBolt prefers local network connections. This is a HEURISTIC, not enforcemen
 | Mobile | 8192 (8KB) |
 | Desktop/Laptop | 16384 (16KB) |
 | Steam Deck | 32768 (32KB) |
+
+---
+
+## 12. Replay Protection
+
+### Transfer Identification
+
+- Each file transfer MUST be identified by a `transferId` (bytes16, hex-encoded, 32 chars)
+- Sender generates `transferId` via `crypto.getRandomValues(new Uint8Array(16))`
+- `transferId` MUST be included in every `file-chunk`, `pause`, `resume`, and `cancel` message
+
+### Receiver Guards (Guarded Mode)
+
+Receiver tracks state per `transferId`. When `transferId` is present on incoming chunks:
+
+| Check | Action on Violation |
+|-------|-------------------|
+| `totalChunks` not a finite positive integer | Reject, log `[REPLAY_OOB]` |
+| `chunkIndex < 0` or `chunkIndex >= totalChunks` | Reject, log `[REPLAY_OOB]` |
+| `chunkIndex` already received for this `transferId` | Ignore duplicate, log `[REPLAY_DUP]` |
+| Same `transferId` bound to different sender identity key | Ignore, log `[REPLAY_XFER_MISMATCH]` |
+| Different `transferId` | New transfer (no mismatch) |
+
+Duplicate chunks do NOT abort the transfer (ignore-and-continue policy).
+
+### Backward Compatibility (Legacy Mode)
+
+- `transferId` is OPTIONAL at the wire level for backward compatibility
+- When absent, receiver operates in legacy mode (no dedup, bounds checks still applied)
+- Legacy mode logs: `[REPLAY_UNGUARDED] chunk received without transferId`
+- Legacy chunks MUST NOT create or mutate guarded transfer state
+- Future versions MAY make `transferId` mandatory (fail-closed)

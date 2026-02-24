@@ -1,4 +1,4 @@
-import { sealBoxPayload, openBoxPayload, generateEphemeralKeyPair, toBase64, fromBase64, DEFAULT_CHUNK_SIZE, EncryptionError, KeyMismatchError, computeSas } from '@the9ines/bolt-core';
+import { sealBoxPayload, openBoxPayload, generateEphemeralKeyPair, toBase64, fromBase64, DEFAULT_CHUNK_SIZE, EncryptionError, KeyMismatchError, computeSas, bufferToHex } from '@the9ines/bolt-core';
 import { WebRTCError, ConnectionError, SignalingError, TransferError } from '../../types/webrtc-errors.js';
 import { getLocalOnlyRTCConfig } from '../../lib/platform-utils.js';
 import { verifyPinnedIdentity } from '../identity/pin-store.js';
@@ -35,10 +35,29 @@ interface FileChunkMessage {
   chunkIndex?: number;
   totalChunks?: number;
   fileSize?: number;
+  transferId?: string;
   cancelled?: boolean;
   cancelledBy?: 'sender' | 'receiver';
   paused?: boolean;
   resumed?: boolean;
+}
+
+/** Receiver-side state for a guarded transfer (transferId present). */
+interface ActiveTransfer {
+  transferId: string;
+  filename: string;
+  totalChunks: number;
+  fileSize: number;
+  buffer: (Blob | null)[];
+  receivedSet: Set<number>;
+  remoteIdentityKey: string;
+}
+
+/** Generate a spec-compliant transfer_id (bytes16 → hex, 32 chars). */
+function generateTransferId(): string {
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  return bufferToHex(bytes.buffer);
 }
 
 export type VerificationState = 'unverified' | 'verified' | 'legacy';
@@ -81,6 +100,9 @@ class WebRTCService {
   private transferPaused = false;
   private transferCancelled = false;
   private receiveBuffers: Map<string, (Blob | null)[]> = new Map();
+  private guardedTransfers: Map<string, ActiveTransfer> = new Map();
+  private sendTransferIds: Map<string, string> = new Map();
+  private recvTransferIds: Map<string, string> = new Map();
 
   // Stats
   private transferStartTime = 0;
@@ -550,6 +572,9 @@ class WebRTCService {
     this.transferPaused = false;
     this.transferCancelled = false;
     this.receiveBuffers.clear();
+    this.guardedTransfers.clear();
+    this.sendTransferIds.clear();
+    this.recvTransferIds.clear();
 
     // Clear HELLO / TOFU / SAS state
     if (this.helloTimeout) {
@@ -579,7 +604,9 @@ class WebRTCService {
     }
 
     const totalChunks = Math.ceil(file.size / DEFAULT_CHUNK_SIZE);
-    console.log(`[TRANSFER] Sending ${file.name} (${file.size} bytes, ${totalChunks} chunks)`);
+    const transferId = generateTransferId();
+    this.sendTransferIds.set(file.name, transferId);
+    console.log(`[TRANSFER] Sending ${file.name} (${file.size} bytes, ${totalChunks} chunks, tid=${transferId})`);
     this.transferCancelled = false;
     this.transferPaused = false;
     this.transferStartTime = Date.now();
@@ -609,6 +636,7 @@ class WebRTCService {
           chunkIndex: i,
           totalChunks,
           fileSize: file.size,
+          transferId,
         };
 
         // Backpressure — wait for buffer to drain
@@ -628,11 +656,13 @@ class WebRTCService {
       }
 
       console.log(`[TRANSFER] All chunks sent for ${file.name}`);
+      this.sendTransferIds.delete(file.name);
       // Emit completion after a brief delay so UI can process final progress
       setTimeout(() => {
         this.emitProgress(file.name, totalChunks, totalChunks, file.size, file.size, 'completed');
       }, 50);
     } catch (error) {
+      this.sendTransferIds.delete(file.name);
       if (!(error instanceof TransferError && error.message.includes('cancelled'))) {
         this.emitProgress(file.name, 0, totalChunks, 0, file.size, 'error');
       }
@@ -688,45 +718,143 @@ class WebRTCService {
   private handleRemoteCancel(msg: FileChunkMessage) {
     const status = msg.cancelledBy === 'receiver' ? 'canceled_by_receiver' : 'canceled_by_sender';
     this.receiveBuffers.delete(msg.filename);
+    if (msg.transferId) {
+      this.guardedTransfers.delete(msg.transferId);
+    }
+    // Also clean up by filename lookup
+    const recvTid = this.recvTransferIds.get(msg.filename);
+    if (recvTid) {
+      this.guardedTransfers.delete(recvTid);
+      this.recvTransferIds.delete(msg.filename);
+    }
     this.transferCancelled = true;
     this.emitProgress(msg.filename, 0, 0, 0, 0, status);
+  }
+
+  private isValidChunkFields(msg: FileChunkMessage): boolean {
+    const { chunkIndex, totalChunks } = msg;
+    if (!Number.isFinite(totalChunks) || !Number.isInteger(totalChunks!) || totalChunks! <= 0) {
+      console.warn(`[REPLAY_OOB] invalid totalChunks=${totalChunks} — rejected`);
+      return false;
+    }
+    if (!Number.isFinite(chunkIndex) || !Number.isInteger(chunkIndex!) || chunkIndex! < 0 || chunkIndex! >= totalChunks!) {
+      console.warn(`[REPLAY_OOB] chunkIndex=${chunkIndex} out of range [0, ${totalChunks}) — rejected`);
+      return false;
+    }
+    return true;
   }
 
   private processChunk(msg: FileChunkMessage) {
     if (!msg.chunk || typeof msg.chunkIndex !== 'number' || !msg.totalChunks || !msg.fileSize) return;
     if (!this.remotePublicKey) return;
 
+    // Bounds check applies to BOTH modes
+    if (!this.isValidChunkFields(msg)) return;
+
+    if (msg.transferId && this.helloComplete) {
+      this.processChunkGuarded(msg);
+    } else {
+      if (msg.transferId && !this.helloComplete) {
+        console.warn('[REPLAY_UNGUARDED] transferId present but HELLO incomplete — falling back to legacy');
+      } else {
+        console.warn('[REPLAY_UNGUARDED] chunk received without transferId — legacy peer');
+      }
+      this.processChunkLegacy(msg);
+    }
+  }
+
+  private processChunkGuarded(msg: FileChunkMessage) {
+    const { filename, chunk, chunkIndex, totalChunks, fileSize, transferId } = msg;
+    const identityKey = this.remoteIdentityKey ? toBase64(this.remoteIdentityKey) : '';
+
+    // Lookup or create guarded transfer
+    let transfer = this.guardedTransfers.get(transferId!);
+    if (!transfer) {
+      console.log(`[TRANSFER] Receiving ${filename} (${fileSize} bytes, ${totalChunks} chunks, tid=${transferId})`);
+      transfer = {
+        transferId: transferId!,
+        filename: filename,
+        totalChunks: totalChunks!,
+        fileSize: fileSize!,
+        buffer: new Array(totalChunks!).fill(null),
+        receivedSet: new Set(),
+        remoteIdentityKey: identityKey,
+      };
+      this.guardedTransfers.set(transferId!, transfer);
+      this.recvTransferIds.set(filename, transferId!);
+      this.transferStartTime = Date.now();
+      this.pauseDuration = 0;
+    } else if (transfer.remoteIdentityKey !== identityKey) {
+      // Same transferId but different sender identity — cross-peer collision
+      console.warn(`[REPLAY_XFER_MISMATCH] transferId=${transferId} bound to different sender identity — ignored`);
+      return;
+    }
+
+    // Dedup check
+    if (transfer.receivedSet.has(chunkIndex!)) {
+      console.warn(`[REPLAY_DUP] chunkIndex=${chunkIndex} already received for tid=${transferId} — ignored`);
+      return;
+    }
+
+    try {
+      if (!this.keyPair) throw new EncryptionError('No ephemeral key pair');
+      const decrypted = openBoxPayload(chunk!, this.remotePublicKey!, this.keyPair.secretKey);
+      transfer.buffer[chunkIndex!] = new Blob([decrypted as BlobPart]);
+      transfer.receivedSet.add(chunkIndex!);
+
+      const received = transfer.receivedSet.size;
+      this.emitProgress(filename, received, totalChunks!, received * (fileSize! / totalChunks!), fileSize!, 'transferring');
+
+      // Check completion
+      if (received === totalChunks!) {
+        console.log(`[TRANSFER] Completed receiving ${filename} (tid=${transferId})`);
+        const file = new Blob(transfer.buffer as Blob[]);
+        this.guardedTransfers.delete(transferId!);
+        this.recvTransferIds.delete(filename);
+        this.emitProgress(filename, totalChunks!, totalChunks!, fileSize!, fileSize!, 'completed');
+        this.onReceiveFile(file, filename);
+      }
+    } catch (error) {
+      console.error(`[TRANSFER] Error processing chunk ${chunkIndex} of ${filename} (tid=${transferId}):`, error);
+      this.guardedTransfers.delete(transferId!);
+      this.recvTransferIds.delete(filename);
+      this.emitProgress(filename, 0, totalChunks!, 0, fileSize!, 'error');
+      this.onError(error instanceof WebRTCError ? error : new TransferError('Chunk processing failed', error));
+    }
+  }
+
+  private processChunkLegacy(msg: FileChunkMessage) {
     const { filename, chunk, chunkIndex, totalChunks, fileSize } = msg;
 
     // Initialize buffer on first chunk
     if (!this.receiveBuffers.has(filename)) {
-      console.log(`[TRANSFER] Receiving ${filename} (${fileSize} bytes, ${totalChunks} chunks)`);
-      this.receiveBuffers.set(filename, new Array(totalChunks).fill(null));
+      console.log(`[TRANSFER] Receiving ${filename} (${fileSize} bytes, ${totalChunks} chunks) [legacy]`);
+      this.receiveBuffers.set(filename, new Array(totalChunks!).fill(null));
       this.transferStartTime = Date.now();
       this.pauseDuration = 0;
     }
 
     try {
       if (!this.keyPair) throw new EncryptionError('No ephemeral key pair');
-      const decrypted = openBoxPayload(chunk, this.remotePublicKey, this.keyPair.secretKey);
+      const decrypted = openBoxPayload(chunk!, this.remotePublicKey!, this.keyPair.secretKey);
       const buffer = this.receiveBuffers.get(filename)!;
-      buffer[chunkIndex] = new Blob([decrypted as BlobPart]);
+      buffer[chunkIndex!] = new Blob([decrypted as BlobPart]);
 
       const received = buffer.filter(Boolean).length;
-      this.emitProgress(filename, received, totalChunks, received * (fileSize / totalChunks), fileSize, 'transferring');
+      this.emitProgress(filename, received, totalChunks!, received * (fileSize! / totalChunks!), fileSize!, 'transferring');
 
       // Check completion
-      if (received === totalChunks) {
-        console.log(`[TRANSFER] Completed receiving ${filename}`);
+      if (received === totalChunks!) {
+        console.log(`[TRANSFER] Completed receiving ${filename} [legacy]`);
         const file = new Blob(buffer as Blob[]);
         this.receiveBuffers.delete(filename);
-        this.emitProgress(filename, totalChunks, totalChunks, fileSize, fileSize, 'completed');
+        this.emitProgress(filename, totalChunks!, totalChunks!, fileSize!, fileSize!, 'completed');
         this.onReceiveFile(file, filename);
       }
     } catch (error) {
       console.error(`[TRANSFER] Error processing chunk ${chunkIndex} of ${filename}:`, error);
       this.receiveBuffers.delete(filename);
-      this.emitProgress(filename, 0, totalChunks, 0, fileSize, 'error');
+      this.emitProgress(filename, 0, totalChunks!, 0, fileSize!, 'error');
       this.onError(error instanceof WebRTCError ? error : new TransferError('Chunk processing failed', error));
     }
   }
@@ -736,7 +864,8 @@ class WebRTCService {
   pauseTransfer(filename: string) {
     this.transferPaused = true;
     this.lastPausedAt = Date.now();
-    this.sendControlMessage(filename, { paused: true });
+    const transferId = this.sendTransferIds.get(filename);
+    this.sendControlMessage(filename, { paused: true, ...(transferId && { transferId }) });
     this.emitProgress(filename, 0, 0, 0, 0, 'paused');
   }
 
@@ -746,14 +875,27 @@ class WebRTCService {
       this.lastPausedAt = null;
     }
     this.transferPaused = false;
-    this.sendControlMessage(filename, { resumed: true });
+    const transferId = this.sendTransferIds.get(filename);
+    this.sendControlMessage(filename, { resumed: true, ...(transferId && { transferId }) });
     this.emitProgress(filename, 0, 0, 0, 0, 'transferring');
   }
 
   cancelTransfer(filename: string, isReceiver: boolean = false) {
     this.transferCancelled = true;
-    this.sendControlMessage(filename, { cancelled: true, cancelledBy: isReceiver ? 'receiver' : 'sender' });
+    const transferId = isReceiver
+      ? this.recvTransferIds.get(filename)
+      : this.sendTransferIds.get(filename);
+    this.sendControlMessage(filename, {
+      cancelled: true,
+      cancelledBy: isReceiver ? 'receiver' : 'sender',
+      ...(transferId && { transferId }),
+    });
     this.receiveBuffers.delete(filename);
+    if (transferId) {
+      this.guardedTransfers.delete(transferId);
+      this.recvTransferIds.delete(filename);
+      this.sendTransferIds.delete(filename);
+    }
     const status = isReceiver ? 'canceled_by_receiver' : 'canceled_by_sender';
     this.emitProgress(filename, 0, 0, 0, 0, status);
   }
