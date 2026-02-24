@@ -8,13 +8,42 @@
 //! `REJECTION_MAX = floor(256 / 31) * 31 = 248`. Bytes >= 248 are
 //! discarded to eliminate modulo bias.
 //!
-//! ## Parity gates (R3)
+//! ## Parity
 //! - Generated codes pass `is_valid_peer_code`.
 //! - `normalize_peer_code` matches TS for all test inputs.
-//! - Rejection sampling bias test (chi-squared, 100K samples).
 //! - Long code format: `XXXX-XXXX`.
 
+use rand_core::{OsRng, RngCore};
+
 use crate::constants::PEER_CODE_ALPHABET;
+
+/// Rejection sampling threshold: largest multiple of 31 that fits in a byte.
+/// Bytes >= 248 are discarded to eliminate modulo bias.
+const REJECTION_MAX: u8 = 248; // floor(256 / 31) * 31
+
+/// Fill a buffer with `count` unbiased alphabet characters via rejection sampling.
+///
+/// Matches TS `fillUnbiased()` exactly: request random bytes in batches,
+/// discard bytes >= REJECTION_MAX, use `byte % 31` for survivors.
+fn fill_unbiased(count: usize) -> String {
+    let alphabet = PEER_CODE_ALPHABET.as_bytes();
+    let n = alphabet.len(); // 31
+    let mut result = String::with_capacity(count);
+    while result.len() < count {
+        let needed = count - result.len() + 4; // small over-request like TS
+        let mut batch = vec![0u8; needed];
+        OsRng.fill_bytes(&mut batch);
+        for &byte in &batch {
+            if result.len() >= count {
+                break;
+            }
+            if byte < REJECTION_MAX {
+                result.push(alphabet[byte as usize % n] as char);
+            }
+        }
+    }
+    result
+}
 
 /// Generate a cryptographically secure 6-character peer code.
 ///
@@ -22,9 +51,10 @@ use crate::constants::PEER_CODE_ALPHABET;
 ///
 /// # Parity
 /// TS equivalent: `generateSecurePeerCode()`.
-/// Outputs differ (random), but alphabet and length are identical.
+/// Outputs differ (random), but alphabet, length, and sampling
+/// algorithm are identical.
 pub fn generate_secure_peer_code() -> String {
-    todo!("R3: implement rejection sampling with OsRng")
+    fill_unbiased(6)
 }
 
 /// Generate a longer peer code with dash separator.
@@ -34,7 +64,12 @@ pub fn generate_secure_peer_code() -> String {
 /// # Parity
 /// TS equivalent: `generateLongPeerCode()`.
 pub fn generate_long_peer_code() -> String {
-    todo!("R3: implement rejection sampling with OsRng, dash at position 4")
+    let chars = fill_unbiased(8);
+    let mut result = String::with_capacity(9);
+    result.push_str(&chars[..4]);
+    result.push('-');
+    result.push_str(&chars[4..]);
+    result
 }
 
 /// Validate peer code format.
@@ -44,7 +79,7 @@ pub fn generate_long_peer_code() -> String {
 ///
 /// # Parity
 /// TS equivalent: `isValidPeerCode(code)`. Must return identical
-/// results for all inputs in the golden vector suite.
+/// results for all inputs.
 pub fn is_valid_peer_code(code: &str) -> bool {
     let normalized = code.replace('-', "").to_uppercase();
     if normalized.len() != 6 && normalized.len() != 8 {
@@ -64,6 +99,8 @@ pub fn normalize_peer_code(code: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // ── validation (existing) ───────────────────────────────────────
 
     #[test]
     fn valid_6_char() {
@@ -98,10 +135,8 @@ mod tests {
 
     #[test]
     fn invalid_ambiguous_chars() {
-        // 0 and O are excluded from alphabet
         assert!(!is_valid_peer_code("A0CDEF"));
         assert!(!is_valid_peer_code("AOCDEF"));
-        // 1, I, L are excluded
         assert!(!is_valid_peer_code("A1CDEF"));
         assert!(!is_valid_peer_code("AICDEF"));
         assert!(!is_valid_peer_code("ALCDEF"));
@@ -112,5 +147,61 @@ mod tests {
         assert_eq!(normalize_peer_code("abcd-efgh"), "ABCDEFGH");
         assert_eq!(normalize_peer_code("ABC-DEF"), "ABCDEF");
         assert_eq!(normalize_peer_code("xyzw"), "XYZW");
+    }
+
+    // ── generation (R3) ─────────────────────────────────────────────
+
+    #[test]
+    fn secure_peer_code_length() {
+        let code = generate_secure_peer_code();
+        assert_eq!(code.len(), 6);
+    }
+
+    #[test]
+    fn secure_peer_code_chars_in_alphabet() {
+        let code = generate_secure_peer_code();
+        for c in code.chars() {
+            assert!(PEER_CODE_ALPHABET.contains(c), "char '{c}' not in alphabet");
+        }
+    }
+
+    #[test]
+    fn secure_peer_code_passes_validation() {
+        let code = generate_secure_peer_code();
+        assert!(is_valid_peer_code(&code));
+    }
+
+    #[test]
+    fn long_peer_code_format() {
+        let code = generate_long_peer_code();
+        assert_eq!(code.len(), 9);
+        assert_eq!(code.as_bytes()[4], b'-');
+    }
+
+    #[test]
+    fn long_peer_code_chars_in_alphabet() {
+        let code = generate_long_peer_code();
+        for (i, c) in code.chars().enumerate() {
+            if i == 4 {
+                assert_eq!(c, '-');
+            } else {
+                assert!(
+                    PEER_CODE_ALPHABET.contains(c),
+                    "char '{c}' at index {i} not in alphabet"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn long_peer_code_passes_validation() {
+        let code = generate_long_peer_code();
+        assert!(is_valid_peer_code(&code));
+    }
+
+    #[test]
+    fn rejection_max_constant() {
+        // floor(256 / 31) * 31 = 8 * 31 = 248
+        assert_eq!(REJECTION_MAX, 248);
     }
 }

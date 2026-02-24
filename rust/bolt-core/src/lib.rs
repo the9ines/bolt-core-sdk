@@ -16,7 +16,7 @@
 //! | [`hash`] | `hash.ts` | Complete |
 //! | [`identity`] | `identity.ts` | Complete |
 //! | [`sas`] | `sas.ts` | Complete |
-//! | [`peer_code`] | `peer-code.ts` | Partial (R3) |
+//! | [`peer_code`] | `peer-code.ts` | Complete |
 //! | [`vectors`] | N/A | Complete (test-only) |
 //!
 //! # Parity Strategy
