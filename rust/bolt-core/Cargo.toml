@@ -1,6 +1,6 @@
 [package]
 name = "bolt-core"
-version = "0.1.1"
+version = "0.2.0"
 edition = "2021"
 description = "Canonical Bolt Protocol core — crypto primitives and utilities"
 license = "MIT"
@@ -9,16 +9,14 @@ repository = "https://github.com/the9ines/bolt-core-sdk"
 [features]
 default = []
 # Enables the vectors module (golden vector generator + integration tests).
-# Pulls crypto_box, base64, serde, serde_json. Test-only surface.
-vectors = ["dep:crypto_box", "dep:base64", "dep:serde", "dep:serde_json"]
+# Pulls serde + serde_json for JSON serialization. Test-only surface.
+vectors = ["dep:serde", "dep:serde_json"]
 
 [dependencies]
 thiserror = "2"
+crypto_box = "0.9"
+base64 = "0.22"
+rand_core = { version = "0.6", features = ["getrandom"] }
 # Optional deps — only compiled when `vectors` feature is enabled.
-crypto_box = { version = "0.9", optional = true }
-base64 = { version = "0.22", optional = true }
 serde = { version = "1", features = ["derive"], optional = true }
 serde_json = { version = "1", optional = true }
-# sha2 and rand are NOT used by any R0 compiled code (stubs are todo!()).
-# They will be added in R1 (crypto/encoding) and R2 (hash/SAS) when
-# implementations land.

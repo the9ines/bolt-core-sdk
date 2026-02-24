@@ -11,8 +11,8 @@
 //! |--------|---------------|--------|
 //! | [`constants`] | `constants.ts` | Complete |
 //! | [`errors`] | `errors.ts` | Complete |
-//! | [`encoding`] | `encoding.ts` | Stub (R1) |
-//! | [`crypto`] | `crypto.ts` | Stub (R1) |
+//! | [`encoding`] | `encoding.ts` | Complete |
+//! | [`crypto`] | `crypto.ts` | Complete |
 //! | [`hash`] | `hash.ts` | Stub (R2) |
 //! | [`identity`] | `identity.ts` | Stub (R2) |
 //! | [`sas`] | `sas.ts` | Stub (R2) |
