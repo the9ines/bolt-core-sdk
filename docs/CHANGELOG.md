@@ -2,6 +2,38 @@
 
 All notable changes to bolt-core-sdk are documented here. Newest first.
 
+## [transport-web-v0.4.1-lifecycle-tests] - 2026-02-23
+
+Phase 8B.1: WebRTCService Test Harness + Lifecycle Coverage.
+
+Adds 12 lifecycle and failure-path tests for WebRTCService transfer
+logic. No production code changes. Tests cover sender flow (HELLO wait,
+chunk ordering, dc-not-open), receiver flow (legacy + guarded path
+reconstruction, out-of-order delivery), control messages (cancel, pause,
+resume, remote cancel), state cleanup (disconnect), error path
+(decryption failure), bounds rejection sanity, and handleMessage routing.
+
+### Added (bolt-transport-web)
+- `webrtcservice-lifecycle.test.ts` — 12 tests covering:
+  - `sendFile` blocks until `helloComplete` is resolved.
+  - `sendFile` emits chunk messages in order with correct fields.
+  - `cancelTransfer` sends cancel control message and clears state.
+  - `pauseTransfer` / `resumeTransfer` send control messages.
+  - Legacy receiver path reconstructs file and calls `onReceiveFile`.
+  - Guarded receiver path reconstructs out-of-order chunks (2,0,1).
+  - `handleRemoteCancel` clears all receiver state maps.
+  - `disconnect` clears all transfer state.
+  - Decryption failure triggers error progress and clears guarded transfer.
+  - Invalid chunk fields rejected without crash (bounds sanity).
+  - `handleMessage` routes pause/resume/cancel control messages.
+  - `sendFile` throws when data channel is not open.
+
+### Changed (bolt-transport-web)
+- Version bumped from `0.4.0` to `0.4.1` (tests only, no API change).
+
+### Tests
+- bolt-transport-web: 74 tests (was 62, +12 lifecycle tests).
+
 ## [transport-web-v0.4.0-replay-protection] - 2026-02-23
 
 Phase 8A: Replay Protection + Chunk Bounds (S3 audit item).
