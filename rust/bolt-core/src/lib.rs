@@ -5,64 +5,49 @@
 //! is a supported adapter implementation that MUST produce identical
 //! outputs for identical inputs, verified by shared golden test vectors.
 //!
-//! **Status:** Vector authority established. The Rust crate can
-//! deterministically reproduce the golden test vectors. Full crypto
-//! primitives (public API) are not yet exposed.
+//! # Module Map
+//!
+//! | Module | TS Equivalent | Status |
+//! |--------|---------------|--------|
+//! | [`constants`] | `constants.ts` | Complete |
+//! | [`errors`] | `errors.ts` | Complete |
+//! | [`encoding`] | `encoding.ts` | Stub (R1) |
+//! | [`crypto`] | `crypto.ts` | Stub (R1) |
+//! | [`hash`] | `hash.ts` | Stub (R2) |
+//! | [`identity`] | `identity.ts` | Stub (R2) |
+//! | [`sas`] | `sas.ts` | Stub (R2) |
+//! | [`peer_code`] | `peer-code.ts` | Partial (R3) |
+//! | [`vectors`] | N/A | Complete (test-only) |
+//!
+//! # Parity Strategy
+//!
+//! TS generates golden test vectors. Rust consumes them. The vector
+//! files in `ts/bolt-core/__tests__/vectors/` are the single source
+//! of truth. See `RUST_CORE_PLAN.md` for the full parity strategy.
+
+/// Protocol constants — values shared with TypeScript SDK.
+pub mod constants;
+
+/// Error types for bolt-core operations.
+pub mod errors;
+
+/// Encoding utilities — base64 and hex.
+pub mod encoding;
+
+/// Crypto primitives — NaCl box (XSalsa20-Poly1305).
+pub mod crypto;
+
+/// Hashing utilities — SHA-256.
+pub mod hash;
+
+/// Identity — long-lived keypairs and TOFU error.
+pub mod identity;
+
+/// SAS — Short Authentication String computation.
+pub mod sas;
+
+/// Peer code generation and validation.
+pub mod peer_code;
 
 /// Deterministic golden vector generator (test use only).
 pub mod vectors;
-
-/// Protocol constants.
-pub mod constants {
-    /// NaCl box nonce length in bytes.
-    pub const NONCE_LENGTH: usize = 24;
-
-    /// NaCl public key length in bytes (Curve25519).
-    pub const PUBLIC_KEY_LENGTH: usize = 32;
-
-    /// NaCl secret key length in bytes (Curve25519).
-    pub const SECRET_KEY_LENGTH: usize = 32;
-
-    /// Default chunk size for file transfer (bytes).
-    pub const DEFAULT_CHUNK_SIZE: usize = 16_384;
-
-    /// Peer code length (characters).
-    pub const PEER_CODE_LENGTH: usize = 6;
-
-    /// Peer code alphabet (31 chars, unambiguous base32 subset: no 0/O, 1/I/L).
-    pub const PEER_CODE_ALPHABET: &str = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
-
-    /// SAS (Short Authentication String) length in hex characters.
-    pub const SAS_LENGTH: usize = 6;
-
-    /// NaCl box overhead (Poly1305 MAC).
-    pub const BOX_OVERHEAD: usize = 16;
-}
-
-#[cfg(test)]
-mod tests {
-    use super::constants::*;
-
-    #[test]
-    fn constants_match_protocol() {
-        assert_eq!(NONCE_LENGTH, 24);
-        assert_eq!(PUBLIC_KEY_LENGTH, 32);
-        assert_eq!(SECRET_KEY_LENGTH, 32);
-        assert_eq!(DEFAULT_CHUNK_SIZE, 16_384);
-        assert_eq!(PEER_CODE_LENGTH, 6);
-        assert_eq!(PEER_CODE_ALPHABET, "ABCDEFGHJKMNPQRSTUVWXYZ23456789");
-        assert_eq!(SAS_LENGTH, 6);
-        assert_eq!(BOX_OVERHEAD, 16);
-    }
-
-    #[test]
-    fn peer_code_alphabet_length() {
-        assert_eq!(PEER_CODE_ALPHABET.len(), 31);
-        // Must not contain ambiguous characters: 0, O, 1, I, L
-        assert!(!PEER_CODE_ALPHABET.contains('0'));
-        assert!(!PEER_CODE_ALPHABET.contains('O'));
-        assert!(!PEER_CODE_ALPHABET.contains('1'));
-        assert!(!PEER_CODE_ALPHABET.contains('I'));
-        assert!(!PEER_CODE_ALPHABET.contains('L'));
-    }
-}

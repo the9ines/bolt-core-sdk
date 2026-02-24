@@ -1,13 +1,20 @@
 [package]
 name = "bolt-core"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 description = "Canonical Bolt Protocol core — crypto primitives and utilities"
 license = "MIT"
 repository = "https://github.com/the9ines/bolt-core-sdk"
 
 [dependencies]
+base64 = "0.22"
+crypto_box = "0.9"
+rand = "0.8"
+sha2 = "0.10"
+thiserror = "2"
+# serde + serde_json remain runtime deps because vectors.rs is a public
+# module consumed by integration tests (vector_equivalence.rs). Moving
+# them to dev-deps would break the equivalence gate. Future option:
+# gate vectors behind a cargo feature.
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-crypto_box = "0.9"
-base64 = "0.22"
