@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { generateIdentityKeyPair, KeyMismatchError, PUBLIC_KEY_LENGTH, SECRET_KEY_LENGTH } from '../src/index.js';
+import { generateIdentityKeyPair, KeyMismatchError } from '../src/index.js';
+import { PUBLIC_KEY_LENGTH, SECRET_KEY_LENGTH } from '../src/constants.js';
 
 describe('Identity keypair generation', () => {
   it('returns publicKey and secretKey of correct length', () => {

@@ -4,8 +4,8 @@ import {
   generateLongPeerCode,
   isValidPeerCode,
   normalizePeerCode,
-  PEER_CODE_ALPHABET,
 } from '../src/index.js';
+import { PEER_CODE_ALPHABET } from '../src/constants.js';
 
 describe('generateSecurePeerCode', () => {
   it('returns a 6-character string', () => {
