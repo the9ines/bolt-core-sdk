@@ -61,6 +61,16 @@ This extension does not change the Bolt Core protocol.
 
 - Non-empty, max 16 chars, ASCII alphanumeric only
 
+### Peer Code Security Model
+
+See [PROTOCOL.md §2 — Peer Code Security Model](PROTOCOL.md) for the authoritative policy.
+
+LocalBolt Profile uses **6-character peer codes** (local/LAN mode). The 8-character
+long format (`XXXX-XXXX`) is available for optional cloud/remote discovery extensions.
+
+Peer code is a routing hint, not an authentication secret. Session security derives
+from encrypted HELLO + TOFU + SAS, not from peer code entropy.
+
 ---
 
 ## 4. Peer Channel

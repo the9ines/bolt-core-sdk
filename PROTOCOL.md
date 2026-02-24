@@ -71,6 +71,75 @@ Core requirements for Profiles:
 - Implementations SHOULD store a mapping of friendly device name to pinned key, but the pinned key is authoritative
 - On key mismatch: MUST block, MUST require explicit re-pair approval, MUST require SAS confirmation
 
+### Peer Code Security Model
+
+#### Role of Peer Code
+
+The peer code is a **routing and discovery hint**, not an authentication secret.
+
+It exists solely to:
+
+- Allow two peers to locate each other via rendezvous infrastructure.
+- Reduce accidental collisions between concurrent sessions.
+- Provide a human-typable pairing token.
+
+The peer code does not provide authentication or confidentiality guarantees.
+
+#### Security Chain (Authoritative)
+
+The security model for Bolt transport is:
+
+1. **Peer Code** → rendezvous routing only
+2. **Encrypted HELLO** → ephemeral key exchange
+3. **TOFU identity pinning** → continuity across sessions
+4. **SAS verification** → active MITM detection
+
+Authentication and integrity derive from HELLO + TOFU + SAS.
+They do not derive from peer code entropy.
+
+Even if a peer code is guessed:
+
+- The attacker must still complete the encrypted HELLO exchange.
+- Identity mismatch triggers TOFU failure.
+- Active MITM is detectable via SAS mismatch.
+
+Peer code compromise alone does not compromise session security.
+
+#### Default Length Policy
+
+Alphabet: `ABCDEFGHJKMNPQRSTUVWXYZ23456789` (31 characters)
+
+| Mode | Format | Characters | Entropy | Purpose |
+|------|--------|------------|---------|---------|
+| Local (LAN) | 6 characters | 6 | ~29.7 bits | Low-friction human entry (default) |
+| Remote / Internet | XXXX-XXXX | 8 | ~39.6 bits | Reduced collision probability for wide-area pairing |
+
+12+ characters are unnecessary because peer code is not an authentication primitive.
+
+Profiles define which mode applies in their scope. See LocalBolt Profile v1 for local-mode defaults.
+
+#### Abuse Mitigation
+
+Brute-force resistance is enforced by:
+
+- Rendezvous rate limiting
+- Connection throttling
+- Server-side room caps
+- Optional IP-level controls
+
+Security does not depend on peer code length alone.
+
+#### Non-Goals
+
+Peer code MUST NOT be treated as:
+
+- A password
+- A bearer token
+- A long-term shared secret
+- A substitute for SAS verification
+
+Any design that relies on peer code entropy for authentication violates the Bolt threat model.
+
 ---
 
 ## 3. Session Establishment
