@@ -13,9 +13,9 @@
 //! | [`errors`] | `errors.ts` | Complete |
 //! | [`encoding`] | `encoding.ts` | Complete |
 //! | [`crypto`] | `crypto.ts` | Complete |
-//! | [`hash`] | `hash.ts` | Stub (R2) |
-//! | [`identity`] | `identity.ts` | Stub (R2) |
-//! | [`sas`] | `sas.ts` | Stub (R2) |
+//! | [`hash`] | `hash.ts` | Complete |
+//! | [`identity`] | `identity.ts` | Complete |
+//! | [`sas`] | `sas.ts` | Complete |
 //! | [`peer_code`] | `peer-code.ts` | Partial (R3) |
 //! | [`vectors`] | N/A | Complete (test-only) |
 //!
