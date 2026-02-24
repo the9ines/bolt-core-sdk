@@ -2,7 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { openBoxPayload, fromBase64, NONCE_LENGTH } from '../src/index.js';
+import { openBoxPayload, fromBase64 } from '../src/index.js';
+import { NONCE_LENGTH } from '../src/constants.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const vectorDir = join(__dirname, 'vectors');

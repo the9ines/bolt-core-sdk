@@ -4,9 +4,8 @@ import {
   sealBoxPayload,
   openBoxPayload,
   generateEphemeralKeyPair,
-  NONCE_LENGTH,
-  PUBLIC_KEY_LENGTH,
 } from '../src/index.js';
+import { NONCE_LENGTH, PUBLIC_KEY_LENGTH } from '../src/constants.js';
 
 describe('generateEphemeralKeyPair', () => {
   it('returns 32-byte public and secret keys', () => {
