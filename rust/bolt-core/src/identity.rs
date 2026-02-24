@@ -4,7 +4,7 @@
 //! stores them (IndexedDB for web, filesystem for native). This module
 //! only provides generation and the mismatch error type.
 //!
-//! ## Parity gates (R2)
+//! ## Parity
 //! - `generate_identity_keypair()` produces valid 32-byte keys.
 //! - Public key is derivable from secret key (X25519 property).
 //! - `KeyMismatchError` carries peer_code, expected, received fields.
@@ -13,7 +13,7 @@
 //! - No TOFU pin storage (transport concern).
 //! - No persistence logic.
 
-use crate::crypto::KeyPair;
+use crate::crypto::{generate_ephemeral_keypair, KeyPair};
 
 /// Long-lived X25519 identity keypair.
 ///
@@ -26,8 +26,9 @@ pub type IdentityKeyPair = KeyPair;
 ///
 /// # Parity
 /// TS equivalent: `generateIdentityKeyPair()` (tweetnacl `box.keyPair()`).
+/// Both use X25519 via OS CSPRNG — keypairs are structurally compatible.
 pub fn generate_identity_keypair() -> IdentityKeyPair {
-    todo!("R2: implement using crypto_box::SecretKey + OsRng")
+    generate_ephemeral_keypair()
 }
 
 /// TOFU violation error.
@@ -76,7 +77,19 @@ mod tests {
             expected: [0u8; 32],
             received: [0u8; 32],
         };
-        // Verify it implements std::error::Error
         let _: &dyn std::error::Error = &err;
+    }
+
+    #[test]
+    fn identity_keypair_lengths() {
+        let kp = generate_identity_keypair();
+        assert_eq!(kp.public_key.len(), 32);
+        assert_eq!(kp.secret_key.len(), 32);
+    }
+
+    #[test]
+    fn identity_keypair_nonzero() {
+        let kp = generate_identity_keypair();
+        assert_ne!(kp.public_key, [0u8; 32]);
     }
 }
