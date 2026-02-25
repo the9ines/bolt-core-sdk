@@ -175,6 +175,7 @@ describe('Phase M1: Profile Envelope v1', () => {
 
   /** Enable envelope negotiation: helloComplete + both capabilities negotiated. */
   function enableEnvelope(service: any) {
+    (service as any).sessionState = 'post_hello';
     (service as any).helloComplete = true;
     (service as any).remoteIdentityKey = new Uint8Array(32);
     (service as any).localCapabilities = ['bolt.file-hash', 'bolt.profile-envelope-v1'];
@@ -183,6 +184,7 @@ describe('Phase M1: Profile Envelope v1', () => {
 
   /** HELLO complete but envelope NOT negotiated (remote doesn't support it). */
   function disableEnvelope(service: any) {
+    (service as any).sessionState = 'post_hello';
     (service as any).helloComplete = true;
     (service as any).remoteIdentityKey = new Uint8Array(32);
     (service as any).localCapabilities = ['bolt.file-hash', 'bolt.profile-envelope-v1'];
@@ -403,22 +405,37 @@ describe('Phase M1: Profile Envelope v1', () => {
   // ──────────────────────────────────────────────────────────────────────────
 
   describe('Mixed peer', () => {
-    it('8. when envelope negotiated, receiver still accepts legacy plaintext', async () => {
-      const onReceiveFile = vi.fn();
-      const service = createService(onReceiveFile);
-      const { injectMessage } = attachDataChannel(service);
+    it('8. when envelope negotiated, plaintext rejected with ENVELOPE_REQUIRED (H2)', () => {
+      const onError = vi.fn();
+      const service = createService(vi.fn(), onError);
+      const { sentMessages, injectMessage } = attachDataChannel(service);
       enableEnvelope(service);
 
-      // Send plaintext (not envelope) — should still route normally
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      // Send plaintext (not envelope) — should be rejected in envelope-required mode
       injectMessage(makeChunkMsg({
-        chunkIndex: 0, totalChunks: 1, transferId: 'legacy-compat-1',
+        chunkIndex: 0, totalChunks: 1, transferId: 'envelope-required-1',
       }));
 
-      await new Promise(r => setTimeout(r, 20));
+      const envRequired = warnSpy.mock.calls.filter(
+        (a) => typeof a[0] === 'string' && a[0].includes('[ENVELOPE_REQUIRED]')
+      );
+      expect(envRequired.length).toBe(1);
 
-      expect(onReceiveFile).toHaveBeenCalledTimes(1);
+      // Error frame sent
+      const errorMsgs = sentMessages.filter(m => {
+        try {
+          const p = JSON.parse(m);
+          return p.type === 'error' && p.code === 'ENVELOPE_REQUIRED';
+        } catch { return false; }
+      });
+      expect(errorMsgs.length).toBe(1);
 
-      service.disconnect();
+      // Disconnected
+      expect((service as any).keyPair).toBe(null);
+
+      warnSpy.mockRestore();
     });
   });
 
@@ -481,7 +498,7 @@ describe('Phase M1: Profile Envelope v1', () => {
       service.disconnect();
     });
 
-    it('11. error control messages are enveloped post-handshake when negotiated', async () => {
+    it('11. error control messages sent as plaintext before disconnect (H2)', () => {
       const onError = vi.fn();
       const service = createService(vi.fn(), onError);
       const { sentMessages, injectMessage } = attachDataChannel(service);
@@ -489,10 +506,7 @@ describe('Phase M1: Profile Envelope v1', () => {
 
       const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
-      // Trigger ENVELOPE_UNNEGOTIATED by receiving envelope when NOT negotiated
-      // Actually, let's test error message from unnegotiated envelope on a service
-      // that HAS envelope negotiated. We need a different scenario...
-      // Let's test the ENVELOPE_INVALID path — this sends an error via dcSendMessage
+      // Trigger ENVELOPE_INVALID by sending invalid version
       injectMessage({
         type: 'profile-envelope',
         version: 999,  // invalid version
@@ -500,12 +514,17 @@ describe('Phase M1: Profile Envelope v1', () => {
         payload: 'data',
       });
 
-      // The error control message should be sent as envelope
-      // (because envelope is negotiated and helloComplete is true)
-      const envelopeMsgs = sentMessages.filter(m => {
-        try { return JSON.parse(m).type === 'profile-envelope'; } catch { return false; }
+      // H2: error frames before disconnect are sent as plaintext, not wrapped in envelope
+      const errorMsgs = sentMessages.filter(m => {
+        try {
+          const p = JSON.parse(m);
+          return p.type === 'error' && p.code === 'ENVELOPE_INVALID';
+        } catch { return false; }
       });
-      expect(envelopeMsgs.length).toBe(1);
+      expect(errorMsgs.length).toBe(1);
+
+      // Disconnected
+      expect((service as any).keyPair).toBe(null);
 
       warnSpy.mockRestore();
     });

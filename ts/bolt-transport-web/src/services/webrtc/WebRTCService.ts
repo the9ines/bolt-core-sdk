@@ -132,6 +132,7 @@ class WebRTCService {
   private options: WebRTCServiceOptions;
   private helloComplete = false;
   private sessionLegacy = false;
+  private sessionState: 'pre_hello' | 'post_hello' | 'closed' = 'pre_hello';
   private helloTimeout: ReturnType<typeof setTimeout> | null = null;
   private helloResolve: (() => void) | null = null;
 
@@ -344,6 +345,7 @@ class WebRTCService {
   private setupDataChannel(channel: RTCDataChannel) {
     this.dc = channel;
     this.dc.binaryType = 'arraybuffer';
+    this.sessionState = 'pre_hello';
     this.dc.onmessage = (event) => this.handleMessage(event);
     this.dc.onopen = () => {
       console.log('[DC] Data channel open');
@@ -393,11 +395,20 @@ class WebRTCService {
     }
   }
 
+  /** Send an error frame (plaintext) and disconnect. */
+  private sendErrorAndDisconnect(code: string, message: string): void {
+    if (this.dc && this.dc.readyState === 'open') {
+      this.dc.send(JSON.stringify({ type: 'error', code, message }));
+    }
+    this.disconnect();
+  }
+
   // ─── HELLO Protocol ──────────────────────────────────────────────────────
 
   private initiateHello() {
     if (!this.options.identityPublicKey || !this.keyPair || !this.remotePublicKey) {
       // No identity configured — this node operates in legacy mode
+      this.sessionState = 'post_hello';
       this.helloComplete = true;
       this.sessionLegacy = true;
       this.verificationInfo = { state: 'legacy', sasCode: null };
@@ -422,6 +433,7 @@ class WebRTCService {
     this.helloTimeout = setTimeout(() => {
       if (!this.helloComplete) {
         console.warn('[TOFU_LEGACY_PEER] No HELLO received within timeout, treating as legacy peer');
+        this.sessionState = 'post_hello';
         this.helloComplete = true;
         this.sessionLegacy = true;
         this.verificationInfo = { state: 'legacy', sasCode: null };
@@ -435,16 +447,34 @@ class WebRTCService {
   }
 
   private async processHello(msg: { type: 'hello'; payload: string }) {
+    // H2: Fail-closed HELLO processing — all failures send error + disconnect
     if (!this.keyPair || !this.remotePublicKey) {
-      console.warn('[HELLO] Cannot decrypt — no ephemeral keys');
+      console.warn('[HELLO_DECRYPT_FAIL] Cannot decrypt — no ephemeral keys');
+      this.sendErrorAndDisconnect('HELLO_DECRYPT_FAIL', 'Cannot decrypt HELLO');
       return;
     }
 
-    const decrypted = openBoxPayload(msg.payload, this.remotePublicKey, this.keyPair.secretKey);
-    const hello = JSON.parse(new TextDecoder().decode(decrypted));
+    let decrypted: Uint8Array;
+    try {
+      decrypted = openBoxPayload(msg.payload, this.remotePublicKey, this.keyPair.secretKey);
+    } catch {
+      console.warn('[HELLO_DECRYPT_FAIL] Failed to decrypt HELLO payload');
+      this.sendErrorAndDisconnect('HELLO_DECRYPT_FAIL', 'Failed to decrypt HELLO');
+      return;
+    }
+
+    let hello: any;
+    try {
+      hello = JSON.parse(new TextDecoder().decode(decrypted));
+    } catch {
+      console.warn('[HELLO_PARSE_ERROR] Failed to parse HELLO JSON');
+      this.sendErrorAndDisconnect('HELLO_PARSE_ERROR', 'Failed to parse HELLO');
+      return;
+    }
 
     if (hello.type !== 'hello' || hello.version !== 1 || !hello.identityPublicKey) {
-      console.warn('[HELLO] Invalid HELLO format, ignoring');
+      console.warn('[HELLO_SCHEMA_ERROR] Invalid HELLO format');
+      this.sendErrorAndDisconnect('HELLO_SCHEMA_ERROR', 'Invalid HELLO schema');
       return;
     }
 
@@ -463,18 +493,27 @@ class WebRTCService {
     let verificationState: VerificationState = 'unverified';
 
     if (this.options.pinStore) {
-      const result = await verifyPinnedIdentity(
-        this.options.pinStore,
-        this.remotePeerCode,
-        remoteIdentityKey,
-      );
-      // KeyMismatchError propagates to caller (handleMessage catch → abort session)
-      if (result.outcome === 'pinned') {
-        console.log('[TOFU] First contact — pinned identity for', this.remotePeerCode);
-        verificationState = 'unverified';
-      } else {
-        console.log('[TOFU] Identity verified for', this.remotePeerCode);
-        verificationState = result.verified ? 'verified' : 'unverified';
+      try {
+        const result = await verifyPinnedIdentity(
+          this.options.pinStore,
+          this.remotePeerCode,
+          remoteIdentityKey,
+        );
+        if (result.outcome === 'pinned') {
+          console.log('[TOFU] First contact — pinned identity for', this.remotePeerCode);
+          verificationState = 'unverified';
+        } else {
+          console.log('[TOFU] Identity verified for', this.remotePeerCode);
+          verificationState = result.verified ? 'verified' : 'unverified';
+        }
+      } catch (error) {
+        if (error instanceof KeyMismatchError) {
+          console.error('[TOFU] IDENTITY MISMATCH — aborting session:', error.message);
+          this.onError(new ConnectionError('Identity key mismatch (TOFU violation)', error));
+          this.sendErrorAndDisconnect('KEY_MISMATCH', 'Identity key mismatch');
+          return;
+        }
+        throw error;
       }
     }
 
@@ -494,11 +533,12 @@ class WebRTCService {
     this.verificationInfo = { state: verificationState, sasCode };
     this.options.onVerificationState?.(this.verificationInfo);
 
-    // HELLO complete
+    // HELLO complete — transition state
     if (this.helloTimeout) {
       clearTimeout(this.helloTimeout);
       this.helloTimeout = null;
     }
+    this.sessionState = 'post_hello';
     this.helloComplete = true;
     this.sessionLegacy = false;
     if (this.helloResolve) {
@@ -600,6 +640,7 @@ class WebRTCService {
     this.recvTransferIds.clear();
 
     // Clear HELLO / TOFU / SAS state
+    this.sessionState = 'closed';
     if (this.helloTimeout) {
       clearTimeout(this.helloTimeout);
       this.helloTimeout = null;
@@ -711,69 +752,80 @@ class WebRTCService {
     try {
       const msg = JSON.parse(event.data);
 
-      // Route HELLO messages (encrypted identity exchange)
+      // ─── HELLO routing (exactly-once) ──────────────────────────
       if (msg.type === 'hello' && msg.payload) {
+        if (this.sessionState !== 'pre_hello') {
+          console.warn('[DUPLICATE_HELLO] HELLO received after handshake complete — disconnecting');
+          this.sendErrorAndDisconnect('DUPLICATE_HELLO', 'Duplicate HELLO');
+          return;
+        }
         this.processHello(msg).catch((error) => {
-          if (error instanceof KeyMismatchError) {
-            console.error('[TOFU] IDENTITY MISMATCH — aborting session:', error.message);
-            this.onError(new ConnectionError('Identity key mismatch (TOFU violation)', error));
-            this.disconnect();
-          } else {
-            console.error('[HELLO] Failed to process:', error);
-          }
+          console.error('[HELLO] Unexpected error:', error);
+          this.sendErrorAndDisconnect('PROTOCOL_VIOLATION', 'Unexpected HELLO processing error');
         });
         return;
       }
 
-      // Strict handshake gating (S4): reject any non-HELLO message before
-      // handshake completion. This is a Profile-layer narrowing of the broader
-      // PROTOCOL.md pre-handshake allowlist (which also permits PING/PONG and
-      // ERROR envelopes — those are rendezvous-level or not yet implemented at
-      // the Profile layer). Profile-envelope before helloComplete is also rejected.
-      if (!this.helloComplete) {
+      // ─── Pre-handshake gate ────────────────────────────────────
+      if (this.sessionState === 'pre_hello') {
         console.warn('[INVALID_STATE] non-HELLO message before handshake complete — disconnecting');
         this.onError(new ConnectionError('Received message before handshake complete'));
-        if (this.dc && this.dc.readyState === 'open') {
-          this.dc.send(JSON.stringify({
-            type: 'error',
-            code: 'INVALID_STATE',
-            message: 'Handshake not complete',
-          }));
-        }
-        this.disconnect();
+        this.sendErrorAndDisconnect('INVALID_STATE', 'Handshake not complete');
         return;
       }
 
-      // Profile Envelope v1: unwrap if negotiated
+      // ─── Profile Envelope v1: unwrap if negotiated ─────────────
       if (msg.type === 'profile-envelope') {
         if (!this.negotiatedEnvelopeV1()) {
           console.warn('[ENVELOPE_UNNEGOTIATED] profile-envelope received but not negotiated — disconnecting');
-          this.dcSendMessage({ type: 'error', code: 'ENVELOPE_UNNEGOTIATED', message: 'Profile envelope not negotiated' });
-          this.disconnect();
+          this.sendErrorAndDisconnect('ENVELOPE_UNNEGOTIATED', 'Profile envelope not negotiated');
           return;
         }
         if (msg.version !== 1 || msg.encoding !== 'base64' || typeof msg.payload !== 'string') {
           console.warn('[ENVELOPE_INVALID] invalid profile-envelope version/encoding — disconnecting');
-          this.dcSendMessage({ type: 'error', code: 'ENVELOPE_INVALID', message: 'Invalid profile envelope format' });
-          this.disconnect();
+          this.sendErrorAndDisconnect('ENVELOPE_INVALID', 'Invalid profile envelope format');
           return;
         }
-        const inner = this.decodeProfileEnvelopeV1(msg as ProfileEnvelopeV1);
-        if (!inner) {
+        // Decrypt envelope payload
+        let innerBytes: Uint8Array;
+        try {
+          innerBytes = openBoxPayload(msg.payload, this.remotePublicKey!, this.keyPair!.secretKey);
+        } catch {
           console.warn('[ENVELOPE_DECRYPT_FAIL] failed to decrypt profile-envelope — disconnecting');
-          this.dcSendMessage({ type: 'error', code: 'ENVELOPE_DECRYPT_FAIL', message: 'Failed to decrypt profile envelope' });
-          this.disconnect();
+          this.sendErrorAndDisconnect('ENVELOPE_DECRYPT_FAIL', 'Failed to decrypt profile envelope');
           return;
         }
-        // Route the decrypted inner message
+        // Parse inner JSON
+        let inner: any;
+        try {
+          inner = JSON.parse(new TextDecoder().decode(innerBytes));
+        } catch {
+          console.warn('[INVALID_MESSAGE] failed to parse inner message JSON — disconnecting');
+          this.sendErrorAndDisconnect('INVALID_MESSAGE', 'Invalid inner message');
+          return;
+        }
+        // Validate inner message type
+        if (inner.type !== 'file-chunk') {
+          console.warn(`[UNKNOWN_MESSAGE_TYPE] unknown inner type "${inner.type}" — disconnecting`);
+          this.sendErrorAndDisconnect('UNKNOWN_MESSAGE_TYPE', `Unknown message type: ${inner.type}`);
+          return;
+        }
         this.routeInnerMessage(inner);
         return;
       }
 
-      // Legacy plaintext path — accepted even when envelope is negotiated (mixed-peer compat)
+      // ─── Envelope-required enforcement ─────────────────────────
+      if (this.negotiatedEnvelopeV1()) {
+        console.warn('[ENVELOPE_REQUIRED] plaintext message received in envelope-required session — disconnecting');
+        this.sendErrorAndDisconnect('ENVELOPE_REQUIRED', 'Envelope required');
+        return;
+      }
+
+      // ─── Envelope-unnegotiated plaintext path ──────────────────
       this.routeInnerMessage(msg);
     } catch (error) {
-      console.error('[RECV] Error processing message:', error);
+      console.error('[PROTOCOL_VIOLATION] Error processing message:', error);
+      this.sendErrorAndDisconnect('PROTOCOL_VIOLATION', 'Protocol violation');
     }
   }
 

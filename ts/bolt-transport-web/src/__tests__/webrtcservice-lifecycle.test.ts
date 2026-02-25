@@ -478,6 +478,7 @@ describe('Phase 8B.1: WebRTCService Lifecycle Coverage', () => {
     const service = createService(vi.fn(), vi.fn(), onProgress);
     const { injectMessage } = attachDataChannel(service);
     // Handshake must be complete before control messages are accepted (Phase 8D)
+    (service as any).sessionState = 'post_hello';
     (service as any).helloComplete = true;
 
     // Inject pause
