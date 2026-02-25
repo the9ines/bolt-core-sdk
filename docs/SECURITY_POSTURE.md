@@ -91,6 +91,20 @@ This document covers the security properties of the Bolt Protocol as implemented
 
 ---
 
+## Enforcement Posture (H0–H3)
+
+As of H2, `WebRTCService` enforces:
+- **Exactly-once HELLO:** Duplicate HELLO triggers `DUPLICATE_HELLO` error + disconnect.
+- **Envelope-required mode:** Post-HELLO plaintext rejected with `ENVELOPE_REQUIRED` + disconnect when `bolt.envelope` negotiated.
+- **Fail-closed:** Every protocol error in Section 3 of `PROTOCOL_ENFORCEMENT.md` triggers error frame + disconnect.
+- **Downgrade resistance:** No runtime path disables enforcement post-negotiation.
+
+As of H3, cross-implementation parity is verified by golden vectors (SAS, HELLO-open, envelope-open) across TS SDK, Rust SDK, and bolt-daemon.
+
+H2 and H3 are on feature branches, not yet merged to main.
+
+Full enforcement specification: `bolt-ecosystem/docs/PROTOCOL_ENFORCEMENT.md`
+
 ## Audit Trail
 
 Full audit tracker with per-finding evidence: [`docs/AUDIT_TRACKER.md`](AUDIT_TRACKER.md)

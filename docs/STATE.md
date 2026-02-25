@@ -4,9 +4,11 @@ Current state of the bolt-core-sdk repository.
 
 ## Current Version
 
-**Tags:** `sdk-v0.4.0-dead-exports-cleanup`
-**Commit:** `064bfe0`
-**Branch:** `main`
+**Tags (main):** `sdk-v0.4.0-dead-exports-cleanup`
+**Tags (feature branch):** `sdk-v0.5.0-h2-webrtc-enforcement`, `sdk-v0.5.1`
+**Commit (main):** `064bfe0`
+**Commit (feature):** `9d8617d` (H3, on `feature/h3-golden-vectors`)
+**Branch:** `main` (H2/H3 on `feature/h3-golden-vectors`, not yet merged)
 **TS Package:** `@the9ines/bolt-core` v0.4.0 (dead exports removed, 21 public exports)
 **TS Package:** `@the9ines/bolt-transport-web` v0.6.0 (Profile Envelope v1)
 **Rust Crate:** `bolt-core` v0.4.0 (R0-R3 complete, all 8 modules at full TS parity)
@@ -37,7 +39,9 @@ See [SDK_STABILITY.md](SDK_STABILITY.md) for the stability contract.
 | Transport Contract | Complete (`docs/TRANSPORT_CONTRACT.md`) |
 | Ecosystem Strategy | Complete (`docs/ECOSYSTEM_STRATEGY.md`) |
 | Interop Test Plan | Complete (`docs/INTEROP_TEST_PLAN.md`) |
-| Golden test vectors | Complete (`ts/bolt-core/__tests__/vectors/`) |
+| Golden test vectors (box-payload, framing) | Complete (`ts/bolt-core/__tests__/vectors/`) |
+| H3 golden vectors (SAS, HELLO-open, envelope-open) | Complete, on feature branch (`ts/bolt-core/__tests__/vectors/`) |
+| H3 vector generator | Complete, on feature branch (`ts/bolt-core/scripts/generate-h3-vectors.mjs`) |
 | Vector compatibility gate (Rust) | Complete (`rust/bolt-core/tests/vector_compat.rs`) |
 | Vector equivalence gate (Rust) | Complete (`rust/bolt-core/tests/vector_equivalence.rs`) |
 | API surface guard (TS) | Complete (`scripts/audit-exports.mjs`) |
@@ -72,9 +76,11 @@ See [SDK_STABILITY.md](SDK_STABILITY.md) for the stability contract.
 - TypeScript (bolt-core): 76 tests (vitest), 7 test files
 - TypeScript (bolt-transport-web): 117 tests (vitest, jsdom), 11 test files
 - Rust: 59 tests (54 unit + 3 vector compat + 2 vector equivalence)
-- Golden vector suites: box-payload, framing
+- Golden vector suites: box-payload, framing, H3 (SAS, HELLO-open, envelope-open)
 - API surface drift detection: `npm run audit-exports`
 - Cross-language verification: `npm run verify:all`
+- H2 enforcement tests: 21 (on feature branch)
+- H3 vector tests: TS 94 total, Rust 68 total (on feature branch)
 
 ## Phase Status
 
@@ -109,6 +115,8 @@ See [SDK_STABILITY.md](SDK_STABILITY.md) for the stability contract.
 | Phase R1 | Rust crypto + encoding parity | **Complete** (base64, seal/open, keygen, 41 tests, golden vector parity) |
 | Phase R2 | Rust identity + sas + hash parity | **Complete** (sha256, identity keygen, compute_sas, 52 tests) |
 | Phase R3 | Rust peer code generation parity | **Complete** (rejection sampling, all 8 modules complete, 59 tests) |
+| Phase H2 | WebRTC enforcement compliance | **Complete** on feature branch (exactly-once HELLO, envelope-required, fail-closed, 21 tests) |
+| Phase H3 | Cross-implementation golden vectors | **Complete** on feature branch (SAS, HELLO-open, envelope-open; TS 94 tests, Rust 68 tests) |
 
 ## Downstream Consumers
 
