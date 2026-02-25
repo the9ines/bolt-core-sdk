@@ -84,3 +84,17 @@ All product repos on main are pinned to current SDK releases:
 - **Residual risk:** See `docs/SECURITY_POSTURE.md`
 
 The LocalBolt audit surface is effectively frozen and clean. All actionable items without entering ByteBolt/global scope are closed.
+
+---
+
+## PROTOCOL HARDENING (H-phases)
+
+| ID | Phase | Description | Status | Evidence |
+|----|-------|-------------|--------|----------|
+| H0 | Protocol enforcement posture | Normative enforcement doc: exactly-once HELLO, envelope-required, fail-closed, error registry, downgrade resistance | **DONE** | `bolt-ecosystem/docs/PROTOCOL_ENFORCEMENT.md`. Not version-controlled (ecosystem root is not a git repo). |
+| H1 | Signal server hardening | Trust-boundary hardening in localbolt-v3 signal server | **DONE** | `v3.0.59-signal-hardening` (`ac5110c`). On `feature/h1-signal-hardening`, not merged to main. |
+| H2 | WebRTC enforcement compliance | Exactly-once HELLO, envelope-required, fail-closed in WebRTCService | **DONE** | `sdk-v0.5.0-h2-webrtc-enforcement` (`b4ce544`). 21 enforcement tests. On `feature/h3-golden-vectors`, not merged to main. |
+| H3 | Cross-implementation golden vectors | SAS, HELLO-open, envelope-open deterministic vectors across TS, Rust SDK, daemon | **DONE** | `sdk-v0.5.1` (`9d8617d`), `daemon-v0.2.5-h3-golden-vectors` (`3751118`). On feature branches, not merged to main. |
+| H4 | Daemon unwrap hardening | Error code enforcement in daemon decode paths | NOT STARTED | — |
+| H5 | TOFU/SAS wiring in localbolt-v3 | Wire TOFU + SAS into product UI | NOT STARTED | — |
+| H6 | CI/coverage enforcement | Golden vector and enforcement tests as CI gates | NOT STARTED | — |
