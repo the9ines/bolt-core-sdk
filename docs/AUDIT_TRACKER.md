@@ -28,8 +28,8 @@
 | I2 | Daemon/Web NaCl interop untested | LOW | **DEFERRED** | bolt-daemon is planned/minimal. No TS consumers exist. Will be addressed when daemon development begins. |
 | I3 | Shadow SAS in transport-web | MEDIUM | **DONE** | Removed `getVerificationCode()`. Phase 6A.2: `sdk-v0.1.2-sas-canonical`. Enforcement script `verify-no-shadow-sas.sh`. |
 | I4 | Protocol-level bolt-envelope | MEDIUM | **DEFERRED** | Profile Envelope v1 landed (Phase M1, `transport-web-v0.6.0`). Full protocol-level envelope standardization across all transports is a large cross-cutting effort deferred to bolt-protocol specification work. |
-| I5 | Post-envelope error framing divergence | HIGH | **DONE** | Daemon `build_error_payload()` wraps errors in envelope when negotiated. Web `sendErrorAndDisconnect()` envelope-aware (World B). Web accepts enveloped errors (Case B inbound). Daemon `600fef4`, SDK `e463e1a`. +4 daemon tests (271 total), +5 web tests (161 total). |
-| I6 | HELLO key material verification | MEDIUM | **CLOSED-NO-BUG** | Both implementations use X25519 + XSalsa20-Poly1305, 24-byte CSPRNG nonce, `base64(nonce\|\|ciphertext)` wire format. H3 golden vectors pass 12/12 cross-implementation. |
+| I5 | Post-envelope error framing divergence | HIGH | **DONE** | Daemon `build_error_payload()` wraps errors in envelope when negotiated (session passed in). Web `sendErrorAndDisconnect()` envelope-aware (World B). Web accepts enveloped errors (Case B inbound). `daemon-v0.2.11-interop-error-framing` (`600fef4`), `transport-web-v0.6.2-interop-error-framing` (`e463e1a`). +4 daemon tests (271 total), +5 web tests (161 total). |
+| I6 | HELLO key material verification | MEDIUM | **CLOSED-NO-BUG** | Spec is authoritative. Both implementations match spec: X25519 + XSalsa20-Poly1305, 24-byte CSPRNG nonce, base64 of NaCl box payload per `seal_box_payload`/`open_box_payload`. H3 golden vectors pass 12/12 cross-implementation. No code change required. |
 
 ---
 

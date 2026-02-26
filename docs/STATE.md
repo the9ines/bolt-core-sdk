@@ -4,7 +4,7 @@ Current state of the bolt-core-sdk repository.
 
 ## Current Version
 
-**Latest Tag (main):** `sdk-v0.5.7-interop-error-framing`
+**Latest Tag (main):** `transport-web-v0.6.2-interop-error-framing`
 **Commit (main):** `e463e1a`
 **Branch:** `main`
 **TS Package:** `@the9ines/bolt-core` v0.4.0 (dead exports removed, 21 public exports)

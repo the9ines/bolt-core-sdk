@@ -23,7 +23,7 @@ enveloped errors as UNKNOWN_MESSAGE_TYPE.
 ### Companion
 - Daemon fix: `daemon-v0.2.11-interop-error-framing` (`600fef4`)
 
-**Tag:** `sdk-v0.5.7-interop-error-framing` (`e463e1a`)
+**Tag:** `transport-web-v0.6.2-interop-error-framing` (`e463e1a`)
 
 ---
 
