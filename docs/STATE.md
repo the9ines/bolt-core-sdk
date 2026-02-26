@@ -4,11 +4,9 @@ Current state of the bolt-core-sdk repository.
 
 ## Current Version
 
-**Tags (main):** `sdk-v0.4.0-dead-exports-cleanup`
-**Tags (feature branch):** `sdk-v0.5.0-h2-webrtc-enforcement`, `sdk-v0.5.1`
-**Commit (main):** `064bfe0`
-**Commit (feature):** `9d8617d` (H3, on `feature/h3-golden-vectors`)
-**Branch:** `main` (H2/H3 on `feature/h3-golden-vectors`, not yet merged)
+**Latest Tag (main):** `sdk-v0.5.4-s1-conformance-harness`
+**Commit (main):** `cced058`
+**Branch:** `main`
 **TS Package:** `@the9ines/bolt-core` v0.4.0 (dead exports removed, 21 public exports)
 **TS Package:** `@the9ines/bolt-transport-web` v0.6.0 (Profile Envelope v1)
 **Rust Crate:** `bolt-core` v0.4.0 (R0-R3 complete, all 8 modules at full TS parity)
@@ -73,14 +71,13 @@ See [SDK_STABILITY.md](SDK_STABILITY.md) for the stability contract.
 
 ## Test Summary
 
-- TypeScript (bolt-core): 76 tests (vitest), 7 test files
-- TypeScript (bolt-transport-web): 117 tests (vitest, jsdom), 11 test files
-- Rust: 59 tests (54 unit + 3 vector compat + 2 vector equivalence)
+- TypeScript (bolt-core): 97 tests (vitest), 10 test files
+- Rust (default): 66 tests (55 unit + 11 S1 conformance/error_code_mapping)
+- Rust (vectors): 96 tests (55 unit + 27 S1 conformance + 14 H3 vectors)
 - Golden vector suites: box-payload, framing, H3 (SAS, HELLO-open, envelope-open)
+- S1 conformance harness: 27 tests (envelope, SAS, error mapping)
 - API surface drift detection: `npm run audit-exports`
 - Cross-language verification: `npm run verify:all`
-- H2 enforcement tests: 21 (on feature branch)
-- H3 vector tests: TS 94 total, Rust 68 total (on feature branch)
 
 ## Phase Status
 
@@ -115,8 +112,9 @@ See [SDK_STABILITY.md](SDK_STABILITY.md) for the stability contract.
 | Phase R1 | Rust crypto + encoding parity | **Complete** (base64, seal/open, keygen, 41 tests, golden vector parity) |
 | Phase R2 | Rust identity + sas + hash parity | **Complete** (sha256, identity keygen, compute_sas, 52 tests) |
 | Phase R3 | Rust peer code generation parity | **Complete** (rejection sampling, all 8 modules complete, 59 tests) |
-| Phase H2 | WebRTC enforcement compliance | **Complete** on feature branch (exactly-once HELLO, envelope-required, fail-closed, 21 tests) |
-| Phase H3 | Cross-implementation golden vectors | **Complete** on feature branch (SAS, HELLO-open, envelope-open; TS 94 tests, Rust 68 tests) |
+| Phase H2 | WebRTC enforcement compliance | **Complete** (exactly-once HELLO, envelope-required, fail-closed, 21 tests) |
+| Phase H3 | Cross-implementation golden vectors | **Complete** (SAS, HELLO-open, envelope-open; TS 97 tests, Rust 96 tests) |
+| Phase S1 | Core protocol conformance harness | **Complete** (envelope, SAS, error mapping; 27 Rust conformance tests) |
 
 ## Downstream Consumers
 

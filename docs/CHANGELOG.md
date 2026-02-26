@@ -2,6 +2,52 @@
 
 All notable changes to bolt-core-sdk are documented here. Newest first.
 
+## [S1 — Core Protocol Conformance Harness] - 2026-02-26
+
+Phase S1: Deterministic Rust conformance harness enforcing MUST-level
+core protocol invariants using H3 golden vectors. Prevents silent
+regression in envelope, nonce, SAS, and error mapping logic.
+Enforcement-only — no protocol behavior, wire format, or crypto logic
+changed.
+
+### Added (Rust — bolt-core)
+- `tests/conformance/main.rs` — harness entry point.
+- `tests/conformance/envelope_validation.rs` — 10 tests: box-payload
+  open (all vectors), HELLO open, envelope open, corrupt vector
+  rejection, single-bit-flip MAC rejection, nonce-only rejection,
+  short payload rejection, nonce 24-byte enforcement, 256-seal
+  nonce uniqueness, base64 wire format, varied-size round trip.
+- `tests/conformance/sas_determinism.rs` — 5 tests: golden vector
+  match, commutativity (all vectors), 100-round idempotency,
+  output format validation, distinct-input distinct-output.
+- `tests/conformance/error_code_mapping.rs` — 11 tests: BoltError
+  display format (5 variants), Send+Sync, std::error::Error,
+  KeyMismatchError display + fields, crypto→Encryption mapping,
+  encoding→Encoding mapping, short payload rejection.
+
+### Invariants Covered
+- PROTO-01: HELLO inside encrypted envelope
+- PROTO-06: SAS computed over raw 32-byte keys
+- PROTO-07: All protected messages inside encrypted envelope
+- SEC-01: Fresh 24-byte CSPRNG nonce per envelope
+- SEC-02: No nonce reuse with same keypair
+- SEC-06: MAC verified before plaintext processing
+- Appendix A (Rust surface): BoltError variants, KeyMismatchError
+
+### TS-Owned Invariants (Not in S1)
+- Handshake gating (WebRTCService state machine)
+- Downgrade resistance (capability negotiation)
+- HELLO exactly-once (WebRTCService)
+- 11 of 14 Appendix A error codes (transport-level)
+
+### Tests
+- Rust (default): 66 tests (was 55, +11 error_code_mapping).
+- Rust (vectors): 96 tests (was 69, +27 conformance).
+
+**Tag:** `sdk-v0.5.4-s1-conformance-harness`
+**Commit:** `cced058`
+**Branch:** `main`
+
 ## [H3 — Cross-Implementation Golden Vectors] - 2026-02-25
 
 Phase H3: Shared deterministic test vectors for SAS, HELLO-open, and
