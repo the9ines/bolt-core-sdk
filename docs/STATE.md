@@ -4,8 +4,8 @@ Current state of the bolt-core-sdk repository.
 
 ## Current Version
 
-**Latest Tag (main):** `transport-web-v0.6.2-interop-error-framing`
-**Commit (main):** `e463e1a`
+**Latest Tag (main):** `transport-web-v0.6.3-ci-gate`
+**Commit (main):** `ff3cdd3`
 **Branch:** `main`
 **TS Package:** `@the9ines/bolt-core` v0.4.0 (dead exports removed, 21 public exports)
 **TS Package:** `@the9ines/bolt-transport-web` v0.6.0 (Profile Envelope v1)
@@ -45,6 +45,7 @@ See [SDK_STABILITY.md](SDK_STABILITY.md) for the stability contract.
 | API surface guard (TS) | Complete (`scripts/audit-exports.mjs`) |
 | Rust CI workflow | Complete (`.github/workflows/ci-rust.yml`) |
 | Transport-web publish workflow | Complete (`.github/workflows/publish-transport-web.yml`) |
+| Transport-web CI gate (PR/main) | Complete (`.github/workflows/ci-transport-web.yml`) |
 | Transport upgrade protocol | Complete (`docs/TRANSPORT_UPGRADE_PROTOCOL.md`) |
 | Constants verification script | Complete (`scripts/verify-constants.sh`) |
 | Shadow SAS enforcement script | Complete (`scripts/verify-no-shadow-sas.sh`) |

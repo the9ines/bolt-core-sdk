@@ -2,6 +2,17 @@
 
 All notable changes to bolt-core-sdk are documented here. Newest first.
 
+## [CI Gate — transport-web] - 2026-02-26
+
+Added PR/main CI workflow for transport-web. Previously tests ran only
+locally and during publish (tag-only). Now gates on every PR and push
+to main when `ts/bolt-transport-web/**` or `ts/bolt-core/**` paths
+change. Includes bolt-core gate step (mirrors publish workflow pattern).
+
+**Tag:** `transport-web-v0.6.3-ci-gate` (`ff3cdd3`)
+
+---
+
 ## [I5 — Interop Error Framing Fix] - 2026-02-26
 
 Post-envelope error framing divergence: `sendErrorAndDisconnect()` sent
