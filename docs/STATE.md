@@ -65,7 +65,7 @@ See [SDK_STABILITY.md](SDK_STABILITY.md) for the stability contract.
 | File integrity verification (bolt-core) | Complete (`hashFile` widened to Blob, `IntegrityError` added) |
 | File integrity verification (transport-web) | Complete (`WebRTCService` — `bolt.file-hash` capability, sender hash, receiver verify, fail-closed) |
 | File integrity verification (spec) | Complete (`LOCALBOLT_PROFILE.md` §13 — capability gate, wire format, backward compat) |
-| Audit tracker | Complete (`docs/AUDIT_TRACKER.md` — 28 findings, 23 DONE, 1 CLOSED-NO-BUG, 3 DEFERRED) |
+| Audit tracker | Relocated to `bolt-ecosystem/docs/AUDIT_TRACKER.md` (DOC-GOV-2). Local stub remains. |
 | Security posture declaration | Complete (`docs/SECURITY_POSTURE.md` — WebRTC DataChannel profile) |
 | Rust core plan | Complete (`docs/ecosystem/RUST_CORE_PLAN.md` — crate layout, API, phased milestones) |
 | Ecosystem docs index | Complete (`docs/ecosystem/README.md`) |
