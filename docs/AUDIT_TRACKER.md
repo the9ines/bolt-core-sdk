@@ -1,6 +1,6 @@
 # Bolt Ecosystem Audit Tracker
 
-**Last updated:** 2026-02-24
+**Last updated:** 2026-02-26
 **Scope:** All repos under the9ines/bolt-ecosystem
 **Authority:** bolt-core-sdk (this repo)
 
@@ -28,6 +28,8 @@
 | I2 | Daemon/Web NaCl interop untested | LOW | **DEFERRED** | bolt-daemon is planned/minimal. No TS consumers exist. Will be addressed when daemon development begins. |
 | I3 | Shadow SAS in transport-web | MEDIUM | **DONE** | Removed `getVerificationCode()`. Phase 6A.2: `sdk-v0.1.2-sas-canonical`. Enforcement script `verify-no-shadow-sas.sh`. |
 | I4 | Protocol-level bolt-envelope | MEDIUM | **DEFERRED** | Profile Envelope v1 landed (Phase M1, `transport-web-v0.6.0`). Full protocol-level envelope standardization across all transports is a large cross-cutting effort deferred to bolt-protocol specification work. |
+| I5 | Post-envelope error framing divergence | HIGH | **INVESTIGATING** | |
+| I6 | HELLO key material verification | MEDIUM | **INVESTIGATING** | |
 
 ---
 
@@ -78,12 +80,11 @@ All product repos on main are pinned to current SDK releases:
 
 ## SUMMARY
 
-- **Total findings:** 26
+- **Total findings:** 28
 - **DONE:** 22
+- **INVESTIGATING:** 2 (I5, I6)
 - **DEFERRED:** 3 (I2, I4, Q4)
 - **Residual risk:** See `docs/SECURITY_POSTURE.md`
-
-The LocalBolt audit surface is effectively frozen and clean. All actionable items without entering ByteBolt/global scope are closed.
 
 ---
 
