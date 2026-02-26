@@ -400,10 +400,15 @@ class WebRTCService {
     }
   }
 
-  /** Send an error frame (plaintext) and disconnect. */
+  /** Send an error frame and disconnect. Wraps in envelope when negotiated. */
   private sendErrorAndDisconnect(code: string, message: string): void {
     if (this.dc && this.dc.readyState === 'open') {
-      this.dc.send(JSON.stringify({ type: 'error', code, message }));
+      const errorMsg = { type: 'error', code, message };
+      if (this.negotiatedEnvelopeV1() && this.helloComplete && this.keyPair && this.remotePublicKey) {
+        this.dc.send(JSON.stringify(this.encodeProfileEnvelopeV1(errorMsg)));
+      } else {
+        this.dc.send(JSON.stringify(errorMsg));
+      }
     }
     this.disconnect();
   }
@@ -838,6 +843,13 @@ class WebRTCService {
         } catch {
           console.warn('[INVALID_MESSAGE] failed to parse inner message JSON — disconnecting');
           this.sendErrorAndDisconnect('INVALID_MESSAGE', 'Invalid inner message');
+          return;
+        }
+        // Handle enveloped error from remote peer
+        if (inner.type === 'error') {
+          console.warn(`[REMOTE_ERROR] enveloped error: code=${inner.code}, message=${inner.message}`);
+          this.onError(new WebRTCError(inner.message || 'Remote error'));
+          this.disconnect();
           return;
         }
         // Validate inner message type

@@ -128,7 +128,17 @@ function makeChunkMsg(overrides: Record<string, unknown> = {}) {
   };
 }
 
-/** Assert a specific error code was sent and service disconnected. */
+/** Hex-decode a string to UTF-8 (reverses mock sealBoxPayload). */
+function hexDecode(hex: string): string {
+  const bytes = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < hex.length; i += 2) {
+    bytes[i / 2] = parseInt(hex.substring(i, i + 2), 16);
+  }
+  return new TextDecoder().decode(bytes);
+}
+
+/** Assert a specific error code was sent and service disconnected.
+ *  Checks both plaintext errors and enveloped errors (I5 fix). */
 function expectErrorAndDisconnect(
   sentMessages: string[],
   code: string,
@@ -137,7 +147,14 @@ function expectErrorAndDisconnect(
   const errorMsgs = sentMessages.filter(m => {
     try {
       const p = JSON.parse(m);
-      return p.type === 'error' && p.code === code;
+      // Plaintext error (pre-HELLO or no envelope)
+      if (p.type === 'error' && p.code === code) return true;
+      // Enveloped error (post-HELLO with envelope negotiated)
+      if (p.type === 'profile-envelope' && p.payload) {
+        const inner = JSON.parse(hexDecode(p.payload));
+        return inner.type === 'error' && inner.code === code;
+      }
+      return false;
     } catch { return false; }
   });
   expect(errorMsgs.length).toBe(1);

@@ -423,11 +423,19 @@ describe('Phase M1: Profile Envelope v1', () => {
       );
       expect(envRequired.length).toBe(1);
 
-      // Error frame sent
+      // Error frame sent (may be enveloped when envelope negotiated — I5 fix)
       const errorMsgs = sentMessages.filter(m => {
         try {
           const p = JSON.parse(m);
-          return p.type === 'error' && p.code === 'ENVELOPE_REQUIRED';
+          if (p.type === 'error' && p.code === 'ENVELOPE_REQUIRED') return true;
+          if (p.type === 'profile-envelope' && p.payload) {
+            const innerHex = p.payload as string;
+            const bytes = new Uint8Array(innerHex.length / 2);
+            for (let i = 0; i < innerHex.length; i += 2) bytes[i / 2] = parseInt(innerHex.substring(i, i + 2), 16);
+            const inner = JSON.parse(new TextDecoder().decode(bytes));
+            return inner.type === 'error' && inner.code === 'ENVELOPE_REQUIRED';
+          }
+          return false;
         } catch { return false; }
       });
       expect(errorMsgs.length).toBe(1);
@@ -498,7 +506,7 @@ describe('Phase M1: Profile Envelope v1', () => {
       service.disconnect();
     });
 
-    it('11. error control messages sent as plaintext before disconnect (H2)', () => {
+    it('11. error control messages enveloped when envelope negotiated (I5 fix)', () => {
       const onError = vi.fn();
       const service = createService(vi.fn(), onError);
       const { sentMessages, injectMessage } = attachDataChannel(service);
@@ -506,7 +514,7 @@ describe('Phase M1: Profile Envelope v1', () => {
 
       const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
-      // Trigger ENVELOPE_INVALID by sending invalid version
+      // Trigger ENVELOPE_INVALID by sending invalid version (decode-path failure)
       injectMessage({
         type: 'profile-envelope',
         version: 999,  // invalid version
@@ -514,11 +522,19 @@ describe('Phase M1: Profile Envelope v1', () => {
         payload: 'data',
       });
 
-      // H2: error frames before disconnect are sent as plaintext, not wrapped in envelope
+      // I5 fix: World B (envelope negotiated + keys present) → error enveloped
       const errorMsgs = sentMessages.filter(m => {
         try {
           const p = JSON.parse(m);
-          return p.type === 'error' && p.code === 'ENVELOPE_INVALID';
+          if (p.type === 'error' && p.code === 'ENVELOPE_INVALID') return true;
+          if (p.type === 'profile-envelope' && p.payload) {
+            const innerHex = p.payload as string;
+            const bytes = new Uint8Array(innerHex.length / 2);
+            for (let i = 0; i < innerHex.length; i += 2) bytes[i / 2] = parseInt(innerHex.substring(i, i + 2), 16);
+            const inner = JSON.parse(new TextDecoder().decode(bytes));
+            return inner.type === 'error' && inner.code === 'ENVELOPE_INVALID';
+          }
+          return false;
         } catch { return false; }
       });
       expect(errorMsgs.length).toBe(1);
@@ -592,6 +608,111 @@ describe('Phase M1: Profile Envelope v1', () => {
       expect((service as any).localCapabilities).toContain('bolt.profile-envelope-v1');
       expect((service as any).localCapabilities).toContain('bolt.file-hash');
       service.disconnect();
+    });
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // 8. I5: Error framing interop
+  // ──────────────────────────────────────────────────────────────────────────
+
+  describe('I5: Error framing interop', () => {
+    it('15. enveloped error from remote peer accepted and routed (Case B inbound)', () => {
+      const onError = vi.fn();
+      const service = createService(vi.fn(), onError);
+      const { injectMessage } = attachDataChannel(service);
+      enableEnvelope(service);
+
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      // Remote sends enveloped error (Case B: decrypts OK, inner is {type:'error'})
+      injectMessage(buildEnvelope({ type: 'error', code: 'REMOTE_CANCEL', message: 'Transfer cancelled by remote' }));
+
+      expect(onError).toHaveBeenCalledTimes(1);
+      expect(onError.mock.calls[0][0].message).toContain('Transfer cancelled by remote');
+      // Disconnected
+      expect((service as any).keyPair).toBe(null);
+
+      warnSpy.mockRestore();
+    });
+
+    it('16. plaintext error rejected in envelope-required mode', () => {
+      const onError = vi.fn();
+      const service = createService(vi.fn(), onError);
+      const { sentMessages, injectMessage } = attachDataChannel(service);
+      enableEnvelope(service);
+
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      // Remote sends plaintext error when envelope is required — not exempt
+      injectMessage({ type: 'error', code: 'SOME_ERROR', message: 'should be rejected' });
+
+      const envRequired = warnSpy.mock.calls.filter(
+        (a) => typeof a[0] === 'string' && a[0].includes('[ENVELOPE_REQUIRED]')
+      );
+      expect(envRequired.length).toBe(1);
+      // Disconnected
+      expect((service as any).keyPair).toBe(null);
+
+      warnSpy.mockRestore();
+    });
+
+    it('17. sendErrorAndDisconnect wraps in envelope when negotiated (World B outbound)', () => {
+      const service = createService();
+      const { sentMessages } = attachDataChannel(service);
+      enableEnvelope(service);
+
+      // Directly invoke sendErrorAndDisconnect in World B state
+      (service as any).sendErrorAndDisconnect('TEST_ERROR', 'test message');
+
+      expect(sentMessages.length).toBe(1);
+      const parsed = JSON.parse(sentMessages[0]);
+      expect(parsed.type).toBe('profile-envelope');
+      expect(parsed.version).toBe(1);
+      // Decode inner via hex (mock sealBoxPayload format)
+      const innerHex = parsed.payload as string;
+      const bytes = new Uint8Array(innerHex.length / 2);
+      for (let i = 0; i < innerHex.length; i += 2) bytes[i / 2] = parseInt(innerHex.substring(i, i + 2), 16);
+      const inner = JSON.parse(new TextDecoder().decode(bytes));
+      expect(inner.type).toBe('error');
+      expect(inner.code).toBe('TEST_ERROR');
+      expect(inner.message).toBe('test message');
+      // Disconnected
+      expect((service as any).keyPair).toBe(null);
+    });
+
+    it('18. sendErrorAndDisconnect sends plaintext pre-HELLO (World A outbound)', () => {
+      const service = createService();
+      const { sentMessages } = attachDataChannel(service);
+      // helloComplete=false, sessionState=pre_hello by default (World A)
+
+      (service as any).sendErrorAndDisconnect('PRE_HELLO_ERROR', 'before handshake');
+
+      expect(sentMessages.length).toBe(1);
+      const parsed = JSON.parse(sentMessages[0]);
+      expect(parsed.type).toBe('error');
+      expect(parsed.code).toBe('PRE_HELLO_ERROR');
+      expect(parsed.message).toBe('before handshake');
+      // Disconnected
+      expect((service as any).keyPair).toBe(null);
+    });
+
+    it('19. unknown error code in enveloped error handled safely', () => {
+      const onError = vi.fn();
+      const service = createService(vi.fn(), onError);
+      const { injectMessage } = attachDataChannel(service);
+      enableEnvelope(service);
+
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      // Remote sends enveloped error with non-standard code — no crash
+      injectMessage(buildEnvelope({ type: 'error', code: 'XYZZY_UNKNOWN_999', message: 'exotic error' }));
+
+      expect(onError).toHaveBeenCalledTimes(1);
+      expect(onError.mock.calls[0][0].message).toContain('exotic error');
+      // Disconnected gracefully
+      expect((service as any).keyPair).toBe(null);
+
+      warnSpy.mockRestore();
     });
   });
 });
