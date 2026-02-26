@@ -18,6 +18,7 @@
 //! | [`sas`] | `sas.ts` | Complete |
 //! | [`peer_code`] | `peer-code.ts` | Complete |
 //! | [`vectors`] | N/A | Complete (test-only) |
+//! | [`transfer_policy`] | N/A (future WASM) | S2 — stub |
 //!
 //! # Parity Strategy
 //!
@@ -48,6 +49,9 @@ pub mod sas;
 
 /// Peer code generation and validation.
 pub mod peer_code;
+
+/// Transfer policy — pure, deterministic chunk scheduling (S2 greenfield).
+pub mod transfer_policy;
 
 /// Deterministic golden vector generator (test use only).
 /// Requires the `vectors` feature: `cargo test --features vectors`.
