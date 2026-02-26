@@ -219,4 +219,47 @@ mod tests {
         let result = open_box_payload(sealed, &sender_pk, &receiver_sk);
         assert!(result.is_err());
     }
+
+    /// Nonce uniqueness sanity test (H6).
+    ///
+    /// Seals N times via the production `seal_box_payload` path and verifies
+    /// all nonces are unique, exactly 24 bytes, and non-zero.
+    ///
+    /// This is an in-process statistical sanity check, NOT a cryptographic
+    /// guarantee of cross-process uniqueness.
+    #[test]
+    fn nonce_uniqueness_sanity() {
+        use std::collections::HashSet;
+
+        const N: usize = 128;
+        let alice = generate_ephemeral_keypair();
+        let bob = generate_ephemeral_keypair();
+        let plaintext = b"nonce-test";
+
+        let mut seen = HashSet::new();
+        let zero_nonce = [0u8; NONCE_LENGTH];
+
+        for _ in 0..N {
+            let sealed = seal_box_payload(plaintext, &bob.public_key, &alice.secret_key).unwrap();
+            let raw = from_base64(&sealed).unwrap();
+            assert!(
+                raw.len() >= NONCE_LENGTH,
+                "sealed payload shorter than nonce"
+            );
+
+            let nonce: [u8; NONCE_LENGTH] = raw[..NONCE_LENGTH].try_into().unwrap();
+
+            // Nonce must not be all-zero.
+            assert_ne!(nonce, zero_nonce, "nonce must not be all-zero");
+
+            // Nonce must be unique within this run.
+            assert!(
+                seen.insert(nonce),
+                "duplicate nonce detected after {} seals",
+                seen.len()
+            );
+        }
+
+        assert_eq!(seen.len(), N);
+    }
 }
