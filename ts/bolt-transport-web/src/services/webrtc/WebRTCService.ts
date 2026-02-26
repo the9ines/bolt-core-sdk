@@ -4,6 +4,7 @@ import { getLocalOnlyRTCConfig } from '../../lib/platform-utils.js';
 import { verifyPinnedIdentity } from '../identity/pin-store.js';
 import type { PinPersistence } from '../identity/pin-store.js';
 import type { SignalingProvider, SignalMessage } from '../signaling/index.js';
+import { ENABLE_TRANSFER_METRICS, TransferMetricsCollector, summarizeTransfer } from './transferMetrics.js';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -118,6 +119,10 @@ class WebRTCService {
   private transferStartTime = 0;
   private pauseDuration = 0;
   private lastPausedAt: number | null = null;
+
+  // Metrics (S2B instrumentation, gated by ENABLE_TRANSFER_METRICS)
+  private metricsCollector: TransferMetricsCollector | null = null;
+  private metricsFirstProgressRecorded = false;
 
   // Callbacks
   private onProgressCallback?: (progress: TransferProgress) => void;
@@ -639,6 +644,12 @@ class WebRTCService {
     this.sendTransferIds.clear();
     this.recvTransferIds.clear();
 
+    if (this.metricsCollector) {
+      this.metricsCollector.reset();
+      this.metricsCollector = null;
+      this.metricsFirstProgressRecorded = false;
+    }
+
     // Clear HELLO / TOFU / SAS state
     this.sessionState = 'closed';
     if (this.helloTimeout) {
@@ -688,6 +699,12 @@ class WebRTCService {
     this.pauseDuration = 0;
     this.lastPausedAt = null;
 
+    if (ENABLE_TRANSFER_METRICS) {
+      this.metricsCollector = new TransferMetricsCollector();
+      this.metricsFirstProgressRecorded = false;
+      this.metricsCollector.begin(transferId, file.size, DEFAULT_CHUNK_SIZE, totalChunks);
+    }
+
     try {
       for (let i = 0; i < totalChunks; i++) {
         if (this.transferCancelled) throw new TransferError('Transfer cancelled by user');
@@ -717,8 +734,10 @@ class WebRTCService {
 
         // Backpressure — wait for buffer to drain
         if (this.dc!.bufferedAmount > this.dc!.bufferedAmountLowThreshold) {
+          this.metricsCollector?.enterBufferDrainWait();
           await new Promise<void>(resolve => {
             this.dc!.onbufferedamountlow = () => {
+              this.metricsCollector?.exitBufferDrainWait();
               this.dc!.onbufferedamountlow = null;
               resolve();
             };
@@ -727,18 +746,35 @@ class WebRTCService {
 
         if (this.transferCancelled) throw new TransferError('Transfer cancelled by user');
 
+        this.metricsCollector?.recordChunkSend(this.dc!.bufferedAmount, i + 1);
         this.dcSendMessage(msg);
         this.emitProgress(file.name, i + 1, totalChunks, end, file.size, 'transferring');
       }
 
       console.log(`[TRANSFER] All chunks sent for ${file.name}`);
       this.sendTransferIds.delete(file.name);
+
+      if (this.metricsCollector) {
+        const metrics = this.metricsCollector.finish();
+        this.metricsCollector = null;
+        this.metricsFirstProgressRecorded = false;
+        if (metrics) console.log('[TRANSFER_METRICS]', JSON.stringify(summarizeTransfer(metrics)));
+      }
+
       // Emit completion after a brief delay so UI can process final progress
       setTimeout(() => {
         this.emitProgress(file.name, totalChunks, totalChunks, file.size, file.size, 'completed');
       }, 50);
     } catch (error) {
       this.sendTransferIds.delete(file.name);
+
+      if (this.metricsCollector) {
+        const metrics = this.metricsCollector.finish();
+        this.metricsCollector = null;
+        this.metricsFirstProgressRecorded = false;
+        if (metrics) console.log('[TRANSFER_METRICS]', JSON.stringify(summarizeTransfer(metrics)));
+      }
+
       if (!(error instanceof TransferError && error.message.includes('cancelled'))) {
         this.emitProgress(file.name, 0, totalChunks, 0, file.size, 'error');
       }
@@ -1040,6 +1076,7 @@ class WebRTCService {
   pauseTransfer(filename: string) {
     this.transferPaused = true;
     this.lastPausedAt = Date.now();
+    this.metricsCollector?.markPaused();
     const transferId = this.sendTransferIds.get(filename);
     this.sendControlMessage(filename, { paused: true, ...(transferId && { transferId }) });
     this.emitProgress(filename, 0, 0, 0, 0, 'paused');
@@ -1051,6 +1088,7 @@ class WebRTCService {
       this.lastPausedAt = null;
     }
     this.transferPaused = false;
+    this.metricsCollector?.markResumed();
     const transferId = this.sendTransferIds.get(filename);
     this.sendControlMessage(filename, { resumed: true, ...(transferId && { transferId }) });
     this.emitProgress(filename, 0, 0, 0, 0, 'transferring');
@@ -1091,6 +1129,11 @@ class WebRTCService {
     total: number,
     status: TransferProgress['status']
   ) {
+    if (this.metricsCollector && !this.metricsFirstProgressRecorded) {
+      this.metricsCollector.recordFirstProgress();
+      this.metricsFirstProgressRecorded = true;
+    }
+
     if (!this.onProgressCallback) return;
 
     const elapsed = Math.max(1, Date.now() - this.transferStartTime - this.pauseDuration);
