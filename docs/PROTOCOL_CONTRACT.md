@@ -2,7 +2,7 @@
 
 This document provides conformance clarifications and implementation notes for the `@the9ines/bolt-core` SDK. It is **not** a second specification.
 
-**Normative authority**: `PROTOCOL.md` in `bolt-protocol` (or temporarily `bolt-core-sdk`) is the single source of truth for wire formats, byte layouts, and protocol semantics. This document clarifies how the TypeScript SDK implements those requirements and defines the test vector contract for cross-implementation verification.
+**Normative authority**: `PROTOCOL.md` in `bolt-protocol` is the single source of truth for wire formats, byte layouts, and protocol semantics. This document clarifies how the TypeScript SDK implements those requirements and defines the test vector contract for cross-implementation verification.
 
 If this document and `PROTOCOL.md` conflict, `PROTOCOL.md` wins.
 
