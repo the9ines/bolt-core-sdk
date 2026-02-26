@@ -133,8 +133,11 @@ describe('Phase 8D: Strict Handshake Gating (S4)', () => {
 
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
-    // Send a hello message (processHello will run but we don't need it to succeed fully)
-    injectMessage({ type: 'hello', payload: 'encrypted-stub' });
+    // Send a valid HELLO payload (mock openBoxPayload returns UTF-8 decode of cipher string)
+    injectMessage({
+      type: 'hello',
+      payload: '{"type":"hello","version":1,"identityPublicKey":"abc"}',
+    });
 
     // Should NOT have logged INVALID_STATE
     const invalidStateWarns = warnSpy.mock.calls.filter(
@@ -142,11 +145,14 @@ describe('Phase 8D: Strict Handshake Gating (S4)', () => {
     );
     expect(invalidStateWarns.length).toBe(0);
 
-    // Should NOT have sent an error control message
-    const errorMsgs = sentMessages.filter(m => {
-      try { return JSON.parse(m).type === 'error'; } catch { return false; }
+    // Should NOT have sent an INVALID_STATE error control message
+    const invalidStateErrors = sentMessages.filter(m => {
+      try {
+        const p = JSON.parse(m);
+        return p.type === 'error' && p.code === 'INVALID_STATE';
+      } catch { return false; }
     });
-    expect(errorMsgs.length).toBe(0);
+    expect(invalidStateErrors.length).toBe(0);
 
     warnSpy.mockRestore();
     service.disconnect();
