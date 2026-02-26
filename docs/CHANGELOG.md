@@ -2,6 +2,31 @@
 
 All notable changes to bolt-core-sdk are documented here. Newest first.
 
+## [I5 — Interop Error Framing Fix] - 2026-02-26
+
+Post-envelope error framing divergence: `sendErrorAndDisconnect()` sent
+plaintext errors even after envelope-v1 negotiation. Web also rejected
+enveloped errors as UNKNOWN_MESSAGE_TYPE.
+
+### Fixed (transport-web)
+- `sendErrorAndDisconnect()` now wraps errors in profile-envelope when
+  envelope negotiated, helloComplete, and key material present (World B).
+  Pre-HELLO errors remain plaintext (World A).
+- `handleMessage()` now routes enveloped `{type:'error'}` from remote
+  peers (Case B inbound) — emits onError and disconnects.
+
+### Added (transport-web)
+- 5 new I5 interop tests: enveloped error inbound (Case B), plaintext
+  error rejected in envelope-required mode, World B outbound wrapping,
+  World A outbound plaintext, unknown error code safety.
+
+### Companion
+- Daemon fix: `daemon-v0.2.11-interop-error-framing` (`600fef4`)
+
+**Tag:** `sdk-v0.5.7-interop-error-framing` (`e463e1a`)
+
+---
+
 ## [S1 — Core Protocol Conformance Harness] - 2026-02-26
 
 Phase S1: Deterministic Rust conformance harness enforcing MUST-level

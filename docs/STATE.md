@@ -4,8 +4,8 @@ Current state of the bolt-core-sdk repository.
 
 ## Current Version
 
-**Latest Tag (main):** `sdk-v0.5.4-s1-conformance-harness`
-**Commit (main):** `cced058`
+**Latest Tag (main):** `sdk-v0.5.7-interop-error-framing`
+**Commit (main):** `e463e1a`
 **Branch:** `main`
 **TS Package:** `@the9ines/bolt-core` v0.4.0 (dead exports removed, 21 public exports)
 **TS Package:** `@the9ines/bolt-transport-web` v0.6.0 (Profile Envelope v1)
@@ -64,7 +64,7 @@ See [SDK_STABILITY.md](SDK_STABILITY.md) for the stability contract.
 | File integrity verification (bolt-core) | Complete (`hashFile` widened to Blob, `IntegrityError` added) |
 | File integrity verification (transport-web) | Complete (`WebRTCService` — `bolt.file-hash` capability, sender hash, receiver verify, fail-closed) |
 | File integrity verification (spec) | Complete (`LOCALBOLT_PROFILE.md` §13 — capability gate, wire format, backward compat) |
-| Audit tracker | Complete (`docs/AUDIT_TRACKER.md` — 26 findings, 22 DONE, 3 DEFERRED) |
+| Audit tracker | Complete (`docs/AUDIT_TRACKER.md` — 28 findings, 23 DONE, 1 CLOSED-NO-BUG, 3 DEFERRED) |
 | Security posture declaration | Complete (`docs/SECURITY_POSTURE.md` — WebRTC DataChannel profile) |
 | Rust core plan | Complete (`docs/ecosystem/RUST_CORE_PLAN.md` — crate layout, API, phased milestones) |
 | Ecosystem docs index | Complete (`docs/ecosystem/README.md`) |
@@ -115,6 +115,7 @@ See [SDK_STABILITY.md](SDK_STABILITY.md) for the stability contract.
 | Phase H2 | WebRTC enforcement compliance | **Complete** (exactly-once HELLO, envelope-required, fail-closed, 21 tests) |
 | Phase H3 | Cross-implementation golden vectors | **Complete** (SAS, HELLO-open, envelope-open; TS 97 tests, Rust 96 tests) |
 | Phase S1 | Core protocol conformance harness | **Complete** (envelope, SAS, error mapping; 27 Rust conformance tests) |
+| Phase I5 | Interop error framing fix | **Complete** (envelope-aware sendErrorAndDisconnect, Case B inbound routing; +5 web tests, 161 total) |
 
 ## Downstream Consumers
 
