@@ -2,7 +2,7 @@
 
 **Last updated:** 2026-02-26
 **Scope:** All repos under the9ines/bolt-ecosystem
-**Authority:** bolt-core-sdk (this repo)
+**Authority:** bolt-core-sdk (this repo). All governance docs (AUDIT_TRACKER, STATE, CHANGELOG) are version-controlled here. Ecosystem-root docs (e.g., `bolt-ecosystem/docs/`) are informational only — not version-controlled, not authoritative.
 
 ---
 
@@ -25,7 +25,7 @@
 | ID | Finding | Severity | Status | Evidence |
 |----|---------|----------|--------|----------|
 | I1 | Rust/TS constants misaligned | MEDIUM | **DONE** | PEER_CODE_LENGTH 4->6, SAS_LENGTH 4->6, alphabet 36->31 chars. Phase 6A.1: `sdk-v0.1.1-constants-alignment`. Cross-language verification script. |
-| I2 | Daemon/Web NaCl interop untested | LOW | **DEFERRED** | bolt-daemon is planned/minimal. No TS consumers exist. Will be addressed when daemon development begins. |
+| I2 | Daemon/Web NaCl interop untested | LOW | **DONE** | H3 golden vectors prove crypto interop (12/12 cross-implementation: TS-sealed → Rust-opened). I5/I6 investigation further confirmed wire format alignment. Remaining gap: transport-level E2E (daemon ↔ web live transfer) not yet in CI. |
 | I3 | Shadow SAS in transport-web | MEDIUM | **DONE** | Removed `getVerificationCode()`. Phase 6A.2: `sdk-v0.1.2-sas-canonical`. Enforcement script `verify-no-shadow-sas.sh`. |
 | I4 | Protocol-level bolt-envelope | MEDIUM | **DEFERRED** | Profile Envelope v1 landed (Phase M1, `transport-web-v0.6.0`). Full protocol-level envelope standardization across all transports is a large cross-cutting effort deferred to bolt-protocol specification work. |
 | I5 | Post-envelope error framing divergence | HIGH | **DONE** | Daemon `build_error_payload()` wraps errors in envelope when negotiated (session passed in). Web `sendErrorAndDisconnect()` envelope-aware (World B). Web accepts enveloped errors (Case B inbound). `daemon-v0.2.11-interop-error-framing` (`600fef4`), `transport-web-v0.6.2-interop-error-framing` (`e463e1a`). +4 daemon tests (271 total), +5 web tests (161 total). |
@@ -68,22 +68,22 @@
 
 ## ADOPTION STATUS
 
-All product repos on main are pinned to current SDK releases:
+Product repos on main are pinned to published SDK releases. Interop fix (transport-web 0.6.2) landed but not yet rolled to consumers — adoption pending.
 
-| Repo | bolt-core | transport-web | Tests | Build |
-|------|-----------|---------------|-------|-------|
-| localbolt | 0.4.0 | 0.6.0 | 272/272 | pass |
-| localbolt-app | 0.4.0 | 0.6.0 | N/A | pass |
-| localbolt-v3 | 0.4.0 | 0.6.0 | 4/4 | pass |
+| Repo | bolt-core | transport-web (pinned) | transport-web (latest) | Tests | Build |
+|------|-----------|------------------------|------------------------|-------|-------|
+| localbolt | 0.4.0 | 0.6.0 | 0.6.2 (pending) | 272/272 | pass |
+| localbolt-app | 0.4.0 | 0.6.0 | 0.6.2 (pending) | N/A | pass |
+| localbolt-v3 | 0.4.0 | 0.6.0 | 0.6.2 (pending) | 4/4 | pass |
 
 ---
 
 ## SUMMARY
 
 - **Total findings:** 28
-- **DONE:** 23
+- **DONE:** 24
 - **CLOSED-NO-BUG:** 1 (I6)
-- **DEFERRED:** 3 (I2, I4, Q4)
+- **DEFERRED:** 2 (I4, Q4)
 - **Residual risk:** See `docs/SECURITY_POSTURE.md`
 
 ---
@@ -92,10 +92,10 @@ All product repos on main are pinned to current SDK releases:
 
 | ID | Phase | Description | Status | Evidence |
 |----|-------|-------------|--------|----------|
-| H0 | Protocol enforcement posture | Normative enforcement doc: exactly-once HELLO, envelope-required, fail-closed, error registry, downgrade resistance | **DONE** | `bolt-ecosystem/docs/PROTOCOL_ENFORCEMENT.md`. Not version-controlled (ecosystem root is not a git repo). |
-| H1 | Signal server hardening | Trust-boundary hardening in localbolt-v3 signal server | **DONE** | `v3.0.59-signal-hardening` (`ac5110c`). On `feature/h1-signal-hardening`, not merged to main. |
-| H2 | WebRTC enforcement compliance | Exactly-once HELLO, envelope-required, fail-closed in WebRTCService | **DONE** | `sdk-v0.5.0-h2-webrtc-enforcement` (`b4ce544`). 21 enforcement tests. On `feature/h3-golden-vectors`, not merged to main. |
-| H3 | Cross-implementation golden vectors | SAS, HELLO-open, envelope-open deterministic vectors across TS, Rust SDK, daemon | **DONE** | `sdk-v0.5.1` (`9d8617d`), `daemon-v0.2.5-h3-golden-vectors` (`3751118`). On feature branches, not merged to main. |
+| H0 | Protocol enforcement posture | Normative enforcement doc: exactly-once HELLO, envelope-required, fail-closed, error registry, downgrade resistance | **DONE** | `bolt-ecosystem/docs/PROTOCOL_ENFORCEMENT.md`. Informational only (ecosystem root is not a git repo). |
+| H1 | Signal server hardening | Trust-boundary hardening in localbolt-v3 signal server | **IMPLEMENTED** | `v3.0.59-signal-hardening` (`ac5110c`). On `feature/h1-signal-hardening`, **not merged to main**. |
+| H2 | WebRTC enforcement compliance | Exactly-once HELLO, envelope-required, fail-closed in WebRTCService | **MERGED** | Originally `sdk-v0.5.0-h2-webrtc-enforcement` (`b4ce544`). 21 enforcement tests. Merged to main via subsequent phases. |
+| H3 | Cross-implementation golden vectors | SAS, HELLO-open, envelope-open deterministic vectors across TS, Rust SDK, daemon | **MERGED (daemon)** | Daemon: `daemon-v0.2.5-h3-golden-vectors` (`3751118`), merged to main via `0b16392`. SDK TS vectors: on feature branch, not yet on main. |
 | H4 | Daemon unwrap hardening | Error code enforcement in daemon decode paths | NOT STARTED | — |
 | H5 | TOFU/SAS wiring in localbolt-v3 | Wire TOFU + SAS into product UI | NOT STARTED | — |
 | H6 | CI/coverage enforcement | Golden vector and enforcement tests as CI gates | NOT STARTED | — |
