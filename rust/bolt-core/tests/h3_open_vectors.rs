@@ -99,17 +99,14 @@ fn hello_open_golden_vectors() {
             &sender_pk,
             &receiver_sk,
         )
-        .unwrap_or_else(|e| {
-            panic!("HELLO open failed for case '{}': {}", case.name, e)
-        });
+        .unwrap_or_else(|e| panic!("HELLO open failed for case '{}': {}", case.name, e));
 
-        let inner: serde_json::Value = serde_json::from_slice(&decrypted)
-            .unwrap_or_else(|e| {
-                panic!(
-                    "HELLO inner JSON parse failed for case '{}': {}",
-                    case.name, e
-                )
-            });
+        let inner: serde_json::Value = serde_json::from_slice(&decrypted).unwrap_or_else(|e| {
+            panic!(
+                "HELLO inner JSON parse failed for case '{}': {}",
+                case.name, e
+            )
+        });
 
         assert_eq!(
             inner, case.expected_inner,
@@ -152,19 +149,12 @@ fn hello_seal_then_open_roundtrip() {
     let inner = r#"{"type":"hello","version":1,"identityPublicKey":"dGVzdA==","capabilities":["bolt.file-hash"]}"#;
     let plaintext = inner.as_bytes();
 
-    let sealed = bolt_core::crypto::seal_box_payload(
-        plaintext,
-        &kp_b.public_key,
-        &kp_a.secret_key,
-    )
-    .expect("seal failed");
+    let sealed = bolt_core::crypto::seal_box_payload(plaintext, &kp_b.public_key, &kp_a.secret_key)
+        .expect("seal failed");
 
-    let decrypted = bolt_core::crypto::open_box_payload(
-        &sealed,
-        &kp_a.public_key,
-        &kp_b.secret_key,
-    )
-    .expect("open failed");
+    let decrypted =
+        bolt_core::crypto::open_box_payload(&sealed, &kp_a.public_key, &kp_b.secret_key)
+            .expect("open failed");
 
     assert_eq!(decrypted, plaintext);
 }
@@ -212,17 +202,14 @@ fn envelope_open_golden_vectors() {
             &sender_pk,
             &receiver_sk,
         )
-        .unwrap_or_else(|e| {
-            panic!("envelope open failed for case '{}': {}", case.name, e)
-        });
+        .unwrap_or_else(|e| panic!("envelope open failed for case '{}': {}", case.name, e));
 
-        let inner: serde_json::Value = serde_json::from_slice(&decrypted)
-            .unwrap_or_else(|e| {
-                panic!(
-                    "envelope inner JSON parse failed for case '{}': {}",
-                    case.name, e
-                )
-            });
+        let inner: serde_json::Value = serde_json::from_slice(&decrypted).unwrap_or_else(|e| {
+            panic!(
+                "envelope inner JSON parse failed for case '{}': {}",
+                case.name, e
+            )
+        });
 
         assert_eq!(
             inner, case.expected_inner,
@@ -269,19 +256,13 @@ fn envelope_seal_then_open_roundtrip() {
     ];
 
     for msg in &messages {
-        let sealed = bolt_core::crypto::seal_box_payload(
-            msg.as_bytes(),
-            &kp_b.public_key,
-            &kp_a.secret_key,
-        )
-        .expect("seal failed");
+        let sealed =
+            bolt_core::crypto::seal_box_payload(msg.as_bytes(), &kp_b.public_key, &kp_a.secret_key)
+                .expect("seal failed");
 
-        let decrypted = bolt_core::crypto::open_box_payload(
-            &sealed,
-            &kp_a.public_key,
-            &kp_b.secret_key,
-        )
-        .expect("open failed");
+        let decrypted =
+            bolt_core::crypto::open_box_payload(&sealed, &kp_a.public_key, &kp_b.secret_key)
+                .expect("open failed");
 
         assert_eq!(decrypted, msg.as_bytes());
     }
@@ -299,8 +280,7 @@ fn h3_vector_files_exist_and_not_empty() {
     ];
     for (filename, min_size) in &files {
         let path = dir.join(filename);
-        let meta = std::fs::metadata(&path)
-            .unwrap_or_else(|e| panic!("{}: {}", path.display(), e));
+        let meta = std::fs::metadata(&path).unwrap_or_else(|e| panic!("{}: {}", path.display(), e));
         assert!(
             meta.len() > *min_size,
             "{} suspiciously small ({} bytes)",

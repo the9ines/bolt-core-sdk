@@ -46,8 +46,7 @@ fn sas_golden_vectors_from_file() {
     let path = vectors_dir().join("sas.vectors.json");
     let data = std::fs::read_to_string(&path)
         .unwrap_or_else(|e| panic!("failed to read {}: {}", path.display(), e));
-    let vecs: SasVectors =
-        serde_json::from_str(&data).expect("sas vectors failed to parse");
+    let vecs: SasVectors = serde_json::from_str(&data).expect("sas vectors failed to parse");
 
     assert_eq!(vecs.version, 1);
     assert!(
@@ -82,8 +81,7 @@ fn sas_golden_vectors_from_file() {
 #[test]
 fn sas_vector_file_exists_and_not_empty() {
     let path = vectors_dir().join("sas.vectors.json");
-    let meta = std::fs::metadata(&path)
-        .unwrap_or_else(|e| panic!("{}: {}", path.display(), e));
+    let meta = std::fs::metadata(&path).unwrap_or_else(|e| panic!("{}: {}", path.display(), e));
     assert!(
         meta.len() > 200,
         "sas vectors suspiciously small ({} bytes)",
