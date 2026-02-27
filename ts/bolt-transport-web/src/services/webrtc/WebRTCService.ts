@@ -140,6 +140,7 @@ class WebRTCService {
   private sessionState: 'pre_hello' | 'post_hello' | 'closed' = 'pre_hello';
   private helloTimeout: ReturnType<typeof setTimeout> | null = null;
   private helloResolve: (() => void) | null = null;
+  private helloProcessing = false; // SA12: reentrancy guard
 
   // SAS verification state
   private remoteIdentityKey: Uint8Array | null = null;
@@ -463,6 +464,14 @@ class WebRTCService {
   }
 
   private async processHello(msg: { type: 'hello'; payload: string }) {
+    // SA12: synchronous reentrancy guard — must be set before any await
+    if (this.helloProcessing) {
+      console.warn('[DUPLICATE_HELLO] HELLO received while processing — disconnecting');
+      this.sendErrorAndDisconnect('DUPLICATE_HELLO', 'Duplicate HELLO');
+      return;
+    }
+    this.helloProcessing = true;
+
     // H2: Fail-closed HELLO processing — all failures send error + disconnect
     if (!this.keyPair || !this.remotePublicKey) {
       console.warn('[HELLO_DECRYPT_FAIL] Cannot decrypt — no ephemeral keys');
@@ -668,6 +677,7 @@ class WebRTCService {
       this.helloTimeout = null;
     }
     this.helloComplete = false;
+    this.helloProcessing = false;
     this.sessionLegacy = false;
     this.helloResolve = null;
     this.remoteIdentityKey = null;
@@ -906,6 +916,18 @@ class WebRTCService {
       }
 
       // ─── Envelope-unnegotiated plaintext path ──────────────────
+      // SA9: reject unknown type (non-file-chunk) — no silent drops
+      if (msg.type !== 'file-chunk') {
+        console.warn(`[UNKNOWN_MESSAGE_TYPE] unknown plaintext type "${msg.type}" — disconnecting`);
+        this.sendErrorAndDisconnect('UNKNOWN_MESSAGE_TYPE', `Unknown message type: ${msg.type}`);
+        return;
+      }
+      // SA9: reject malformed file-chunk (missing/empty filename) — no silent drops
+      if (!msg.filename) {
+        console.warn('[INVALID_MESSAGE] file-chunk with missing/empty filename — disconnecting');
+        this.sendErrorAndDisconnect('INVALID_MESSAGE', 'file-chunk missing filename');
+        return;
+      }
       this.routeInnerMessage(msg);
     } catch (error) {
       console.error('[PROTOCOL_VIOLATION] Error processing message:', error);
