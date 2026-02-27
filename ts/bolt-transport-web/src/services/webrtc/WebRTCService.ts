@@ -1,4 +1,4 @@
-import { sealBoxPayload, openBoxPayload, generateEphemeralKeyPair, toBase64, fromBase64, DEFAULT_CHUNK_SIZE, EncryptionError, IntegrityError, KeyMismatchError, computeSas, bufferToHex, hashFile } from '@the9ines/bolt-core';
+import { sealBoxPayload, openBoxPayload, generateEphemeralKeyPair, toBase64, fromBase64, DEFAULT_CHUNK_SIZE, EncryptionError, IntegrityError, KeyMismatchError, computeSas, bufferToHex, hashFile, isValidWireErrorCode } from '@the9ines/bolt-core';
 import { WebRTCError, ConnectionError, SignalingError, TransferError } from '../../types/webrtc-errors.js';
 import { getLocalOnlyRTCConfig } from '../../lib/platform-utils.js';
 import { verifyPinnedIdentity } from '../identity/pin-store.js';
@@ -402,6 +402,12 @@ class WebRTCService {
 
   /** Send an error frame and disconnect. Wraps in envelope when negotiated. */
   private sendErrorAndDisconnect(code: string, message: string): void {
+    // Outbound guard: only emit canonical wire error codes (PROTOCOL.md §10)
+    if (!isValidWireErrorCode(code)) {
+      console.error(`[BUG] sendErrorAndDisconnect called with non-canonical code: ${code}`);
+      this.disconnect();
+      return;
+    }
     if (this.dc && this.dc.readyState === 'open') {
       const errorMsg = { type: 'error', code, message };
       if (this.negotiatedEnvelopeV1() && this.helloComplete && this.keyPair && this.remotePublicKey) {
@@ -847,6 +853,18 @@ class WebRTCService {
         }
         // Handle enveloped error from remote peer
         if (inner.type === 'error') {
+          // Validate inbound error code: must be a non-empty string in the canonical registry
+          if (!isValidWireErrorCode(inner.code)) {
+            console.warn(`[PROTOCOL_VIOLATION] enveloped error with invalid code: ${JSON.stringify(inner.code)} — disconnecting`);
+            this.sendErrorAndDisconnect('PROTOCOL_VIOLATION', 'Invalid inbound error code');
+            return;
+          }
+          // Validate message field if present: must be a string
+          if (inner.message !== undefined && typeof inner.message !== 'string') {
+            console.warn(`[PROTOCOL_VIOLATION] enveloped error with non-string message — disconnecting`);
+            this.sendErrorAndDisconnect('PROTOCOL_VIOLATION', 'Invalid inbound error message type');
+            return;
+          }
           console.warn(`[REMOTE_ERROR] enveloped error: code=${inner.code}, message=${inner.message}`);
           this.onError(new WebRTCError(inner.message || 'Remote error'));
           this.disconnect();
@@ -866,6 +884,24 @@ class WebRTCService {
       if (this.negotiatedEnvelopeV1()) {
         console.warn('[ENVELOPE_REQUIRED] plaintext message received in envelope-required session — disconnecting');
         this.sendErrorAndDisconnect('ENVELOPE_REQUIRED', 'Envelope required');
+        return;
+      }
+
+      // ─── Plaintext error handling (pre-envelope) ────────────────
+      if (msg.type === 'error') {
+        if (!isValidWireErrorCode(msg.code)) {
+          console.warn(`[PROTOCOL_VIOLATION] plaintext error with invalid code: ${JSON.stringify(msg.code)} — disconnecting`);
+          this.sendErrorAndDisconnect('PROTOCOL_VIOLATION', 'Invalid inbound error code');
+          return;
+        }
+        if (msg.message !== undefined && typeof msg.message !== 'string') {
+          console.warn(`[PROTOCOL_VIOLATION] plaintext error with non-string message — disconnecting`);
+          this.sendErrorAndDisconnect('PROTOCOL_VIOLATION', 'Invalid inbound error message type');
+          return;
+        }
+        console.warn(`[REMOTE_ERROR] plaintext error: code=${msg.code}, message=${msg.message}`);
+        this.onError(new WebRTCError(msg.message || 'Remote error'));
+        this.disconnect();
         return;
       }
 

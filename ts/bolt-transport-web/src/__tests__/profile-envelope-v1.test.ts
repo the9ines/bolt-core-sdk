@@ -70,6 +70,23 @@ vi.mock('@the9ines/bolt-core', () => ({
   bufferToHex: (buffer: ArrayBuffer) =>
     Array.from(new Uint8Array(buffer)).map(b => b.toString(16).padStart(2, '0')).join(''),
   hashFile: async () => 'a'.repeat(64),
+  WIRE_ERROR_CODES: [
+    'VERSION_MISMATCH', 'ENCRYPTION_FAILED', 'INTEGRITY_FAILED', 'REPLAY_DETECTED',
+    'TRANSFER_FAILED', 'LIMIT_EXCEEDED', 'CONNECTION_LOST', 'PEER_NOT_FOUND',
+    'ALREADY_CONNECTED', 'INVALID_STATE', 'KEY_MISMATCH',
+    'DUPLICATE_HELLO', 'ENVELOPE_REQUIRED', 'ENVELOPE_UNNEGOTIATED', 'ENVELOPE_DECRYPT_FAIL',
+    'ENVELOPE_INVALID', 'HELLO_PARSE_ERROR', 'HELLO_DECRYPT_FAIL', 'HELLO_SCHEMA_ERROR',
+    'INVALID_MESSAGE', 'UNKNOWN_MESSAGE_TYPE', 'PROTOCOL_VIOLATION',
+  ],
+  isValidWireErrorCode: (x: unknown) =>
+    typeof x === 'string' && [
+      'VERSION_MISMATCH', 'ENCRYPTION_FAILED', 'INTEGRITY_FAILED', 'REPLAY_DETECTED',
+      'TRANSFER_FAILED', 'LIMIT_EXCEEDED', 'CONNECTION_LOST', 'PEER_NOT_FOUND',
+      'ALREADY_CONNECTED', 'INVALID_STATE', 'KEY_MISMATCH',
+      'DUPLICATE_HELLO', 'ENVELOPE_REQUIRED', 'ENVELOPE_UNNEGOTIATED', 'ENVELOPE_DECRYPT_FAIL',
+      'ENVELOPE_INVALID', 'HELLO_PARSE_ERROR', 'HELLO_DECRYPT_FAIL', 'HELLO_SCHEMA_ERROR',
+      'INVALID_MESSAGE', 'UNKNOWN_MESSAGE_TYPE', 'PROTOCOL_VIOLATION',
+    ].includes(x as string),
 }));
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -625,7 +642,7 @@ describe('Phase M1: Profile Envelope v1', () => {
       const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
       // Remote sends enveloped error (Case B: decrypts OK, inner is {type:'error'})
-      injectMessage(buildEnvelope({ type: 'error', code: 'REMOTE_CANCEL', message: 'Transfer cancelled by remote' }));
+      injectMessage(buildEnvelope({ type: 'error', code: 'TRANSFER_FAILED', message: 'Transfer cancelled by remote' }));
 
       expect(onError).toHaveBeenCalledTimes(1);
       expect(onError.mock.calls[0][0].message).toContain('Transfer cancelled by remote');
@@ -662,7 +679,7 @@ describe('Phase M1: Profile Envelope v1', () => {
       enableEnvelope(service);
 
       // Directly invoke sendErrorAndDisconnect in World B state
-      (service as any).sendErrorAndDisconnect('TEST_ERROR', 'test message');
+      (service as any).sendErrorAndDisconnect('INVALID_STATE', 'test message');
 
       expect(sentMessages.length).toBe(1);
       const parsed = JSON.parse(sentMessages[0]);
@@ -674,7 +691,7 @@ describe('Phase M1: Profile Envelope v1', () => {
       for (let i = 0; i < innerHex.length; i += 2) bytes[i / 2] = parseInt(innerHex.substring(i, i + 2), 16);
       const inner = JSON.parse(new TextDecoder().decode(bytes));
       expect(inner.type).toBe('error');
-      expect(inner.code).toBe('TEST_ERROR');
+      expect(inner.code).toBe('INVALID_STATE');
       expect(inner.message).toBe('test message');
       // Disconnected
       expect((service as any).keyPair).toBe(null);
@@ -685,31 +702,44 @@ describe('Phase M1: Profile Envelope v1', () => {
       const { sentMessages } = attachDataChannel(service);
       // helloComplete=false, sessionState=pre_hello by default (World A)
 
-      (service as any).sendErrorAndDisconnect('PRE_HELLO_ERROR', 'before handshake');
+      (service as any).sendErrorAndDisconnect('VERSION_MISMATCH', 'before handshake');
 
       expect(sentMessages.length).toBe(1);
       const parsed = JSON.parse(sentMessages[0]);
       expect(parsed.type).toBe('error');
-      expect(parsed.code).toBe('PRE_HELLO_ERROR');
+      expect(parsed.code).toBe('VERSION_MISMATCH');
       expect(parsed.message).toBe('before handshake');
       // Disconnected
       expect((service as any).keyPair).toBe(null);
     });
 
-    it('19. unknown error code in enveloped error handled safely', () => {
+    it('19. unknown error code in enveloped error → PROTOCOL_VIOLATION + disconnect', () => {
       const onError = vi.fn();
       const service = createService(vi.fn(), onError);
-      const { injectMessage } = attachDataChannel(service);
+      const { sentMessages, injectMessage } = attachDataChannel(service);
       enableEnvelope(service);
 
       const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
-      // Remote sends enveloped error with non-standard code — no crash
+      // Remote sends enveloped error with non-canonical code — must be rejected
       injectMessage(buildEnvelope({ type: 'error', code: 'XYZZY_UNKNOWN_999', message: 'exotic error' }));
 
-      expect(onError).toHaveBeenCalledTimes(1);
-      expect(onError.mock.calls[0][0].message).toContain('exotic error');
-      // Disconnected gracefully
+      // Should emit PROTOCOL_VIOLATION
+      const violations = sentMessages.filter(m => {
+        try {
+          const p = JSON.parse(m);
+          if (p.type === 'profile-envelope' && p.payload) {
+            const hex = p.payload as string;
+            const bytes = new Uint8Array(hex.length / 2);
+            for (let i = 0; i < hex.length; i += 2) bytes[i / 2] = parseInt(hex.substring(i, i + 2), 16);
+            const inner = JSON.parse(new TextDecoder().decode(bytes));
+            return inner.type === 'error' && inner.code === 'PROTOCOL_VIOLATION';
+          }
+          return false;
+        } catch { return false; }
+      });
+      expect(violations.length).toBe(1);
+      // Disconnected
       expect((service as any).keyPair).toBe(null);
 
       warnSpy.mockRestore();

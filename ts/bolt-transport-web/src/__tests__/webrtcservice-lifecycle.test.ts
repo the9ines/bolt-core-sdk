@@ -51,6 +51,23 @@ vi.mock('@the9ines/bolt-core', () => ({
   bufferToHex: (buffer: ArrayBuffer) =>
     Array.from(new Uint8Array(buffer)).map(b => b.toString(16).padStart(2, '0')).join(''),
   hashFile: async () => 'a'.repeat(64),
+  WIRE_ERROR_CODES: [
+    'VERSION_MISMATCH', 'ENCRYPTION_FAILED', 'INTEGRITY_FAILED', 'REPLAY_DETECTED',
+    'TRANSFER_FAILED', 'LIMIT_EXCEEDED', 'CONNECTION_LOST', 'PEER_NOT_FOUND',
+    'ALREADY_CONNECTED', 'INVALID_STATE', 'KEY_MISMATCH',
+    'DUPLICATE_HELLO', 'ENVELOPE_REQUIRED', 'ENVELOPE_UNNEGOTIATED', 'ENVELOPE_DECRYPT_FAIL',
+    'ENVELOPE_INVALID', 'HELLO_PARSE_ERROR', 'HELLO_DECRYPT_FAIL', 'HELLO_SCHEMA_ERROR',
+    'INVALID_MESSAGE', 'UNKNOWN_MESSAGE_TYPE', 'PROTOCOL_VIOLATION',
+  ],
+  isValidWireErrorCode: (x: unknown) =>
+    typeof x === 'string' && [
+      'VERSION_MISMATCH', 'ENCRYPTION_FAILED', 'INTEGRITY_FAILED', 'REPLAY_DETECTED',
+      'TRANSFER_FAILED', 'LIMIT_EXCEEDED', 'CONNECTION_LOST', 'PEER_NOT_FOUND',
+      'ALREADY_CONNECTED', 'INVALID_STATE', 'KEY_MISMATCH',
+      'DUPLICATE_HELLO', 'ENVELOPE_REQUIRED', 'ENVELOPE_UNNEGOTIATED', 'ENVELOPE_DECRYPT_FAIL',
+      'ENVELOPE_INVALID', 'HELLO_PARSE_ERROR', 'HELLO_DECRYPT_FAIL', 'HELLO_SCHEMA_ERROR',
+      'INVALID_MESSAGE', 'UNKNOWN_MESSAGE_TYPE', 'PROTOCOL_VIOLATION',
+    ].includes(x as string),
 }));
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
