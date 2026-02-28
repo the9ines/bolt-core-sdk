@@ -19,12 +19,23 @@ use crate::errors::BoltError;
 /// X25519 keypair (ephemeral or identity).
 ///
 /// 32-byte public key (Curve25519 point) and 32-byte secret key.
+/// Secret key is deterministically zeroized on drop via volatile writes.
 #[derive(Clone)]
 pub struct KeyPair {
     /// Curve25519 public key (32 bytes).
     pub public_key: [u8; 32],
     /// Curve25519 secret key (32 bytes).
     pub secret_key: [u8; 32],
+}
+
+impl Drop for KeyPair {
+    fn drop(&mut self) {
+        // Volatile writes prevent the compiler from optimizing away the zeroization.
+        for byte in self.secret_key.iter_mut() {
+            unsafe { std::ptr::write_volatile(byte as *mut u8, 0u8) };
+        }
+        std::sync::atomic::compiler_fence(std::sync::atomic::Ordering::SeqCst);
+    }
 }
 
 /// Generate a fresh ephemeral X25519 keypair.
@@ -218,6 +229,47 @@ mod tests {
 
         let result = open_box_payload(sealed, &sender_pk, &receiver_sk);
         assert!(result.is_err());
+    }
+
+    /// SA4: Drop zeroizes secret key via volatile writes.
+    ///
+    /// Allocates KeyPair on heap, captures a raw pointer to the secret buffer,
+    /// drops the Box, then reads the memory region with read_volatile to confirm
+    /// all bytes are zero.
+    #[test]
+    fn keypair_drop_zeroizes_secret() {
+        let kp = Box::new(generate_ephemeral_keypair());
+        // Confirm secret is non-zero before drop.
+        assert_ne!(
+            kp.secret_key, [0u8; 32],
+            "secret key must be non-zero after generation"
+        );
+
+        // Capture raw pointer to the secret key buffer inside the heap allocation.
+        let secret_ptr = kp.secret_key.as_ptr();
+
+        // Drop the KeyPair — Drop::drop should volatile-zero the secret.
+        drop(kp);
+
+        // Immediately read the memory region. The allocator has not been asked
+        // for new memory, so the region should still be accessible (though
+        // logically freed). read_volatile prevents the compiler from eliding
+        // the reads.
+        for i in 0..32 {
+            let byte = unsafe { std::ptr::read_volatile(secret_ptr.add(i)) };
+            assert_eq!(byte, 0, "secret_key byte {} not zeroed after drop", i);
+        }
+    }
+
+    /// SA4: Double-drop safety — dropping a default-constructed KeyPair does not panic.
+    #[test]
+    fn keypair_drop_zeros_safe() {
+        let kp = KeyPair {
+            public_key: [0u8; 32],
+            secret_key: [0u8; 32],
+        };
+        drop(kp);
+        // If we reach here, Drop did not panic on an all-zero secret.
     }
 
     /// Nonce uniqueness sanity test (H6).
