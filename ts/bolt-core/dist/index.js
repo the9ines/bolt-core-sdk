@@ -14,3 +14,5 @@ export { computeSas } from './sas.js';
 export { generateIdentityKeyPair, KeyMismatchError } from './identity.js';
 // Errors
 export { BoltError, EncryptionError, ConnectionError, TransferError, IntegrityError } from './errors.js';
+// Wire error code registry (PROTOCOL.md §10)
+export { WIRE_ERROR_CODES, isValidWireErrorCode } from './errors.js';

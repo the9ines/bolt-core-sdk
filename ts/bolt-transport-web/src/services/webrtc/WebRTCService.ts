@@ -170,7 +170,7 @@ class WebRTCService {
     this.onProgressCallback = onProgress;
     this.options = options ?? {};
     this.signaling = signaling;
-    this.signalUnsub = this.signaling.onSignal((signal) => this.handleSignal(signal)) ?? undefined;
+    this.signalUnsub = this.signaling.onSignal((signal) => this.handleSignal(signal));
   }
 
   // ─── Signaling ──────────────────────────────────────────────────────────

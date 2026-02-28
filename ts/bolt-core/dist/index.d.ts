@@ -7,3 +7,5 @@ export { computeSas } from './sas.js';
 export { generateIdentityKeyPair, KeyMismatchError } from './identity.js';
 export type { IdentityKeyPair } from './identity.js';
 export { BoltError, EncryptionError, ConnectionError, TransferError, IntegrityError } from './errors.js';
+export { WIRE_ERROR_CODES, isValidWireErrorCode } from './errors.js';
+export type { WireErrorCode } from './errors.js';
