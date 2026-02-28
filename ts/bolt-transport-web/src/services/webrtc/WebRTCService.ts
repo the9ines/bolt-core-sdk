@@ -146,6 +146,9 @@ class WebRTCService {
   // SA6: signaling listener unsubscribe handle
   private signalUnsub?: () => void;
 
+  // N1: backpressure cancel hook — settled by disconnect() to prevent hang
+  private backpressureReject?: (err: Error) => void;
+
   // SAS verification state
   private remoteIdentityKey: Uint8Array | null = null;
   private verificationInfo: VerificationInfo = { state: 'legacy', sasCode: null };
@@ -657,12 +660,19 @@ class WebRTCService {
     this.connectReject = null;
     this.connectTimeout = null;
 
+    // N1: settle any pending backpressure wait before closing DC
+    if (this.backpressureReject) {
+      this.backpressureReject(new TransferError('Transfer aborted: disconnected'));
+      this.backpressureReject = undefined;
+    }
+
     if (this.dc) {
-      // SA13: null handlers before close to prevent post-close event delivery
+      // SA13 + N1: null handlers before close to prevent post-close event delivery
       this.dc.onmessage = null;
       this.dc.onopen = null;
       this.dc.onclose = null;
       this.dc.onerror = null;
+      this.dc.onbufferedamountlow = null;
       try { this.dc.close(); } catch { /* ignore */ }
       this.dc = null;
     }
@@ -776,13 +786,20 @@ class WebRTCService {
           ...(fileHash && i === 0 ? { fileHash } : {}),
         };
 
-        // Backpressure — wait for buffer to drain
+        // Backpressure — wait for buffer to drain (N1: cancelable by disconnect)
         if (this.dc!.bufferedAmount > this.dc!.bufferedAmountLowThreshold) {
+          const gen = this.sessionGeneration;
           this.metricsCollector?.enterBufferDrainWait();
-          await new Promise<void>(resolve => {
+          await new Promise<void>((resolve, reject) => {
+            this.backpressureReject = reject;
             this.dc!.onbufferedamountlow = () => {
+              this.backpressureReject = undefined;
               this.metricsCollector?.exitBufferDrainWait();
-              this.dc!.onbufferedamountlow = null;
+              if (this.dc) this.dc.onbufferedamountlow = null;
+              if (gen !== this.sessionGeneration) {
+                reject(new TransferError('Transfer aborted: session ended'));
+                return;
+              }
               resolve();
             };
           });
