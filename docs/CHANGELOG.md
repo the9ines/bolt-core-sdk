@@ -2,6 +2,44 @@
 
 All notable changes to bolt-core-sdk are documented here. Newest first.
 
+## [LIFECYCLE-HARDEN-1 — Deterministic Signaling Teardown] - 2026-02-28
+
+SA5 + SA6 lifecycle hardening in bolt-transport-web. Error-path cleanup
+and deterministic signaling listener unregistration.
+
+### Fixed (bolt-transport-web)
+- **SA5**: `handleSignal()` catch block now calls `disconnect()` before
+  surfacing `onError()`, preventing RTCPeerConnection/DataChannel leak
+  when `handleOffer` or `handleAnswer` throws after peer connection
+  creation. `createPeerConnection()` nulls `this.pc` after closing
+  existing connection for clarity.
+- **SA6**: `SignalingProvider.onSignal()` return type changed from `void`
+  to `(() => void) | void`. `WebSocketSignaling` and `DualSignaling`
+  return unsubscribe closures that splice the callback from the internal
+  array (idempotent, double-call safe). `WebRTCService` stores the
+  unsubscribe handle and invokes it early in `disconnect()`, physically
+  removing the listener to prevent callback accumulation across
+  connect/disconnect cycles.
+
+### Added (bolt-transport-web)
+- `sa5-sa6-lifecycle-harden.test.ts` — 8 tests: 3 SA5 (error-path
+  disconnect ordering, idempotent double-call, adversarial no-pc throw),
+  3 SA6 integration (unsubscribe invoked, post-disconnect emission
+  blocked, reconnect dedup), 2 SA6 signaling unit (WebSocketSignaling
+  + DualSignaling unsubscribe).
+
+### Semver Note (pre-1.0)
+- `SignalingProvider.onSignal` return type changed. Runtime-safe for
+  existing void-return implementations via `?? undefined` + `?.()`.
+  TS implementers outside this repo may need to update their return type.
+
+### Tests
+- bolt-transport-web: 196 tests (was 188, +8 lifecycle harden tests).
+
+**Tag:** `sdk-v0.5.11-lifecycle-harden-1` (`1962891`)
+
+---
+
 ## [CI Gate — transport-web] - 2026-02-26
 
 Added PR/main CI workflow for transport-web. Previously tests ran only

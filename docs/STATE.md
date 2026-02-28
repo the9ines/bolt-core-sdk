@@ -4,8 +4,8 @@ Current state of the bolt-core-sdk repository.
 
 ## Current Version
 
-**Latest Tag (main):** `transport-web-v0.6.3-ci-gate`
-**Commit (main):** `ff3cdd3`
+**Latest Tag (main):** `sdk-v0.5.11-lifecycle-harden-1`
+**Commit (main):** `1962891`
 **Branch:** `main`
 **TS Package:** `@the9ines/bolt-core` v0.4.0 (dead exports removed, 21 public exports)
 **TS Package:** `@the9ines/bolt-transport-web` v0.6.0 (Profile Envelope v1)
@@ -72,9 +72,10 @@ See [SDK_STABILITY.md](SDK_STABILITY.md) for the stability contract.
 
 ## Test Summary
 
-- TypeScript (bolt-core): 97 tests (vitest), 10 test files
-- Rust (default): 66 tests (55 unit + 11 S1 conformance/error_code_mapping)
-- Rust (vectors): 96 tests (55 unit + 27 S1 conformance + 14 H3 vectors)
+- TypeScript (bolt-core): 104 tests (vitest), 11 test files
+- TypeScript (bolt-transport-web): 196 tests (vitest), 18 test files
+- Rust (default): 87 tests (61 unit + 11 S1 conformance + 15 S2 contract)
+- Rust (vectors): 115 tests (61 unit + 27 S1 conformance + 14 H3 vectors + 15 S2 contract - 2 overlap)
 - Golden vector suites: box-payload, framing, H3 (SAS, HELLO-open, envelope-open)
 - S1 conformance harness: 27 tests (envelope, SAS, error mapping)
 - API surface drift detection: `npm run audit-exports`
@@ -117,6 +118,7 @@ See [SDK_STABILITY.md](SDK_STABILITY.md) for the stability contract.
 | Phase H3 | Cross-implementation golden vectors | **Complete** (SAS, HELLO-open, envelope-open; TS 97 tests, Rust 96 tests) |
 | Phase S1 | Core protocol conformance harness | **Complete** (envelope, SAS, error mapping; 27 Rust conformance tests) |
 | Phase I5 | Interop error framing fix | **Complete** (envelope-aware sendErrorAndDisconnect, Case B inbound routing; +5 web tests, 161 total) |
+| LIFECYCLE-HARDEN-1 | SA5 + SA6 deterministic signaling teardown | **Complete** (error-path disconnect, signaling unsubscribe; +8 tests, 196 total) |
 
 ## Downstream Consumers
 
