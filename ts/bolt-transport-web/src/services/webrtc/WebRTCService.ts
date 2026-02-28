@@ -654,6 +654,7 @@ class WebRTCService {
       try { this.pc.close(); } catch { /* ignore */ }
       this.pc = null;
     }
+    if (this.remotePublicKey instanceof Uint8Array) this.remotePublicKey.fill(0);
     this.remotePublicKey = null;
     this.remotePeerCode = '';
     this.pendingCandidates = [];
@@ -680,6 +681,7 @@ class WebRTCService {
     this.helloProcessing = false;
     this.sessionLegacy = false;
     this.helloResolve = null;
+    if (this.remoteIdentityKey instanceof Uint8Array) this.remoteIdentityKey.fill(0);
     this.remoteIdentityKey = null;
     this.verificationInfo = { state: 'legacy', sasCode: null };
 
