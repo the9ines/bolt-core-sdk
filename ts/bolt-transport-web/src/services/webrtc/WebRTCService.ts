@@ -141,6 +141,7 @@ class WebRTCService {
   private helloTimeout: ReturnType<typeof setTimeout> | null = null;
   private helloResolve: (() => void) | null = null;
   private helloProcessing = false; // SA12: reentrancy guard
+  private sessionGeneration = 0; // SA14: stale timeout guard
 
   // SA6: signaling listener unsubscribe handle
   private signalUnsub?: () => void;
@@ -453,7 +454,10 @@ class WebRTCService {
     console.log('[HELLO] Sent encrypted HELLO');
 
     // Start timeout — fail-closed if remote doesn't complete HELLO (SA10)
+    // SA14: capture session generation to detect stale callbacks after disconnect+reconnect
+    const gen = this.sessionGeneration;
     this.helloTimeout = setTimeout(() => {
+      if (gen !== this.sessionGeneration) return; // stale timeout from previous session
       if (!this.helloComplete) {
         console.error('[HELLO_TIMEOUT] HELLO not completed within timeout — identity required, failing closed');
         const error = new ConnectionError('HELLO handshake timed out while identity is required');
@@ -507,7 +511,14 @@ class WebRTCService {
     this.remoteIdentityKey = remoteIdentityKey;
 
     // Capabilities negotiation — missing field treated as empty (backward compat)
-    this.remoteCapabilities = Array.isArray(hello.capabilities) ? hello.capabilities : [];
+    // SA17: reject oversized capabilities array (max 32)
+    const rawCaps = Array.isArray(hello.capabilities) ? hello.capabilities : [];
+    if (rawCaps.length > 32) {
+      console.warn(`[PROTOCOL_VIOLATION] capabilities array length ${rawCaps.length} exceeds max 32 — disconnecting`);
+      this.sendErrorAndDisconnect('PROTOCOL_VIOLATION', 'Capabilities array exceeds maximum length');
+      return;
+    }
+    this.remoteCapabilities = rawCaps;
     const localSet = new Set(this.localCapabilities);
     this.negotiatedCapabilities = this.remoteCapabilities.filter((c: string) => localSet.has(c));
     console.log('[HELLO] Remote capabilities:', this.remoteCapabilities, '→ negotiated:', this.negotiatedCapabilities);
@@ -630,6 +641,8 @@ class WebRTCService {
 
   disconnect() {
     console.log('[WEBRTC] Disconnecting');
+    // SA14: increment generation so stale timeout callbacks from this session become no-ops
+    this.sessionGeneration++;
     // SA6: unregister signaling listener first to prevent further signal delivery
     this.signalUnsub?.();
     this.signalUnsub = undefined;
@@ -645,6 +658,11 @@ class WebRTCService {
     this.connectTimeout = null;
 
     if (this.dc) {
+      // SA13: null handlers before close to prevent post-close event delivery
+      this.dc.onmessage = null;
+      this.dc.onopen = null;
+      this.dc.onclose = null;
+      this.dc.onerror = null;
       try { this.dc.close(); } catch { /* ignore */ }
       this.dc = null;
     }
@@ -1274,19 +1292,8 @@ class WebRTCService {
     return { type: 'profile-envelope', version: 1, encoding: 'base64', payload };
   }
 
-  /** Decrypt a ProfileEnvelopeV1 to the inner message object, or null on failure. */
-  private decodeProfileEnvelopeV1(env: ProfileEnvelopeV1): any | null {
-    if (env.type !== 'profile-envelope' || env.version !== 1 || env.encoding !== 'base64' || typeof env.payload !== 'string') {
-      return null;
-    }
-    try {
-      const innerBytes = openBoxPayload(env.payload, this.remotePublicKey!, this.keyPair!.secretKey);
-      const innerJson = new TextDecoder().decode(innerBytes);
-      return JSON.parse(innerJson);
-    } catch {
-      return null;
-    }
-  }
+  // SA18: decodeProfileEnvelopeV1 removed — dead code with silent null return.
+  // Inline decryption in handleMessage() is the active path (fail-closed).
 
   /**
    * Send a message over the DataChannel, wrapping in profile-envelope when negotiated.
