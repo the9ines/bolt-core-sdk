@@ -452,19 +452,13 @@ class WebRTCService {
     this.dc!.send(JSON.stringify({ type: 'hello', payload: encrypted }));
     console.log('[HELLO] Sent encrypted HELLO');
 
-    // Start timeout — if remote doesn't send HELLO, treat as legacy
+    // Start timeout — fail-closed if remote doesn't complete HELLO (SA10)
     this.helloTimeout = setTimeout(() => {
       if (!this.helloComplete) {
-        console.warn('[TOFU_LEGACY_PEER] No HELLO received within timeout, treating as legacy peer');
-        this.sessionState = 'post_hello';
-        this.helloComplete = true;
-        this.sessionLegacy = true;
-        this.verificationInfo = { state: 'legacy', sasCode: null };
-        this.options.onVerificationState?.(this.verificationInfo);
-        if (this.helloResolve) {
-          this.helloResolve();
-          this.helloResolve = null;
-        }
+        console.error('[HELLO_TIMEOUT] HELLO not completed within timeout — identity required, failing closed');
+        const error = new ConnectionError('HELLO handshake timed out while identity is required');
+        this.disconnect();
+        this.onError(error);
       }
     }, HELLO_TIMEOUT_MS);
   }
