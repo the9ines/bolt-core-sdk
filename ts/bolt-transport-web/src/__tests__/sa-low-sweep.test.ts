@@ -269,8 +269,8 @@ describe('SA17: Max capabilities length enforcement (transport-web)', () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
-    // Build HELLO with exactly 32 capabilities
-    const caps = Array.from({ length: 32 }, (_, i) => `cap-${i}`);
+    // Build HELLO with exactly 32 capabilities (include required envelope-v1)
+    const caps = ['bolt.profile-envelope-v1', ...Array.from({ length: 31 }, (_, i) => `cap-${i}`)];
     const helloMsg = buildMockHello(caps);
 
     // Process HELLO

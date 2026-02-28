@@ -172,11 +172,13 @@ describe('Phase 0: HELLO Capabilities Plumbing', () => {
     service.disconnect();
   });
 
-  // ─── 2. Remote HELLO missing capabilities → stored as [] ────────────────
+  // ─── 2. Remote HELLO missing capabilities → stored as [] → N5 rejects ───
 
-  it('remote HELLO missing capabilities is treated as empty array', async () => {
+  it('remote HELLO missing capabilities is treated as empty array and rejected (N5)', async () => {
     const service = createService();
-    attachDataChannel(service);
+    const { sentMessages } = attachDataChannel(service);
+
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
     // Simulate processHello with a HELLO that has NO capabilities field.
     // openBoxPayload mock returns the cipher as-is, so we pass a JSON string
@@ -189,11 +191,22 @@ describe('Phase 0: HELLO Capabilities Plumbing', () => {
 
     await (service as any).processHello({ type: 'hello', payload: helloPayload });
 
+    // Missing capabilities → [] (backward compat), then N5 rejects
     expect((service as any).remoteCapabilities).toEqual([]);
     expect((service as any).negotiatedCapabilities).toEqual([]);
-    expect((service as any).helloComplete).toBe(true);
+    // Session must NOT complete — N5 enforcement disconnects
+    expect((service as any).helloComplete).toBe(false);
 
-    service.disconnect();
+    // PROTOCOL_VIOLATION sent
+    const errorMsgs = sentMessages.filter(m => {
+      try {
+        const parsed = JSON.parse(m);
+        return parsed.type === 'error' && parsed.code === 'PROTOCOL_VIOLATION';
+      } catch { return false; }
+    });
+    expect(errorMsgs.length).toBe(1);
+
+    warnSpy.mockRestore();
   });
 
   // ─── 3. Remote HELLO with capabilities persists and intersection computed ─
@@ -202,22 +215,23 @@ describe('Phase 0: HELLO Capabilities Plumbing', () => {
     const service = createService();
     attachDataChannel(service);
 
-    // Manually set localCapabilities to simulate a future phase where we advertise
-    (service as any).localCapabilities = ['bolt.file-hash', 'bolt.other'];
+    // Local advertises envelope-v1 + two others; remote advertises envelope-v1 + one matching
+    (service as any).localCapabilities = ['bolt.file-hash', 'bolt.profile-envelope-v1', 'bolt.other'];
 
     const helloPayload = JSON.stringify({
       type: 'hello',
       version: 1,
       identityPublicKey: 'AAAA',
-      capabilities: ['bolt.file-hash', 'bolt.envelope-v1'],
+      capabilities: ['bolt.file-hash', 'bolt.profile-envelope-v1', 'bolt.future-cap'],
     });
 
     await (service as any).processHello({ type: 'hello', payload: helloPayload });
 
-    expect((service as any).remoteCapabilities).toEqual(['bolt.file-hash', 'bolt.envelope-v1']);
-    expect((service as any).negotiatedCapabilities).toEqual(['bolt.file-hash']);
+    expect((service as any).remoteCapabilities).toEqual(['bolt.file-hash', 'bolt.profile-envelope-v1', 'bolt.future-cap']);
+    expect((service as any).negotiatedCapabilities).toEqual(['bolt.file-hash', 'bolt.profile-envelope-v1']);
     expect(service.hasCapability('bolt.file-hash')).toBe(true);
-    expect(service.hasCapability('bolt.envelope-v1')).toBe(false);
+    expect(service.hasCapability('bolt.profile-envelope-v1')).toBe(true);
+    expect(service.hasCapability('bolt.future-cap')).toBe(false);
     expect(service.hasCapability('bolt.other')).toBe(false);
 
     service.disconnect();
@@ -299,11 +313,13 @@ describe('Phase 0: HELLO Capabilities Plumbing', () => {
 
   // ─── 6. No crash on unexpected HELLO payload shape ──────────────────────
 
-  it('no crash on unexpected HELLO payload shape (capabilities is non-array)', async () => {
+  it('no crash on unexpected HELLO payload shape (capabilities is non-array) → N5 rejects', async () => {
     const service = createService();
-    attachDataChannel(service);
+    const { sentMessages } = attachDataChannel(service);
 
-    // capabilities is a string instead of array — should degrade to []
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    // capabilities is a string instead of array — degrades to [], then N5 rejects
     const helloPayload = JSON.stringify({
       type: 'hello',
       version: 1,
@@ -315,9 +331,19 @@ describe('Phase 0: HELLO Capabilities Plumbing', () => {
 
     expect((service as any).remoteCapabilities).toEqual([]);
     expect((service as any).negotiatedCapabilities).toEqual([]);
-    expect((service as any).helloComplete).toBe(true);
+    // Session must NOT complete — N5 enforcement disconnects
+    expect((service as any).helloComplete).toBe(false);
 
-    service.disconnect();
+    // PROTOCOL_VIOLATION sent
+    const errorMsgs = sentMessages.filter(m => {
+      try {
+        const parsed = JSON.parse(m);
+        return parsed.type === 'error' && parsed.code === 'PROTOCOL_VIOLATION';
+      } catch { return false; }
+    });
+    expect(errorMsgs.length).toBe(1);
+
+    warnSpy.mockRestore();
   });
 
   // ─── 7. disconnect clears negotiatedCapabilities ────────────────────────
@@ -326,18 +352,18 @@ describe('Phase 0: HELLO Capabilities Plumbing', () => {
     const service = createService();
     attachDataChannel(service);
 
-    // Simulate a completed HELLO with capabilities
-    (service as any).localCapabilities = ['bolt.file-hash'];
+    // Simulate a completed HELLO with capabilities (including required envelope-v1)
+    (service as any).localCapabilities = ['bolt.file-hash', 'bolt.profile-envelope-v1'];
     const helloPayload = JSON.stringify({
       type: 'hello',
       version: 1,
       identityPublicKey: 'AAAA',
-      capabilities: ['bolt.file-hash'],
+      capabilities: ['bolt.file-hash', 'bolt.profile-envelope-v1'],
     });
     await (service as any).processHello({ type: 'hello', payload: helloPayload });
 
-    expect((service as any).negotiatedCapabilities).toEqual(['bolt.file-hash']);
-    expect((service as any).remoteCapabilities).toEqual(['bolt.file-hash']);
+    expect((service as any).negotiatedCapabilities).toEqual(['bolt.file-hash', 'bolt.profile-envelope-v1']);
+    expect((service as any).remoteCapabilities).toEqual(['bolt.file-hash', 'bolt.profile-envelope-v1']);
 
     service.disconnect();
 

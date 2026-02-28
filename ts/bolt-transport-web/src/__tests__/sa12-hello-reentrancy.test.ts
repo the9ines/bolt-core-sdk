@@ -131,6 +131,7 @@ function buildHelloMessage(): Record<string, unknown> {
       type: 'hello',
       version: 1,
       identityPublicKey: 'AAAA',
+      capabilities: ['bolt.file-hash', 'bolt.profile-envelope-v1'],
     })),
   };
 }

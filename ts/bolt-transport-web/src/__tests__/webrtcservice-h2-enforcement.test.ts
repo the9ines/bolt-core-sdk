@@ -617,31 +617,72 @@ describe('H2: WebRTCService Enforcement Compliance', () => {
   });
 
   // ──────────────────────────────────────────────────────────────────────────
-  // Non-envelope session: plaintext allowed
+  // N5: Remote HELLO omitting envelope-v1 → PROTOCOL_VIOLATION + disconnect
+  // (Rewritten from "non-envelope session permits plaintext routing after
+  //  HELLO" — that behavior is now forbidden via processHello enforcement.)
   // ──────────────────────────────────────────────────────────────────────────
 
-  it('non-envelope session permits plaintext routing after HELLO', async () => {
-    const onReceiveFile = vi.fn();
-    const service = createService(onReceiveFile);
-    const { injectMessage } = attachDataChannel(service);
-    disableEnvelope(service);
+  it('N5: remote HELLO omitting envelope-v1 → PROTOCOL_VIOLATION + disconnect', () => {
+    const service = createService();
+    const { sentMessages, injectMessage } = attachDataChannel(service);
 
-    // Plaintext file-chunk should route normally
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    // Remote HELLO advertises bolt.file-hash but omits bolt.profile-envelope-v1
     injectMessage({
-      type: 'file-chunk',
-      filename: 'plain.bin',
-      chunk: hexEncode('plain-data'),
-      chunkIndex: 0,
-      totalChunks: 1,
-      fileSize: 10,
-      transferId: 'plain-tid-1',
+      type: 'hello',
+      payload: hexEncode(JSON.stringify({
+        type: 'hello',
+        version: 1,
+        identityPublicKey: 'AAAA',
+        capabilities: ['bolt.file-hash'],
+      })),
     });
 
-    await new Promise(r => setTimeout(r, 20));
+    const violation = warnSpy.mock.calls.filter(
+      (a) => typeof a[0] === 'string' && a[0].includes('[PROTOCOL_VIOLATION]'),
+    );
+    expect(violation.length).toBe(1);
+    expectErrorAndDisconnect(sentMessages, 'PROTOCOL_VIOLATION', service);
 
-    expect(onReceiveFile).toHaveBeenCalledTimes(1);
-    expect(onReceiveFile.mock.calls[0][1]).toBe('plain.bin');
+    // Session must NOT reach post_hello
+    expect((service as any).sessionState).not.toBe('post_hello');
+    expect((service as any).helloComplete).toBe(false);
 
-    service.disconnect();
+    warnSpy.mockRestore();
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // N5: Remote HELLO with empty capabilities → PROTOCOL_VIOLATION + disconnect
+  // (Adversarial variant: capabilities field absent → treated as empty array)
+  // ──────────────────────────────────────────────────────────────────────────
+
+  it('N5: remote HELLO with no capabilities field → PROTOCOL_VIOLATION + disconnect', () => {
+    const service = createService();
+    const { sentMessages, injectMessage } = attachDataChannel(service);
+
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    // Remote HELLO with no capabilities field (backward-compat: treated as [])
+    injectMessage({
+      type: 'hello',
+      payload: hexEncode(JSON.stringify({
+        type: 'hello',
+        version: 1,
+        identityPublicKey: 'BBBB',
+      })),
+    });
+
+    const violation = warnSpy.mock.calls.filter(
+      (a) => typeof a[0] === 'string' && a[0].includes('[PROTOCOL_VIOLATION]'),
+    );
+    expect(violation.length).toBe(1);
+    expectErrorAndDisconnect(sentMessages, 'PROTOCOL_VIOLATION', service);
+
+    // Session must NOT reach post_hello
+    expect((service as any).sessionState).not.toBe('post_hello');
+    expect((service as any).helloComplete).toBe(false);
+
+    warnSpy.mockRestore();
   });
 });

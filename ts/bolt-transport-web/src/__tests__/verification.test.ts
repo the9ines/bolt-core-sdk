@@ -135,6 +135,7 @@ describe('SAS integration with WebRTCService', () => {
       type: 'hello',
       version: 1,
       identityPublicKey: toBase64(remoteId.publicKey),
+      capabilities: ['bolt.file-hash', 'bolt.profile-envelope-v1'],
     });
     const encrypted = sealBoxPayload(
       new TextEncoder().encode(hello),
@@ -185,6 +186,7 @@ describe('SAS integration with WebRTCService', () => {
       type: 'hello',
       version: 1,
       identityPublicKey: toBase64(remoteId.publicKey),
+      capabilities: ['bolt.file-hash', 'bolt.profile-envelope-v1'],
     });
     const encrypted = sealBoxPayload(
       new TextEncoder().encode(hello),
@@ -268,6 +270,7 @@ describe('SAS integration with WebRTCService', () => {
       type: 'hello',
       version: 1,
       identityPublicKey: toBase64(remoteId.publicKey),
+      capabilities: ['bolt.file-hash', 'bolt.profile-envelope-v1'],
     });
     const encrypted = sealBoxPayload(
       new TextEncoder().encode(hello),

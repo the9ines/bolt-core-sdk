@@ -526,6 +526,15 @@ class WebRTCService {
     this.negotiatedCapabilities = this.remoteCapabilities.filter((c: string) => localSet.has(c));
     console.log('[HELLO] Remote capabilities:', this.remoteCapabilities, '→ negotiated:', this.negotiatedCapabilities);
 
+    // N5: Enforce envelope-v1 in identity-configured sessions.
+    // If we reach processHello(), identity IS configured. Remote MUST
+    // advertise bolt.profile-envelope-v1 — omission is downgrade attack.
+    if (!rawCaps.includes('bolt.profile-envelope-v1')) {
+      console.warn('[PROTOCOL_VIOLATION] Remote omitted required capability bolt.profile-envelope-v1 — disconnecting');
+      this.sendErrorAndDisconnect('PROTOCOL_VIOLATION', 'Missing required capability: bolt.profile-envelope-v1');
+      return;
+    }
+
     console.log('[HELLO] Received identity from peer', this.remotePeerCode);
 
     // TOFU verification — determines verification state
