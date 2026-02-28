@@ -19,8 +19,8 @@ export interface SignalingProvider {
   /** Connect to the signaling server and register this peer */
   connect(localPeerCode: string, deviceName: string, deviceType: DiscoveredDevice['deviceType']): Promise<void>;
 
-  /** Subscribe to incoming signaling messages */
-  onSignal(callback: (signal: SignalMessage) => void): void;
+  /** Subscribe to incoming signaling messages. Returns an unsubscribe function. */
+  onSignal(callback: (signal: SignalMessage) => void): (() => void) | void;
 
   /** Subscribe to peer discovery events */
   onPeerDiscovered(callback: (peer: DiscoveredDevice) => void): void;

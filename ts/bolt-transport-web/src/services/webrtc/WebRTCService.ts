@@ -142,6 +142,9 @@ class WebRTCService {
   private helloResolve: (() => void) | null = null;
   private helloProcessing = false; // SA12: reentrancy guard
 
+  // SA6: signaling listener unsubscribe handle
+  private signalUnsub?: () => void;
+
   // SAS verification state
   private remoteIdentityKey: Uint8Array | null = null;
   private verificationInfo: VerificationInfo = { state: 'legacy', sasCode: null };
@@ -163,7 +166,7 @@ class WebRTCService {
     this.onProgressCallback = onProgress;
     this.options = options ?? {};
     this.signaling = signaling;
-    this.signaling.onSignal((signal) => this.handleSignal(signal));
+    this.signalUnsub = this.signaling.onSignal((signal) => this.handleSignal(signal)) ?? undefined;
   }
 
   // ─── Signaling ──────────────────────────────────────────────────────────
@@ -195,6 +198,8 @@ class WebRTCService {
       }
     } catch (error) {
       console.error('[SIGNAL] Error handling', signal.type, ':', error);
+      // SA5: deterministic cleanup before surfacing error — prevents pc/dc leak on throw
+      this.disconnect();
       this.onError(error instanceof WebRTCError ? error : new ConnectionError('Signal handling failed', error));
     }
   }
@@ -279,6 +284,7 @@ class WebRTCService {
       this.pc.ondatachannel = null;
       this.pc.oniceconnectionstatechange = null;
       this.pc.close();
+      this.pc = null;
     }
 
     const config = getLocalOnlyRTCConfig();
@@ -630,6 +636,9 @@ class WebRTCService {
 
   disconnect() {
     console.log('[WEBRTC] Disconnecting');
+    // SA6: unregister signaling listener first to prevent further signal delivery
+    this.signalUnsub?.();
+    this.signalUnsub = undefined;
     // Zero and discard ephemeral key material
     if (this.keyPair) {
       this.keyPair.secretKey.fill(0);

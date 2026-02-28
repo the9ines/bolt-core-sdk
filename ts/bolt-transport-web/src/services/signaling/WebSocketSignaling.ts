@@ -104,8 +104,15 @@ export class WebSocketSignaling implements SignalingProvider {
     return this.openConnection(true);
   }
 
-  onSignal(callback: (signal: SignalMessage) => void): void {
+  onSignal(callback: (signal: SignalMessage) => void): () => void {
     this.signalCallbacks.push(callback);
+    let removed = false;
+    return () => {
+      if (removed) return;
+      removed = true;
+      const idx = this.signalCallbacks.indexOf(callback);
+      if (idx !== -1) this.signalCallbacks.splice(idx, 1);
+    };
   }
 
   onPeerDiscovered(callback: (peer: DiscoveredDevice) => void): void {
