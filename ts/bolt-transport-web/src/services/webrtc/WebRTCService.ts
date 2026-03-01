@@ -149,6 +149,9 @@ class WebRTCService {
   // N1: backpressure cancel hook — settled by disconnect() to prevent hang
   private backpressureReject?: (err: Error) => void;
 
+  // N10: completion timer — cleared by disconnect() to prevent stale event
+  private completionTimeout: ReturnType<typeof setTimeout> | null = null;
+
   // SAS verification state
   private remoteIdentityKey: Uint8Array | null = null;
   private verificationInfo: VerificationInfo = { state: 'legacy', sasCode: null };
@@ -680,6 +683,12 @@ class WebRTCService {
       this.backpressureReject = undefined;
     }
 
+    // N10: clear pending completion timer to prevent stale event after teardown
+    if (this.completionTimeout) {
+      clearTimeout(this.completionTimeout);
+      this.completionTimeout = null;
+    }
+
     if (this.dc) {
       // SA13 + N1: null handlers before close to prevent post-close event delivery
       this.dc.onmessage = null;
@@ -837,7 +846,7 @@ class WebRTCService {
       }
 
       // Emit completion after a brief delay so UI can process final progress
-      setTimeout(() => {
+      this.completionTimeout = setTimeout(() => {
         this.emitProgress(file.name, totalChunks, totalChunks, file.size, file.size, 'completed');
       }, 50);
     } catch (error) {

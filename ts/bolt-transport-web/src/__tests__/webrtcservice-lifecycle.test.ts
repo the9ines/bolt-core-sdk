@@ -518,7 +518,39 @@ describe('Phase 8B.1: WebRTCService Lifecycle Coverage', () => {
     service.disconnect();
   });
 
-  // ─── 12. sendFile throws when dc not open ────────────────────────────────
+  // ─── 12. N10: completion timeout cleared on disconnect ──────────────────
+
+  it('completion timeout is cleared on disconnect — stale event not emitted (N10)', async () => {
+    vi.useFakeTimers();
+    const onProgress = vi.fn();
+    const service = createService(vi.fn(), vi.fn(), onProgress);
+    attachDataChannel(service);
+    (service as any).helloComplete = true;
+    (service as any).remoteIdentityKey = new Uint8Array(32);
+
+    const file = createMockFile('n10-test.bin', 100);
+    await service.sendFile(file);
+
+    // Completion timer is scheduled (50ms) but not yet fired
+    const completedBefore = onProgress.mock.calls.filter(
+      (args: any[]) => args[0].status === 'completed'
+    );
+    expect(completedBefore.length).toBe(0);
+
+    service.disconnect();
+
+    // Advance past 50ms — stale completion callback must NOT fire
+    vi.advanceTimersByTime(100);
+
+    const completedAfter = onProgress.mock.calls.filter(
+      (args: any[]) => args[0].status === 'completed'
+    );
+    expect(completedAfter.length).toBe(0);
+
+    vi.useRealTimers();
+  });
+
+  // ─── 13. sendFile throws when dc not open ────────────────────────────────
 
   it('sendFile throws TransferError when data channel is not open', async () => {
     const service = createService();
