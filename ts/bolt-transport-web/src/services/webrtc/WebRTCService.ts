@@ -526,6 +526,15 @@ class WebRTCService {
         this.sendErrorAndDisconnect('PROTOCOL_VIOLATION', 'Capabilities array exceeds maximum length');
         return;
       }
+      // N8: reject individual capability strings exceeding 64 UTF-8 bytes
+      const encoder = new TextEncoder();
+      for (const cap of rawCaps) {
+        if (encoder.encode(cap).length > 64) {
+          console.warn('[PROTOCOL_VIOLATION] capability too long — disconnecting');
+          this.sendErrorAndDisconnect('PROTOCOL_VIOLATION', 'capability too long');
+          return;
+        }
+      }
       this.remoteCapabilities = rawCaps;
       const localSet = new Set(this.localCapabilities);
       this.negotiatedCapabilities = this.remoteCapabilities.filter((c: string) => localSet.has(c));

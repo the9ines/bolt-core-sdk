@@ -313,6 +313,64 @@ describe('SA17: Max capabilities length enforcement (transport-web)', () => {
   });
 });
 
+describe('N8: Per-capability string length bound (transport-web)', () => {
+  beforeEach(async () => {
+    const mod = await import('../services/webrtc/WebRTCService.js');
+    WebRTCService = mod.default;
+  });
+
+  it('UNIT: capability of 65 bytes triggers PROTOCOL_VIOLATION + disconnect', async () => {
+    const onError = vi.fn();
+    const service = createServiceWithIdentity(onError);
+    const { sentMessages } = attachDataChannel(service);
+
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    // Build HELLO with required envelope-v1 + one 65-byte ASCII capability
+    const longCap = 'a'.repeat(65);
+    const helloMsg = buildMockHello(['bolt.profile-envelope-v1', longCap]);
+
+    await (service as any).processHello(helloMsg);
+
+    // Should have sent PROTOCOL_VIOLATION with 'capability too long'
+    const violations = sentMessages.filter(m => m.includes('PROTOCOL_VIOLATION'));
+    expect(violations.length).toBeGreaterThan(0);
+    expect(sentMessages.some(m => m.includes('capability too long'))).toBe(true);
+
+    // helloComplete must remain false
+    expect((service as any).helloComplete).toBe(false);
+
+    logSpy.mockRestore();
+    warnSpy.mockRestore();
+  });
+
+  it('UNIT: capability of 64 bytes is accepted (no N8 rejection)', async () => {
+    const onError = vi.fn();
+    const service = createServiceWithIdentity(onError);
+    const { sentMessages } = attachDataChannel(service);
+
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    // Build HELLO with required envelope-v1 + one 64-byte ASCII capability
+    const cap64 = 'b'.repeat(64);
+    const helloMsg = buildMockHello(['bolt.profile-envelope-v1', cap64]);
+
+    await (service as any).processHello(helloMsg);
+
+    // Should NOT have disconnected with PROTOCOL_VIOLATION for capability length
+    const capLenViolations = sentMessages.filter(m => m.includes('capability too long'));
+    expect(capLenViolations.length).toBe(0);
+
+    // Remote capabilities should include our 64-byte cap
+    expect((service as any).remoteCapabilities).toContain(cap64);
+
+    logSpy.mockRestore();
+    warnSpy.mockRestore();
+  });
+});
+
 describe('SA18: decodeProfileEnvelopeV1 dead code removed', () => {
   beforeEach(async () => {
     const mod = await import('../services/webrtc/WebRTCService.js');
