@@ -479,119 +479,124 @@ class WebRTCService {
     }
     this.helloProcessing = true;
 
-    // H2: Fail-closed HELLO processing — all failures send error + disconnect
-    if (!this.keyPair || !this.remotePublicKey) {
-      console.warn('[HELLO_DECRYPT_FAIL] Cannot decrypt — no ephemeral keys');
-      this.sendErrorAndDisconnect('HELLO_DECRYPT_FAIL', 'Cannot decrypt HELLO');
-      return;
-    }
-
-    let decrypted: Uint8Array;
+    // N2: scoped-lock — try/finally guarantees reset on all exits (success, error, unexpected throw)
     try {
-      decrypted = openBoxPayload(msg.payload, this.remotePublicKey, this.keyPair.secretKey);
-    } catch {
-      console.warn('[HELLO_DECRYPT_FAIL] Failed to decrypt HELLO payload');
-      this.sendErrorAndDisconnect('HELLO_DECRYPT_FAIL', 'Failed to decrypt HELLO');
-      return;
-    }
-
-    let hello: any;
-    try {
-      hello = JSON.parse(new TextDecoder().decode(decrypted));
-    } catch {
-      console.warn('[HELLO_PARSE_ERROR] Failed to parse HELLO JSON');
-      this.sendErrorAndDisconnect('HELLO_PARSE_ERROR', 'Failed to parse HELLO');
-      return;
-    }
-
-    if (hello.type !== 'hello' || hello.version !== 1 || !hello.identityPublicKey) {
-      console.warn('[HELLO_SCHEMA_ERROR] Invalid HELLO format');
-      this.sendErrorAndDisconnect('HELLO_SCHEMA_ERROR', 'Invalid HELLO schema');
-      return;
-    }
-
-    const remoteIdentityKey = fromBase64(hello.identityPublicKey);
-    this.remoteIdentityKey = remoteIdentityKey;
-
-    // Capabilities negotiation — missing field treated as empty (backward compat)
-    // SA17: reject oversized capabilities array (max 32)
-    const rawCaps = Array.isArray(hello.capabilities) ? hello.capabilities : [];
-    if (rawCaps.length > 32) {
-      console.warn(`[PROTOCOL_VIOLATION] capabilities array length ${rawCaps.length} exceeds max 32 — disconnecting`);
-      this.sendErrorAndDisconnect('PROTOCOL_VIOLATION', 'Capabilities array exceeds maximum length');
-      return;
-    }
-    this.remoteCapabilities = rawCaps;
-    const localSet = new Set(this.localCapabilities);
-    this.negotiatedCapabilities = this.remoteCapabilities.filter((c: string) => localSet.has(c));
-    console.log('[HELLO] Remote capabilities:', this.remoteCapabilities, '→ negotiated:', this.negotiatedCapabilities);
-
-    // N5: Enforce envelope-v1 in identity-configured sessions.
-    // If we reach processHello(), identity IS configured. Remote MUST
-    // advertise bolt.profile-envelope-v1 — omission is downgrade attack.
-    if (!rawCaps.includes('bolt.profile-envelope-v1')) {
-      console.warn('[PROTOCOL_VIOLATION] Remote omitted required capability bolt.profile-envelope-v1 — disconnecting');
-      this.sendErrorAndDisconnect('PROTOCOL_VIOLATION', 'Missing required capability: bolt.profile-envelope-v1');
-      return;
-    }
-
-    console.log('[HELLO] Received identity from peer', this.remotePeerCode);
-
-    // TOFU verification — determines verification state
-    let verificationState: VerificationState = 'unverified';
-
-    if (this.options.pinStore) {
-      try {
-        const result = await verifyPinnedIdentity(
-          this.options.pinStore,
-          this.remotePeerCode,
-          remoteIdentityKey,
-        );
-        if (result.outcome === 'pinned') {
-          console.log('[TOFU] First contact — pinned identity for', this.remotePeerCode);
-          verificationState = 'unverified';
-        } else {
-          console.log('[TOFU] Identity verified for', this.remotePeerCode);
-          verificationState = result.verified ? 'verified' : 'unverified';
-        }
-      } catch (error) {
-        if (error instanceof KeyMismatchError) {
-          console.error('[TOFU] IDENTITY MISMATCH — aborting session:', error.message);
-          this.onError(new ConnectionError('Identity key mismatch (TOFU violation)', error));
-          this.sendErrorAndDisconnect('KEY_MISMATCH', 'Identity key mismatch');
-          return;
-        }
-        throw error;
+      // H2: Fail-closed HELLO processing — all failures send error + disconnect
+      if (!this.keyPair || !this.remotePublicKey) {
+        console.warn('[HELLO_DECRYPT_FAIL] Cannot decrypt — no ephemeral keys');
+        this.sendErrorAndDisconnect('HELLO_DECRYPT_FAIL', 'Cannot decrypt HELLO');
+        return;
       }
-    }
 
-    // Compute SAS — only when all 4 keys are available (never in legacy path)
-    let sasCode: string | null = null;
-    if (this.options.identityPublicKey && this.keyPair && this.remotePublicKey) {
-      sasCode = await computeSas(
-        this.options.identityPublicKey,
-        remoteIdentityKey,
-        this.keyPair.publicKey,
-        this.remotePublicKey,
-      );
-      console.log('[SAS] Computed verification code:', sasCode);
-    }
+      let decrypted: Uint8Array;
+      try {
+        decrypted = openBoxPayload(msg.payload, this.remotePublicKey, this.keyPair.secretKey);
+      } catch {
+        console.warn('[HELLO_DECRYPT_FAIL] Failed to decrypt HELLO payload');
+        this.sendErrorAndDisconnect('HELLO_DECRYPT_FAIL', 'Failed to decrypt HELLO');
+        return;
+      }
 
-    // Emit verification state exactly once per HELLO
-    this.verificationInfo = { state: verificationState, sasCode };
-    this.options.onVerificationState?.(this.verificationInfo);
+      let hello: any;
+      try {
+        hello = JSON.parse(new TextDecoder().decode(decrypted));
+      } catch {
+        console.warn('[HELLO_PARSE_ERROR] Failed to parse HELLO JSON');
+        this.sendErrorAndDisconnect('HELLO_PARSE_ERROR', 'Failed to parse HELLO');
+        return;
+      }
 
-    // HELLO complete — transition state
-    if (this.helloTimeout) {
-      clearTimeout(this.helloTimeout);
-      this.helloTimeout = null;
-    }
-    this.sessionState = 'post_hello';
-    this.helloComplete = true;
-    this.sessionLegacy = false;
-    if (this.helloResolve) {
-      this.helloResolve();
-      this.helloResolve = null;
+      if (hello.type !== 'hello' || hello.version !== 1 || !hello.identityPublicKey) {
+        console.warn('[HELLO_SCHEMA_ERROR] Invalid HELLO format');
+        this.sendErrorAndDisconnect('HELLO_SCHEMA_ERROR', 'Invalid HELLO schema');
+        return;
+      }
+
+      const remoteIdentityKey = fromBase64(hello.identityPublicKey);
+      this.remoteIdentityKey = remoteIdentityKey;
+
+      // Capabilities negotiation — missing field treated as empty (backward compat)
+      // SA17: reject oversized capabilities array (max 32)
+      const rawCaps = Array.isArray(hello.capabilities) ? hello.capabilities : [];
+      if (rawCaps.length > 32) {
+        console.warn(`[PROTOCOL_VIOLATION] capabilities array length ${rawCaps.length} exceeds max 32 — disconnecting`);
+        this.sendErrorAndDisconnect('PROTOCOL_VIOLATION', 'Capabilities array exceeds maximum length');
+        return;
+      }
+      this.remoteCapabilities = rawCaps;
+      const localSet = new Set(this.localCapabilities);
+      this.negotiatedCapabilities = this.remoteCapabilities.filter((c: string) => localSet.has(c));
+      console.log('[HELLO] Remote capabilities:', this.remoteCapabilities, '→ negotiated:', this.negotiatedCapabilities);
+
+      // N5: Enforce envelope-v1 in identity-configured sessions.
+      // If we reach processHello(), identity IS configured. Remote MUST
+      // advertise bolt.profile-envelope-v1 — omission is downgrade attack.
+      if (!rawCaps.includes('bolt.profile-envelope-v1')) {
+        console.warn('[PROTOCOL_VIOLATION] Remote omitted required capability bolt.profile-envelope-v1 — disconnecting');
+        this.sendErrorAndDisconnect('PROTOCOL_VIOLATION', 'Missing required capability: bolt.profile-envelope-v1');
+        return;
+      }
+
+      console.log('[HELLO] Received identity from peer', this.remotePeerCode);
+
+      // TOFU verification — determines verification state
+      let verificationState: VerificationState = 'unverified';
+
+      if (this.options.pinStore) {
+        try {
+          const result = await verifyPinnedIdentity(
+            this.options.pinStore,
+            this.remotePeerCode,
+            remoteIdentityKey,
+          );
+          if (result.outcome === 'pinned') {
+            console.log('[TOFU] First contact — pinned identity for', this.remotePeerCode);
+            verificationState = 'unverified';
+          } else {
+            console.log('[TOFU] Identity verified for', this.remotePeerCode);
+            verificationState = result.verified ? 'verified' : 'unverified';
+          }
+        } catch (error) {
+          if (error instanceof KeyMismatchError) {
+            console.error('[TOFU] IDENTITY MISMATCH — aborting session:', error.message);
+            this.onError(new ConnectionError('Identity key mismatch (TOFU violation)', error));
+            this.sendErrorAndDisconnect('KEY_MISMATCH', 'Identity key mismatch');
+            return;
+          }
+          throw error;
+        }
+      }
+
+      // Compute SAS — only when all 4 keys are available (never in legacy path)
+      let sasCode: string | null = null;
+      if (this.options.identityPublicKey && this.keyPair && this.remotePublicKey) {
+        sasCode = await computeSas(
+          this.options.identityPublicKey,
+          remoteIdentityKey,
+          this.keyPair.publicKey,
+          this.remotePublicKey,
+        );
+        console.log('[SAS] Computed verification code:', sasCode);
+      }
+
+      // Emit verification state exactly once per HELLO
+      this.verificationInfo = { state: verificationState, sasCode };
+      this.options.onVerificationState?.(this.verificationInfo);
+
+      // HELLO complete — transition state
+      if (this.helloTimeout) {
+        clearTimeout(this.helloTimeout);
+        this.helloTimeout = null;
+      }
+      this.sessionState = 'post_hello';
+      this.helloComplete = true;
+      this.sessionLegacy = false;
+      if (this.helloResolve) {
+        this.helloResolve();
+        this.helloResolve = null;
+      }
+    } finally {
+      this.helloProcessing = false;
     }
   }
 
