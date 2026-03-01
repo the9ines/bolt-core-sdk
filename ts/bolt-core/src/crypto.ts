@@ -55,6 +55,9 @@ export function openBoxPayload(
   receiverSecretKey: Uint8Array,
 ): Uint8Array {
   const data = fromBase64(sealed);
+  if (data.length < box.nonceLength) {
+    throw new EncryptionError('Sealed payload too short');
+  }
   const nonce = data.slice(0, box.nonceLength);
   const ciphertext = data.slice(box.nonceLength);
   const decrypted = box.open(ciphertext, nonce, senderPublicKey, receiverSecretKey);

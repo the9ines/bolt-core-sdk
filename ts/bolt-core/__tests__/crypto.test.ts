@@ -4,6 +4,7 @@ import {
   sealBoxPayload,
   openBoxPayload,
   generateEphemeralKeyPair,
+  toBase64,
 } from '../src/index.js';
 import { NONCE_LENGTH, PUBLIC_KEY_LENGTH } from '../src/constants.js';
 
@@ -86,5 +87,23 @@ describe('sealBoxPayload / openBoxPayload', () => {
 
   it('nonce length is 24 bytes', () => {
     expect(box.nonceLength).toBe(NONCE_LENGTH);
+  });
+
+  it('rejects sealed payload shorter than nonce length', () => {
+    const alice = generateEphemeralKeyPair();
+    const bob = generateEphemeralKeyPair();
+    const short = toBase64(new Uint8Array(1));
+    expect(() =>
+      openBoxPayload(short, alice.publicKey, bob.secretKey)
+    ).toThrow('Sealed payload too short');
+  });
+
+  it('does not reject payload exactly nonce length at guard stage', () => {
+    const alice = generateEphemeralKeyPair();
+    const bob = generateEphemeralKeyPair();
+    const boundary = toBase64(new Uint8Array(box.nonceLength));
+    expect(() =>
+      openBoxPayload(boundary, alice.publicKey, bob.secretKey)
+    ).toThrow(); // should fail later in decrypt, not at length guard
   });
 });
