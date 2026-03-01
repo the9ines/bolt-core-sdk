@@ -20,7 +20,6 @@ use crate::errors::BoltError;
 ///
 /// 32-byte public key (Curve25519 point) and 32-byte secret key.
 /// Secret key is deterministically zeroized on drop via volatile writes.
-#[derive(Clone)]
 pub struct KeyPair {
     /// Curve25519 public key (32 bytes).
     pub public_key: [u8; 32],
@@ -131,14 +130,9 @@ mod tests {
     use super::*;
     use crate::encoding::from_hex;
 
-    #[test]
-    fn keypair_struct_is_clone() {
-        let kp = KeyPair {
-            public_key: [0u8; 32],
-            secret_key: [0u8; 32],
-        };
-        let _cloned = kp.clone();
-    }
+    // N4: Clone intentionally removed from KeyPair to prevent silent
+    // secret key duplication. Removal is self-enforcing — any .clone()
+    // call site will fail to compile.
 
     #[test]
     fn keypair_generation_correct_lengths() {
