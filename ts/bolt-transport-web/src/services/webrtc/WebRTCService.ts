@@ -1,24 +1,18 @@
-import { sealBoxPayload, openBoxPayload, generateEphemeralKeyPair, toBase64, fromBase64, DEFAULT_CHUNK_SIZE, EncryptionError, IntegrityError, KeyMismatchError, computeSas, bufferToHex, hashFile, isValidWireErrorCode } from '@the9ines/bolt-core';
-import { WebRTCError, ConnectionError, SignalingError, TransferError } from '../../types/webrtc-errors.js';
+import { generateEphemeralKeyPair, toBase64, fromBase64, openBoxPayload, isValidWireErrorCode } from '@the9ines/bolt-core';
+import { WebRTCError, ConnectionError, TransferError } from '../../types/webrtc-errors.js';
 import { getLocalOnlyRTCConfig } from '../../lib/platform-utils.js';
-import { verifyPinnedIdentity } from '../identity/pin-store.js';
-import type { PinPersistence } from '../identity/pin-store.js';
 import type { SignalingProvider, SignalMessage } from '../signaling/index.js';
-import { ENABLE_TRANSFER_METRICS, TransferMetricsCollector, summarizeTransfer } from './transferMetrics.js';
+import type { TransferMetricsCollector } from './transferMetrics.js';
 import { HandshakeManager } from './HandshakeManager.js';
+import { TransferManager } from './TransferManager.js';
+import { encodeProfileEnvelopeV1, dcSendMessage } from './EnvelopeCodec.js';
 import type { HandshakeContext } from './context.js';
+import type { TransferContext } from './TransferManager.js';
 
 // ─── Types (canonical definitions in ./types.ts; re-exported here for API stability) ──
-import type { FileChunkMessage, ProfileEnvelopeV1, ActiveTransfer } from './types.js';
+import type { FileChunkMessage, ActiveTransfer } from './types.js';
 export type { TransferStats, TransferProgress, VerificationState, VerificationInfo, WebRTCServiceOptions } from './types.js';
-import type { TransferProgress, VerificationState, VerificationInfo, WebRTCServiceOptions } from './types.js';
-
-/** Generate a spec-compliant transfer_id (bytes16 → hex, 32 chars). */
-function generateTransferId(): string {
-  const bytes = new Uint8Array(16);
-  crypto.getRandomValues(bytes);
-  return bufferToHex(bytes.buffer);
-}
+import type { TransferProgress, VerificationInfo, WebRTCServiceOptions } from './types.js';
 
 // ─── WebRTCService ──────────────────────────────────────────────────────────
 
@@ -38,7 +32,7 @@ class WebRTCService {
   // ICE
   private pendingCandidates: RTCIceCandidateInit[] = [];
 
-  // Transfer state
+  // Transfer state (owned here for test compat; TransferManager accesses via context)
   private transferPaused = false;
   private transferCancelled = false;
   private receiveBuffers: Map<string, (Blob | null)[]> = new Map();
@@ -64,7 +58,7 @@ class WebRTCService {
   private connectReject: ((err: Error) => void) | null = null;
   private connectTimeout: ReturnType<typeof setTimeout> | null = null;
 
-  // HELLO / TOFU state — owned here for test compatibility (tests set via (service as any).field)
+  // HELLO / TOFU state (owned here for test compat; HandshakeManager accesses via context)
   private options: WebRTCServiceOptions;
   private helloComplete = false;
   private sessionLegacy = false;
@@ -94,6 +88,7 @@ class WebRTCService {
 
   // ─── Decomposed managers ────────────────────────────────────────
   private handshake: HandshakeManager;
+  private transfer: TransferManager;
 
   constructor(
     signaling: SignalingProvider,
@@ -109,9 +104,12 @@ class WebRTCService {
     this.signaling = signaling;
     this.signalUnsub = this.signaling.onSignal((signal) => this.handleSignal(signal));
 
-    // Build context bridge and instantiate HandshakeManager
+    // Build context bridges and instantiate managers
     this.handshake = new HandshakeManager(this.buildHandshakeContext());
+    this.transfer = new TransferManager(this.buildTransferContext());
   }
+
+  // ─── Context bridges ──────────────────────────────────────────────────
 
   /** Build the HandshakeContext bridge — maps to fields on this instance. */
   private buildHandshakeContext(): HandshakeContext {
@@ -148,6 +146,48 @@ class WebRTCService {
     };
   }
 
+  /** Build the TransferContext bridge — maps to fields on this instance. */
+  private buildTransferContext(): TransferContext {
+    return {
+      getKeyPair: () => this.keyPair,
+      getRemotePublicKey: () => this.remotePublicKey,
+      getDc: () => this.dc,
+      isHelloComplete: () => this.helloComplete,
+      getSessionGeneration: () => this.sessionGeneration,
+      hasCapability: (name) => this.negotiatedCapabilities.includes(name),
+      negotiatedEnvelopeV1: () => this.negotiatedCapabilities.includes('bolt.profile-envelope-v1'),
+      getTransferPaused: () => this.transferPaused,
+      setTransferPaused: (v) => { this.transferPaused = v; },
+      getTransferCancelled: () => this.transferCancelled,
+      setTransferCancelled: (v) => { this.transferCancelled = v; },
+      getReceiveBuffers: () => this.receiveBuffers,
+      getGuardedTransfers: () => this.guardedTransfers,
+      getSendTransferIds: () => this.sendTransferIds,
+      getRecvTransferIds: () => this.recvTransferIds,
+      getTransferStartTime: () => this.transferStartTime,
+      setTransferStartTime: (v) => { this.transferStartTime = v; },
+      getPauseDuration: () => this.pauseDuration,
+      setPauseDuration: (v) => { this.pauseDuration = v; },
+      getLastPausedAt: () => this.lastPausedAt,
+      setLastPausedAt: (v) => { this.lastPausedAt = v; },
+      getMetricsCollector: () => this.metricsCollector,
+      setMetricsCollector: (v) => { this.metricsCollector = v; },
+      getMetricsFirstProgressRecorded: () => this.metricsFirstProgressRecorded,
+      setMetricsFirstProgressRecorded: (v) => { this.metricsFirstProgressRecorded = v; },
+      getBackpressureReject: () => this.backpressureReject,
+      setBackpressureReject: (v) => { this.backpressureReject = v; },
+      getCompletionTimeout: () => this.completionTimeout,
+      setCompletionTimeout: (v) => { this.completionTimeout = v; },
+      getOnProgressCallback: () => this.onProgressCallback,
+      getRemoteIdentityKey: () => this.remoteIdentityKey,
+      onReceiveFile: (file, filename) => this.onReceiveFile(file, filename),
+      onError: (error) => this.onError(error instanceof WebRTCError ? error : new TransferError('Transfer error', error)),
+      disconnect: () => this.disconnect(),
+      sendMessage: (innerMsg) => this.dcSendMessage(innerMsg),
+      waitForHello: () => this.waitForHello(),
+    };
+  }
+
   // ─── Signaling ──────────────────────────────────────────────────────────
 
   private async sendSignal(type: SignalMessage['type'], data: any, to: string) {
@@ -157,7 +197,6 @@ class WebRTCService {
 
   private async handleSignal(signal: SignalMessage) {
     if (signal.to !== this.localPeerCode) return;
-    // Only handle WebRTC signal types — ignore custom approval types
     if (signal.type !== 'offer' && signal.type !== 'answer' && signal.type !== 'ice-candidate') return;
 
     console.log('[SIGNALING] Received', signal.type, 'from', signal.from);
@@ -177,7 +216,6 @@ class WebRTCService {
       }
     } catch (error) {
       console.error('[SIGNAL] Error handling', signal.type, ':', error);
-      // SA5: deterministic cleanup before surfacing error — prevents pc/dc leak on throw
       this.disconnect();
       this.onError(error instanceof WebRTCError ? error : new ConnectionError('Signal handling failed', error));
     }
@@ -257,7 +295,6 @@ class WebRTCService {
   private createPeerConnection(): RTCPeerConnection {
     if (this.pc) {
       console.log('[WEBRTC] Closing existing peer connection');
-      // Remove handlers before closing to avoid spurious error callbacks
       this.pc.onconnectionstatechange = null;
       this.pc.onicecandidate = null;
       this.pc.ondatachannel = null;
@@ -270,7 +307,6 @@ class WebRTCService {
     console.log('[WEBRTC] Creating peer connection with config:', JSON.stringify(config));
     this.pc = new RTCPeerConnection(config);
 
-    // Filter ICE candidates — block relay to enforce same-network policy proactively
     this.pc.onicecandidate = (event) => {
       if (event.candidate) {
         if (event.candidate.type === 'relay') {
@@ -285,12 +321,10 @@ class WebRTCService {
       }
     };
 
-    // ICE connection state (more granular than connection state)
     this.pc.oniceconnectionstatechange = () => {
       console.log('[ICE] Connection state:', this.pc?.iceConnectionState);
     };
 
-    // Connection state
     this.pc.onconnectionstatechange = () => {
       const state = this.pc?.connectionState;
       console.log('[WEBRTC] Connection state:', state);
@@ -301,7 +335,6 @@ class WebRTCService {
       if (state === 'connected') {
         console.log('[WEBRTC] Connection established!');
         this.enforceSameNetworkPolicy();
-        // Resolve connect() promise if waiting
         if (this.connectResolve) {
           if (this.connectTimeout) clearTimeout(this.connectTimeout);
           this.connectResolve();
@@ -310,7 +343,6 @@ class WebRTCService {
           this.connectTimeout = null;
         }
       } else if (state === 'failed' || state === 'closed' || state === 'disconnected') {
-        // Reject connect() promise if waiting
         if (this.connectReject && (state === 'failed' || state === 'closed')) {
           if (this.connectTimeout) clearTimeout(this.connectTimeout);
           this.connectReject(new ConnectionError('Connection ' + state));
@@ -324,7 +356,6 @@ class WebRTCService {
       }
     };
 
-    // Incoming data channel (receiver side)
     this.pc.ondatachannel = (event) => {
       console.log('[DC] Received data channel from remote peer');
       this.setupDataChannel(event.channel);
@@ -388,7 +419,6 @@ class WebRTCService {
 
   /** Send an error frame and disconnect. Wraps in envelope when negotiated. */
   private sendErrorAndDisconnect(code: string, message: string): void {
-    // Outbound guard: only emit canonical wire error codes (PROTOCOL.md §10)
     if (!isValidWireErrorCode(code)) {
       console.error(`[BUG] sendErrorAndDisconnect called with non-canonical code: ${code}`);
       this.disconnect();
@@ -397,7 +427,7 @@ class WebRTCService {
     if (this.dc && this.dc.readyState === 'open') {
       const errorMsg = { type: 'error', code, message };
       if (this.negotiatedEnvelopeV1() && this.helloComplete && this.keyPair && this.remotePublicKey) {
-        this.dc.send(JSON.stringify(this.encodeProfileEnvelopeV1(errorMsg)));
+        this.dc.send(JSON.stringify(encodeProfileEnvelopeV1(errorMsg, this.remotePublicKey, this.keyPair.secretKey)));
       } else {
         this.dc.send(JSON.stringify(errorMsg));
       }
@@ -415,10 +445,6 @@ class WebRTCService {
     return this.handshake.processHello(msg);
   }
 
-  /**
-   * Wait for the HELLO handshake to complete (or legacy timeout).
-   * Returns immediately if already complete.
-   */
   waitForHello(): Promise<void> {
     if (this.helloComplete) return Promise.resolve();
     return new Promise<void>((resolve) => {
@@ -426,10 +452,11 @@ class WebRTCService {
     });
   }
 
-  /** Whether the remote peer was identified as legacy (no HELLO). */
   isLegacySession(): boolean {
     return this.sessionLegacy;
   }
+
+  // ─── Connection Lifecycle ──────────────────────────────────────────────
 
   async connect(remotePeerCode: string): Promise<void> {
     this.keyPair = generateEphemeralKeyPair();
@@ -450,8 +477,6 @@ class WebRTCService {
       peerCode: this.localPeerCode,
     }, remotePeerCode);
 
-    // Wait for connection or timeout using class-level resolve/reject
-    // This avoids the handler-wrapping race condition
     const connectionPromise = new Promise<void>((resolve, reject) => {
       this.connectResolve = resolve;
       this.connectReject = reject;
@@ -502,7 +527,6 @@ class WebRTCService {
     }
 
     if (this.dc) {
-      // SA13 + N1: null handlers before close to prevent post-close event delivery
       this.dc.onmessage = null;
       this.dc.onopen = null;
       this.dc.onclose = null;
@@ -512,7 +536,6 @@ class WebRTCService {
       this.dc = null;
     }
     if (this.pc) {
-      // Remove handlers before closing to avoid spurious callbacks
       this.pc.onconnectionstatechange = null;
       this.pc.onicecandidate = null;
       this.pc.ondatachannel = null;
@@ -556,129 +579,7 @@ class WebRTCService {
     this.negotiatedCapabilities = [];
   }
 
-  // ─── File Transfer (Send) ──────────────────────────────────────────────
-
-  async sendFile(file: File): Promise<void> {
-    // Wait for HELLO handshake before allowing file transfer
-    if (!this.helloComplete) {
-      await this.waitForHello();
-    }
-
-    if (!this.dc || this.dc.readyState !== 'open') {
-      throw new TransferError('Data channel not open');
-    }
-    if (!this.remotePublicKey) {
-      throw new EncryptionError('No remote public key');
-    }
-
-    const totalChunks = Math.ceil(file.size / DEFAULT_CHUNK_SIZE);
-    const transferId = generateTransferId();
-    this.sendTransferIds.set(file.name, transferId);
-
-    // Compute file hash if bolt.file-hash was negotiated
-    let fileHash: string | undefined;
-    if (this.hasCapability('bolt.file-hash')) {
-      fileHash = await hashFile(file);
-    }
-
-    console.log(`[TRANSFER] Sending ${file.name} (${file.size} bytes, ${totalChunks} chunks, tid=${transferId})`);
-    this.transferCancelled = false;
-    this.transferPaused = false;
-    this.transferStartTime = Date.now();
-    this.pauseDuration = 0;
-    this.lastPausedAt = null;
-
-    if (ENABLE_TRANSFER_METRICS) {
-      this.metricsCollector = new TransferMetricsCollector();
-      this.metricsFirstProgressRecorded = false;
-      this.metricsCollector.begin(transferId, file.size, DEFAULT_CHUNK_SIZE, totalChunks);
-    }
-
-    try {
-      for (let i = 0; i < totalChunks; i++) {
-        if (this.transferCancelled) throw new TransferError('Transfer cancelled by user');
-
-        while (this.transferPaused) {
-          await new Promise(r => setTimeout(r, 100));
-          if (this.transferCancelled) throw new TransferError('Transfer cancelled while paused');
-        }
-
-        const start = i * DEFAULT_CHUNK_SIZE;
-        const end = Math.min(start + DEFAULT_CHUNK_SIZE, file.size);
-        const raw = new Uint8Array(await file.slice(start, end).arrayBuffer());
-
-        if (!this.keyPair) throw new EncryptionError('No ephemeral key pair');
-        const encrypted = sealBoxPayload(raw, this.remotePublicKey!, this.keyPair.secretKey);
-
-        const msg: FileChunkMessage = {
-          type: 'file-chunk',
-          filename: file.name,
-          chunk: encrypted,
-          chunkIndex: i,
-          totalChunks,
-          fileSize: file.size,
-          transferId,
-          ...(fileHash && i === 0 ? { fileHash } : {}),
-        };
-
-        // Backpressure — wait for buffer to drain (N1: cancelable by disconnect)
-        if (this.dc!.bufferedAmount > this.dc!.bufferedAmountLowThreshold) {
-          const gen = this.sessionGeneration;
-          this.metricsCollector?.enterBufferDrainWait();
-          await new Promise<void>((resolve, reject) => {
-            this.backpressureReject = reject;
-            this.dc!.onbufferedamountlow = () => {
-              this.backpressureReject = undefined;
-              this.metricsCollector?.exitBufferDrainWait();
-              if (this.dc) this.dc.onbufferedamountlow = null;
-              if (gen !== this.sessionGeneration) {
-                reject(new TransferError('Transfer aborted: session ended'));
-                return;
-              }
-              resolve();
-            };
-          });
-        }
-
-        if (this.transferCancelled) throw new TransferError('Transfer cancelled by user');
-
-        this.metricsCollector?.recordChunkSend(this.dc!.bufferedAmount, i + 1);
-        this.dcSendMessage(msg);
-        this.emitProgress(file.name, i + 1, totalChunks, end, file.size, 'transferring');
-      }
-
-      console.log(`[TRANSFER] All chunks sent for ${file.name}`);
-      this.sendTransferIds.delete(file.name);
-
-      if (this.metricsCollector) {
-        const metrics = this.metricsCollector.finish();
-        this.metricsCollector = null;
-        this.metricsFirstProgressRecorded = false;
-        if (metrics) console.log('[TRANSFER_METRICS]', JSON.stringify(summarizeTransfer(metrics)));
-      }
-
-      // Emit completion after a brief delay so UI can process final progress
-      this.completionTimeout = setTimeout(() => {
-        this.emitProgress(file.name, totalChunks, totalChunks, file.size, file.size, 'completed');
-      }, 50);
-    } catch (error) {
-      this.sendTransferIds.delete(file.name);
-
-      if (this.metricsCollector) {
-        const metrics = this.metricsCollector.finish();
-        this.metricsCollector = null;
-        this.metricsFirstProgressRecorded = false;
-        if (metrics) console.log('[TRANSFER_METRICS]', JSON.stringify(summarizeTransfer(metrics)));
-      }
-
-      if (!(error instanceof TransferError && error.message.includes('cancelled'))) {
-        this.emitProgress(file.name, 0, totalChunks, 0, file.size, 'error');
-      }
-      throw error;
-    }
-  }
-
-  // ─── File Transfer (Receive) ──────────────────────────────────────────
+  // ─── Message Routing ──────────────────────────────────────────────────
 
   private handleMessage(event: MessageEvent) {
     try {
@@ -718,7 +619,6 @@ class WebRTCService {
           this.sendErrorAndDisconnect('ENVELOPE_INVALID', 'Invalid profile envelope format');
           return;
         }
-        // Decrypt envelope payload
         let innerBytes: Uint8Array;
         try {
           innerBytes = openBoxPayload(msg.payload, this.remotePublicKey!, this.keyPair!.secretKey);
@@ -727,7 +627,6 @@ class WebRTCService {
           this.sendErrorAndDisconnect('ENVELOPE_DECRYPT_FAIL', 'Failed to decrypt profile envelope');
           return;
         }
-        // Parse inner JSON
         let inner: any;
         try {
           inner = JSON.parse(new TextDecoder().decode(innerBytes));
@@ -736,15 +635,12 @@ class WebRTCService {
           this.sendErrorAndDisconnect('INVALID_MESSAGE', 'Invalid inner message');
           return;
         }
-        // Handle enveloped error from remote peer
         if (inner.type === 'error') {
-          // Validate inbound error code: must be a non-empty string in the canonical registry
           if (!isValidWireErrorCode(inner.code)) {
             console.warn(`[PROTOCOL_VIOLATION] enveloped error with invalid code: ${JSON.stringify(inner.code)} — disconnecting`);
             this.sendErrorAndDisconnect('PROTOCOL_VIOLATION', 'Invalid inbound error code');
             return;
           }
-          // Validate message field if present: must be a string
           if (inner.message !== undefined && typeof inner.message !== 'string') {
             console.warn(`[PROTOCOL_VIOLATION] enveloped error with non-string message — disconnecting`);
             this.sendErrorAndDisconnect('PROTOCOL_VIOLATION', 'Invalid inbound error message type');
@@ -755,13 +651,12 @@ class WebRTCService {
           this.disconnect();
           return;
         }
-        // Validate inner message type
         if (inner.type !== 'file-chunk') {
           console.warn(`[UNKNOWN_MESSAGE_TYPE] unknown inner type "${inner.type}" — disconnecting`);
           this.sendErrorAndDisconnect('UNKNOWN_MESSAGE_TYPE', `Unknown message type: ${inner.type}`);
           return;
         }
-        this.routeInnerMessage(inner);
+        this.transfer.routeInnerMessage(inner);
         return;
       }
 
@@ -790,7 +685,6 @@ class WebRTCService {
         return;
       }
 
-      // ─── Envelope-unnegotiated plaintext path ──────────────────
       // SA9: reject unknown type (non-file-chunk) — no silent drops
       if (msg.type !== 'file-chunk') {
         console.warn(`[UNKNOWN_MESSAGE_TYPE] unknown plaintext type "${msg.type}" — disconnecting`);
@@ -803,268 +697,28 @@ class WebRTCService {
         this.sendErrorAndDisconnect('INVALID_MESSAGE', 'file-chunk missing filename');
         return;
       }
-      this.routeInnerMessage(msg);
+      this.transfer.routeInnerMessage(msg);
     } catch (error) {
       console.error('[PROTOCOL_VIOLATION] Error processing message:', error);
       this.sendErrorAndDisconnect('PROTOCOL_VIOLATION', 'Protocol violation');
     }
   }
 
-  /** Route a decoded inner message (from envelope or legacy plaintext). */
-  private routeInnerMessage(msg: any) {
-    if (msg.type !== 'file-chunk' || !msg.filename) return;
+  // ─── Transfer (delegated to TransferManager) ───────────────────────────
 
-    // Control messages
-    if (msg.paused) {
-      this.transferPaused = true;
-      this.emitProgress(msg.filename, 0, 0, 0, 0, 'paused');
-      return;
-    }
-    if (msg.resumed) {
-      this.transferPaused = false;
-      this.emitProgress(msg.filename, 0, 0, 0, 0, 'transferring');
-      return;
-    }
-    if (msg.cancelled) {
-      this.handleRemoteCancel(msg);
-      return;
-    }
-
-    // Data chunk
-    this.processChunk(msg);
+  // Forwarding methods for test compat — tests call these via (service as any).methodName
+  private processChunk(msg: FileChunkMessage) {
+    this.transfer.processChunk(msg);
   }
 
   private handleRemoteCancel(msg: FileChunkMessage) {
-    const status = msg.cancelledBy === 'receiver' ? 'canceled_by_receiver' : 'canceled_by_sender';
-    this.receiveBuffers.delete(msg.filename);
-    if (msg.transferId) {
-      this.guardedTransfers.delete(msg.transferId);
-    }
-    // Also clean up by filename lookup
-    const recvTid = this.recvTransferIds.get(msg.filename);
-    if (recvTid) {
-      this.guardedTransfers.delete(recvTid);
-      this.recvTransferIds.delete(msg.filename);
-    }
-    this.transferCancelled = true;
-    this.emitProgress(msg.filename, 0, 0, 0, 0, status);
+    // Forward by routing as cancelled message
+    this.transfer.routeInnerMessage(msg);
   }
 
-  private isValidChunkFields(msg: FileChunkMessage): boolean {
-    const { chunkIndex, totalChunks } = msg;
-    if (!Number.isFinite(totalChunks) || !Number.isInteger(totalChunks!) || totalChunks! <= 0) {
-      console.warn(`[REPLAY_OOB] invalid totalChunks=${totalChunks} — rejected`);
-      return false;
-    }
-    if (!Number.isFinite(chunkIndex) || !Number.isInteger(chunkIndex!) || chunkIndex! < 0 || chunkIndex! >= totalChunks!) {
-      console.warn(`[REPLAY_OOB] chunkIndex=${chunkIndex} out of range [0, ${totalChunks}) — rejected`);
-      return false;
-    }
-    return true;
+  private routeInnerMessage(msg: any) {
+    this.transfer.routeInnerMessage(msg);
   }
-
-  private processChunk(msg: FileChunkMessage) {
-    if (!msg.chunk || typeof msg.chunkIndex !== 'number' || !msg.totalChunks || !msg.fileSize) return;
-    if (!this.remotePublicKey) return;
-
-    // Bounds check applies to BOTH modes
-    if (!this.isValidChunkFields(msg)) return;
-
-    if (msg.transferId && this.helloComplete) {
-      this.processChunkGuarded(msg).catch((error) => {
-        console.error(`[TRANSFER] Unhandled error in guarded path:`, error);
-        this.onError(error instanceof WebRTCError ? error : new TransferError('Chunk processing failed', error));
-      });
-    } else {
-      if (msg.transferId && !this.helloComplete) {
-        console.warn('[REPLAY_UNGUARDED] transferId present but HELLO incomplete — falling back to legacy');
-      } else {
-        console.warn('[REPLAY_UNGUARDED] chunk received without transferId — legacy peer');
-      }
-      this.processChunkLegacy(msg);
-    }
-  }
-
-  private async processChunkGuarded(msg: FileChunkMessage) {
-    const { filename, chunk, chunkIndex, totalChunks, fileSize, transferId } = msg;
-    const identityKey = this.remoteIdentityKey ? toBase64(this.remoteIdentityKey) : '';
-
-    // Lookup or create guarded transfer
-    let transfer = this.guardedTransfers.get(transferId!);
-    if (!transfer) {
-      console.log(`[TRANSFER] Receiving ${filename} (${fileSize} bytes, ${totalChunks} chunks, tid=${transferId})`);
-      // Store expectedHash from first chunk if bolt.file-hash negotiated
-      const expectedHash = (this.hasCapability('bolt.file-hash') && msg.fileHash) ? msg.fileHash : undefined;
-      transfer = {
-        transferId: transferId!,
-        filename: filename,
-        totalChunks: totalChunks!,
-        fileSize: fileSize!,
-        buffer: new Array(totalChunks!).fill(null),
-        receivedSet: new Set(),
-        remoteIdentityKey: identityKey,
-        expectedHash,
-      };
-      this.guardedTransfers.set(transferId!, transfer);
-      this.recvTransferIds.set(filename, transferId!);
-      this.transferStartTime = Date.now();
-      this.pauseDuration = 0;
-    } else if (transfer.remoteIdentityKey !== identityKey) {
-      // Same transferId but different sender identity — cross-peer collision
-      console.warn(`[REPLAY_XFER_MISMATCH] transferId=${transferId} bound to different sender identity — ignored`);
-      return;
-    }
-
-    // Dedup check
-    if (transfer.receivedSet.has(chunkIndex!)) {
-      console.warn(`[REPLAY_DUP] chunkIndex=${chunkIndex} already received for tid=${transferId} — ignored`);
-      return;
-    }
-
-    try {
-      if (!this.keyPair) throw new EncryptionError('No ephemeral key pair');
-      const decrypted = openBoxPayload(chunk!, this.remotePublicKey!, this.keyPair.secretKey);
-      transfer.buffer[chunkIndex!] = new Blob([decrypted as BlobPart]);
-      transfer.receivedSet.add(chunkIndex!);
-
-      const received = transfer.receivedSet.size;
-      this.emitProgress(filename, received, totalChunks!, received * (fileSize! / totalChunks!), fileSize!, 'transferring');
-
-      // Check completion
-      if (received === totalChunks!) {
-        const assembledBlob = new Blob(transfer.buffer as Blob[]);
-
-        // Verify file integrity if expectedHash was provided (bolt.file-hash negotiated)
-        if (transfer.expectedHash) {
-          try {
-            const actual = await hashFile(assembledBlob);
-            if (actual !== transfer.expectedHash) {
-              console.error(`[INTEGRITY_MISMATCH] expected=${transfer.expectedHash} actual=${actual} (tid=${transferId})`);
-              this.guardedTransfers.delete(transferId!);
-              this.recvTransferIds.delete(filename);
-              this.emitProgress(filename, 0, totalChunks!, 0, fileSize!, 'error');
-              this.onError(new IntegrityError('File integrity check failed: hash mismatch'));
-              this.dcSendMessage({
-                type: 'error',
-                code: 'INTEGRITY_FAILED',
-                message: 'File integrity check failed: hash mismatch',
-              });
-              this.disconnect();
-              return;
-            }
-            console.log(`[INTEGRITY_OK] hash verified for ${filename} (tid=${transferId})`);
-          } catch (hashError) {
-            console.error(`[INTEGRITY_ERROR] failed to compute hash for ${filename}:`, hashError);
-            // Fail-closed: treat hash computation failure as integrity failure
-            this.guardedTransfers.delete(transferId!);
-            this.recvTransferIds.delete(filename);
-            this.emitProgress(filename, 0, totalChunks!, 0, fileSize!, 'error');
-            this.onError(new IntegrityError('File integrity check failed: hash computation error'));
-            this.disconnect();
-            return;
-          }
-        }
-
-        console.log(`[TRANSFER] Completed receiving ${filename} (tid=${transferId})`);
-        this.guardedTransfers.delete(transferId!);
-        this.recvTransferIds.delete(filename);
-        this.emitProgress(filename, totalChunks!, totalChunks!, fileSize!, fileSize!, 'completed');
-        this.onReceiveFile(assembledBlob, filename);
-      }
-    } catch (error) {
-      console.error(`[TRANSFER] Error processing chunk ${chunkIndex} of ${filename} (tid=${transferId}):`, error);
-      this.guardedTransfers.delete(transferId!);
-      this.recvTransferIds.delete(filename);
-      this.emitProgress(filename, 0, totalChunks!, 0, fileSize!, 'error');
-      this.onError(error instanceof WebRTCError ? error : new TransferError('Chunk processing failed', error));
-    }
-  }
-
-  private processChunkLegacy(msg: FileChunkMessage) {
-    const { filename, chunk, chunkIndex, totalChunks, fileSize } = msg;
-
-    // Initialize buffer on first chunk
-    if (!this.receiveBuffers.has(filename)) {
-      console.log(`[TRANSFER] Receiving ${filename} (${fileSize} bytes, ${totalChunks} chunks) [legacy]`);
-      this.receiveBuffers.set(filename, new Array(totalChunks!).fill(null));
-      this.transferStartTime = Date.now();
-      this.pauseDuration = 0;
-    }
-
-    try {
-      if (!this.keyPair) throw new EncryptionError('No ephemeral key pair');
-      const decrypted = openBoxPayload(chunk!, this.remotePublicKey!, this.keyPair.secretKey);
-      const buffer = this.receiveBuffers.get(filename)!;
-      buffer[chunkIndex!] = new Blob([decrypted as BlobPart]);
-
-      const received = buffer.filter(Boolean).length;
-      this.emitProgress(filename, received, totalChunks!, received * (fileSize! / totalChunks!), fileSize!, 'transferring');
-
-      // Check completion
-      if (received === totalChunks!) {
-        console.log(`[TRANSFER] Completed receiving ${filename} [legacy]`);
-        const file = new Blob(buffer as Blob[]);
-        this.receiveBuffers.delete(filename);
-        this.emitProgress(filename, totalChunks!, totalChunks!, fileSize!, fileSize!, 'completed');
-        this.onReceiveFile(file, filename);
-      }
-    } catch (error) {
-      console.error(`[TRANSFER] Error processing chunk ${chunkIndex} of ${filename}:`, error);
-      this.receiveBuffers.delete(filename);
-      this.emitProgress(filename, 0, totalChunks!, 0, fileSize!, 'error');
-      this.onError(error instanceof WebRTCError ? error : new TransferError('Chunk processing failed', error));
-    }
-  }
-
-  // ─── Transfer Control ──────────────────────────────────────────────────
-
-  pauseTransfer(filename: string) {
-    this.transferPaused = true;
-    this.lastPausedAt = Date.now();
-    this.metricsCollector?.markPaused();
-    const transferId = this.sendTransferIds.get(filename);
-    this.sendControlMessage(filename, { paused: true, ...(transferId && { transferId }) });
-    this.emitProgress(filename, 0, 0, 0, 0, 'paused');
-  }
-
-  resumeTransfer(filename: string) {
-    if (this.lastPausedAt) {
-      this.pauseDuration += Date.now() - this.lastPausedAt;
-      this.lastPausedAt = null;
-    }
-    this.transferPaused = false;
-    this.metricsCollector?.markResumed();
-    const transferId = this.sendTransferIds.get(filename);
-    this.sendControlMessage(filename, { resumed: true, ...(transferId && { transferId }) });
-    this.emitProgress(filename, 0, 0, 0, 0, 'transferring');
-  }
-
-  cancelTransfer(filename: string, isReceiver: boolean = false) {
-    this.transferCancelled = true;
-    const transferId = isReceiver
-      ? this.recvTransferIds.get(filename)
-      : this.sendTransferIds.get(filename);
-    this.sendControlMessage(filename, {
-      cancelled: true,
-      cancelledBy: isReceiver ? 'receiver' : 'sender',
-      ...(transferId && { transferId }),
-    });
-    this.receiveBuffers.delete(filename);
-    if (transferId) {
-      this.guardedTransfers.delete(transferId);
-      this.recvTransferIds.delete(filename);
-      this.sendTransferIds.delete(filename);
-    }
-    const status = isReceiver ? 'canceled_by_receiver' : 'canceled_by_sender';
-    this.emitProgress(filename, 0, 0, 0, 0, status);
-  }
-
-  private sendControlMessage(filename: string, fields: Partial<FileChunkMessage>) {
-    if (!this.dc || this.dc.readyState !== 'open') return;
-    this.dcSendMessage({ type: 'file-chunk', filename, ...fields });
-  }
-
-  // ─── Progress ──────────────────────────────────────────────────────────
 
   private emitProgress(
     filename: string,
@@ -1074,35 +728,23 @@ class WebRTCService {
     total: number,
     status: TransferProgress['status']
   ) {
-    if (this.metricsCollector && !this.metricsFirstProgressRecorded) {
-      this.metricsCollector.recordFirstProgress();
-      this.metricsFirstProgressRecorded = true;
-    }
+    this.transfer.emitProgress(filename, currentChunk, totalChunks, loaded, total, status);
+  }
 
-    if (!this.onProgressCallback) return;
+  async sendFile(file: File): Promise<void> {
+    return this.transfer.sendFile(file);
+  }
 
-    const elapsed = Math.max(1, Date.now() - this.transferStartTime - this.pauseDuration);
-    const speed = loaded > 0 ? loaded / (elapsed / 1000) : 0;
-    const remaining = speed > 0 ? (total - loaded) / speed : 0;
+  pauseTransfer(filename: string) {
+    this.transfer.pauseTransfer(filename);
+  }
 
-    this.onProgressCallback({
-      filename,
-      currentChunk,
-      totalChunks,
-      loaded,
-      total,
-      status,
-      stats: {
-        speed,
-        averageSpeed: speed,
-        estimatedTimeRemaining: remaining,
-        retryCount: 0,
-        maxRetries: 0,
-        startTime: this.transferStartTime,
-        pauseDuration: this.pauseDuration,
-        lastPausedAt: this.lastPausedAt ?? undefined,
-      },
-    });
+  resumeTransfer(filename: string) {
+    this.transfer.resumeTransfer(filename);
+  }
+
+  cancelTransfer(filename: string, isReceiver: boolean = false) {
+    this.transfer.cancelTransfer(filename, isReceiver);
   }
 
   // ─── Public Accessors ──────────────────────────────────────────────────
@@ -1119,50 +761,29 @@ class WebRTCService {
     this.connectionStateHandler = handler;
   }
 
-  /** Get current SAS verification state. */
   getVerificationInfo(): VerificationInfo {
     return this.verificationInfo;
   }
 
-  /** Check whether a capability was successfully negotiated with the remote peer. */
   hasCapability(name: string): boolean {
     return this.negotiatedCapabilities.includes(name);
   }
 
-  /** Mark the current peer as verified. Persists to pin store. */
   async markPeerVerified(): Promise<void> {
     return this.handshake.markPeerVerified();
   }
 
   // ─── Profile Envelope v1 ─────────────────────────────────────────────
 
-  /** Whether profile-envelope-v1 was mutually negotiated. */
   private negotiatedEnvelopeV1(): boolean {
-    return this.hasCapability('bolt.profile-envelope-v1');
-  }
-
-  /** Encrypt an inner message into a ProfileEnvelopeV1 wire object. */
-  private encodeProfileEnvelopeV1(innerMsg: object): ProfileEnvelopeV1 {
-    const innerJson = JSON.stringify(innerMsg);
-    const innerBytes = new TextEncoder().encode(innerJson);
-    const payload = sealBoxPayload(innerBytes, this.remotePublicKey!, this.keyPair!.secretKey);
-    return { type: 'profile-envelope', version: 1, encoding: 'base64', payload };
+    return this.negotiatedCapabilities.includes('bolt.profile-envelope-v1');
   }
 
   // SA18: decodeProfileEnvelopeV1 removed — dead code with silent null return.
   // Inline decryption in handleMessage() is the active path (fail-closed).
 
-  /**
-   * Send a message over the DataChannel, wrapping in profile-envelope when negotiated.
-   * MUST only be called after helloComplete === true (except for pre-handshake error messages).
-   */
   private dcSendMessage(innerMsg: any): void {
-    if (!this.dc || this.dc.readyState !== 'open') return;
-    if (this.negotiatedEnvelopeV1() && this.helloComplete && this.keyPair && this.remotePublicKey) {
-      this.dc.send(JSON.stringify(this.encodeProfileEnvelopeV1(innerMsg)));
-    } else {
-      this.dc.send(JSON.stringify(innerMsg));
-    }
+    dcSendMessage(this.dc, innerMsg, this.negotiatedEnvelopeV1(), this.helloComplete, this.keyPair, this.remotePublicKey);
   }
 }
 
