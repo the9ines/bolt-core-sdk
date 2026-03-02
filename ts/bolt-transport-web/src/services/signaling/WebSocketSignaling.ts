@@ -45,7 +45,12 @@ interface SignalInMessage {
   payload: SignalMessage;
 }
 
-type ServerMessage = PeersMessage | PeerJoinedMessage | PeerLeftMessage | SignalInMessage;
+interface ServerErrorMessage {
+  type: 'error';
+  message: string;
+}
+
+type ServerMessage = PeersMessage | PeerJoinedMessage | PeerLeftMessage | SignalInMessage | ServerErrorMessage;
 
 // ─── Constants ─────────────────────────────────────────────────────────────
 
@@ -264,6 +269,9 @@ export class WebSocketSignaling implements SignalingProvider {
         break;
       case 'signal':
         this.handleSignal(msg);
+        break;
+      case 'error':
+        console.warn('[WS-SIGNAL] Server error:', msg.message);
         break;
       default:
         console.warn('[WS-SIGNAL] Unknown message type:', (msg as any).type);
