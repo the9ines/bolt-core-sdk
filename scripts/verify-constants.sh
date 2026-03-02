@@ -10,7 +10,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-RUST_SRC="$ROOT/rust/bolt-core/src/lib.rs"
+RUST_SRC="$ROOT/rust/bolt-core/src/constants.rs"
 TS_SRC="$ROOT/ts/bolt-core/src/constants.ts"
 
 fail=0

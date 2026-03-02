@@ -94,6 +94,10 @@ jobs:
         with:
           node-version: 20
 
+      - name: Verify cross-language constants
+        working-directory: .
+        run: ./scripts/verify-constants.sh
+
       - run: npm ci
       - run: npm run build
       - run: npm run check-vectors
