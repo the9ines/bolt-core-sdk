@@ -26,9 +26,10 @@ export { createFileUpload, setWebrtcRef } from './components/file-upload.js';
 export { createConnectionStatus } from './components/connection-status.js';
 export { createVerificationStatus } from './components/verification-status.js';
 export type { VerificationStatusOptions } from './components/verification-status.js';
+export { formatSpeed, formatTime, formatSize } from './components/transfer-progress.js';
 
 // ── State ────────────────────────────────────────────────────────────────────
-export { store } from './state/store.js';
+export { AppStore, store } from './state/store.js';
 export type { AppState, ConnectionRequest } from './state/store.js';
 
 // ── UI ───────────────────────────────────────────────────────────────────────

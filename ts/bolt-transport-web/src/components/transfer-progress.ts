@@ -2,14 +2,14 @@ import { icons } from '../ui/icons.js';
 import { escapeHTML } from '../lib/sanitize.js';
 import type { TransferProgress } from '../services/webrtc/WebRTCService.js';
 
-function formatSpeed(bytesPerSecond: number): string {
+export function formatSpeed(bytesPerSecond: number): string {
   if (bytesPerSecond === 0) return '0 B/s';
   const units = ['B/s', 'KB/s', 'MB/s', 'GB/s'];
   const exp = Math.min(Math.floor(Math.log(bytesPerSecond) / Math.log(1024)), units.length - 1);
   return `${(bytesPerSecond / Math.pow(1024, exp)).toFixed(2)} ${units[exp]}`;
 }
 
-function formatTime(seconds: number): string {
+export function formatTime(seconds: number): string {
   if (!isFinite(seconds) || seconds < 0) return 'calculating...';
   if (seconds === 0) return '0s';
   const hrs = Math.floor(seconds / 3600);
@@ -22,7 +22,7 @@ function formatTime(seconds: number): string {
   return parts.join(' ');
 }
 
-function formatSize(bytes: number): string {
+export function formatSize(bytes: number): string {
   if (bytes === 0) return '0 B';
   const units = ['B', 'KB', 'MB', 'GB'];
   const exp = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
