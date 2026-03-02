@@ -2,6 +2,29 @@
 
 All notable changes to bolt-core-sdk are documented here. Newest first.
 
+## [sdk-v0.5.20-protocol-converge-2 — §15 Handshake Invariant Coverage] - 2026-03-02
+
+Complete §15 handshake invariant coverage. Renamed mislabeled
+PROTO-HARDEN-08→10 (receive-side duplicate). Added real PROTO-HARDEN-08
+send-side atomicity test. Updated coverage map header. 11 invariants with
+explicit tests + 1 DONE-BY-DESIGN = all 12 covered. Closes AC-5.
+
+### Changed (bolt-transport-web)
+- `proto-harden-regression.test.ts` coverage map header rewritten to list
+  all 12 invariants with their test locations.
+- PROTO-HARDEN-08 test renamed to PROTO-HARDEN-10 (receive-side duplicate
+  HELLO — was mislabeled, now correctly reflects §15 invariant numbering).
+- New PROTO-HARDEN-08 test: send-side atomicity — verifies `initiateHello()`
+  emits exactly one HELLO frame, and disconnect nulls keyPair to prevent
+  a second HELLO on the same session.
+
+### Tests
+- bolt-transport-web: 249 tests (vitest).
+
+**Tag:** `sdk-v0.5.20-protocol-converge-2` (`28c3baf`)
+
+---
+
 ## [LIFECYCLE-HARDEN-1 — Deterministic Signaling Teardown] - 2026-02-28
 
 SA5 + SA6 lifecycle hardening in bolt-transport-web. Error-path cleanup
