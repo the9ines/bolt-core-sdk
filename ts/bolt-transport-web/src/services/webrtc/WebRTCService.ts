@@ -5,6 +5,8 @@ import { verifyPinnedIdentity } from '../identity/pin-store.js';
 import type { PinPersistence } from '../identity/pin-store.js';
 import type { SignalingProvider, SignalMessage } from '../signaling/index.js';
 import { ENABLE_TRANSFER_METRICS, TransferMetricsCollector, summarizeTransfer } from './transferMetrics.js';
+import { HandshakeManager } from './HandshakeManager.js';
+import type { HandshakeContext } from './context.js';
 
 // ─── Types (canonical definitions in ./types.ts; re-exported here for API stability) ──
 import type { FileChunkMessage, ProfileEnvelopeV1, ActiveTransfer } from './types.js';
@@ -17,8 +19,6 @@ function generateTransferId(): string {
   crypto.getRandomValues(bytes);
   return bufferToHex(bytes.buffer);
 }
-
-const HELLO_TIMEOUT_MS = 5000;
 
 // ─── WebRTCService ──────────────────────────────────────────────────────────
 
@@ -64,7 +64,7 @@ class WebRTCService {
   private connectReject: ((err: Error) => void) | null = null;
   private connectTimeout: ReturnType<typeof setTimeout> | null = null;
 
-  // HELLO / TOFU state
+  // HELLO / TOFU state — owned here for test compatibility (tests set via (service as any).field)
   private options: WebRTCServiceOptions;
   private helloComplete = false;
   private sessionLegacy = false;
@@ -92,6 +92,9 @@ class WebRTCService {
   private remoteCapabilities: string[] = [];
   private negotiatedCapabilities: string[] = [];
 
+  // ─── Decomposed managers ────────────────────────────────────────
+  private handshake: HandshakeManager;
+
   constructor(
     signaling: SignalingProvider,
     private localPeerCode: string,
@@ -105,6 +108,44 @@ class WebRTCService {
     this.options = options ?? {};
     this.signaling = signaling;
     this.signalUnsub = this.signaling.onSignal((signal) => this.handleSignal(signal));
+
+    // Build context bridge and instantiate HandshakeManager
+    this.handshake = new HandshakeManager(this.buildHandshakeContext());
+  }
+
+  /** Build the HandshakeContext bridge — maps to fields on this instance. */
+  private buildHandshakeContext(): HandshakeContext {
+    return {
+      getKeyPair: () => this.keyPair,
+      getRemotePublicKey: () => this.remotePublicKey,
+      getDc: () => this.dc,
+      getLocalPeerCode: () => this.localPeerCode,
+      getRemotePeerCode: () => this.remotePeerCode,
+      getOptions: () => this.options,
+      onFatalError: (code, message) => this.sendErrorAndDisconnect(code, message),
+      onError: (error) => this.onError(error instanceof WebRTCError ? error : new ConnectionError('Manager error', error)),
+      disconnect: () => this.disconnect(),
+      isHelloComplete: () => this.helloComplete,
+      setHelloComplete: (v) => { this.helloComplete = v; },
+      getSessionState: () => this.sessionState,
+      setSessionState: (v) => { this.sessionState = v; },
+      getSessionGeneration: () => this.sessionGeneration,
+      isHelloProcessing: () => this.helloProcessing,
+      setHelloProcessing: (v) => { this.helloProcessing = v; },
+      getHelloTimeout: () => this.helloTimeout,
+      setHelloTimeout: (v) => { this.helloTimeout = v; },
+      getHelloResolve: () => this.helloResolve,
+      setHelloResolve: (v) => { this.helloResolve = v; },
+      setSessionLegacy: (v) => { this.sessionLegacy = v; },
+      getVerificationInfo: () => this.verificationInfo,
+      setVerificationInfo: (v) => { this.verificationInfo = v; },
+      getRemoteIdentityKey: () => this.remoteIdentityKey,
+      setRemoteIdentityKey: (v) => { this.remoteIdentityKey = v; },
+      getLocalCapabilities: () => this.localCapabilities,
+      getNegotiatedCapabilities: () => this.negotiatedCapabilities,
+      setNegotiatedCapabilities: (v) => { this.negotiatedCapabilities = v; },
+      setRemoteCapabilities: (v) => { this.remoteCapabilities = v; },
+    };
   }
 
   // ─── Signaling ──────────────────────────────────────────────────────────
@@ -364,183 +405,14 @@ class WebRTCService {
     this.disconnect();
   }
 
-  // ─── HELLO Protocol ──────────────────────────────────────────────────────
+  // ─── HELLO Protocol (delegated to HandshakeManager) ─────────────────────
 
   private initiateHello() {
-    if (!this.options.identityPublicKey || !this.keyPair || !this.remotePublicKey) {
-      // No identity configured — this node operates in legacy mode
-      this.sessionState = 'post_hello';
-      this.helloComplete = true;
-      this.sessionLegacy = true;
-      this.verificationInfo = { state: 'legacy', sasCode: null };
-      this.options.onVerificationState?.(this.verificationInfo);
-      console.log('[HELLO] No identity configured, skipping HELLO');
-      return;
-    }
-
-    // Send encrypted HELLO over DataChannel
-    const hello = JSON.stringify({
-      type: 'hello',
-      version: 1,
-      identityPublicKey: toBase64(this.options.identityPublicKey),
-      capabilities: this.localCapabilities,
-    });
-    const plaintext = new TextEncoder().encode(hello);
-    const encrypted = sealBoxPayload(plaintext, this.remotePublicKey, this.keyPair.secretKey);
-    this.dc!.send(JSON.stringify({ type: 'hello', payload: encrypted }));
-    console.log('[HELLO] Sent encrypted HELLO');
-
-    // Start timeout — fail-closed if remote doesn't complete HELLO (SA10)
-    // SA14: capture session generation to detect stale callbacks after disconnect+reconnect
-    const gen = this.sessionGeneration;
-    this.helloTimeout = setTimeout(() => {
-      if (gen !== this.sessionGeneration) return; // stale timeout from previous session
-      if (!this.helloComplete) {
-        console.error('[HELLO_TIMEOUT] HELLO not completed within timeout — identity required, failing closed');
-        const error = new ConnectionError('HELLO handshake timed out while identity is required');
-        this.disconnect();
-        this.onError(error);
-      }
-    }, HELLO_TIMEOUT_MS);
+    this.handshake.initiateHello();
   }
 
   private async processHello(msg: { type: 'hello'; payload: string }) {
-    // SA12: synchronous reentrancy guard — must be set before any await
-    if (this.helloProcessing) {
-      console.warn('[DUPLICATE_HELLO] HELLO received while processing — disconnecting');
-      this.sendErrorAndDisconnect('DUPLICATE_HELLO', 'Duplicate HELLO');
-      return;
-    }
-    this.helloProcessing = true;
-
-    // N2: scoped-lock — try/finally guarantees reset on all exits (success, error, unexpected throw)
-    try {
-      // H2: Fail-closed HELLO processing — all failures send error + disconnect
-      if (!this.keyPair || !this.remotePublicKey) {
-        console.warn('[HELLO_DECRYPT_FAIL] Cannot decrypt — no ephemeral keys');
-        this.sendErrorAndDisconnect('HELLO_DECRYPT_FAIL', 'Cannot decrypt HELLO');
-        return;
-      }
-
-      let decrypted: Uint8Array;
-      try {
-        decrypted = openBoxPayload(msg.payload, this.remotePublicKey, this.keyPair.secretKey);
-      } catch {
-        console.warn('[HELLO_DECRYPT_FAIL] Failed to decrypt HELLO payload');
-        this.sendErrorAndDisconnect('HELLO_DECRYPT_FAIL', 'Failed to decrypt HELLO');
-        return;
-      }
-
-      let hello: any;
-      try {
-        hello = JSON.parse(new TextDecoder().decode(decrypted));
-      } catch {
-        console.warn('[HELLO_PARSE_ERROR] Failed to parse HELLO JSON');
-        this.sendErrorAndDisconnect('HELLO_PARSE_ERROR', 'Failed to parse HELLO');
-        return;
-      }
-
-      if (hello.type !== 'hello' || hello.version !== 1 || !hello.identityPublicKey) {
-        console.warn('[HELLO_SCHEMA_ERROR] Invalid HELLO format');
-        this.sendErrorAndDisconnect('HELLO_SCHEMA_ERROR', 'Invalid HELLO schema');
-        return;
-      }
-
-      const remoteIdentityKey = fromBase64(hello.identityPublicKey);
-      this.remoteIdentityKey = remoteIdentityKey;
-
-      // Capabilities negotiation — missing field treated as empty (backward compat)
-      // SA17: reject oversized capabilities array (max 32)
-      const rawCaps = Array.isArray(hello.capabilities) ? hello.capabilities : [];
-      if (rawCaps.length > 32) {
-        console.warn(`[PROTOCOL_VIOLATION] capabilities array length ${rawCaps.length} exceeds max 32 — disconnecting`);
-        this.sendErrorAndDisconnect('PROTOCOL_VIOLATION', 'Capabilities array exceeds maximum length');
-        return;
-      }
-      // N8: reject individual capability strings exceeding 64 UTF-8 bytes
-      const encoder = new TextEncoder();
-      for (const cap of rawCaps) {
-        if (encoder.encode(cap).length > 64) {
-          console.warn('[PROTOCOL_VIOLATION] capability too long — disconnecting');
-          this.sendErrorAndDisconnect('PROTOCOL_VIOLATION', 'capability too long');
-          return;
-        }
-      }
-      this.remoteCapabilities = rawCaps;
-      const localSet = new Set(this.localCapabilities);
-      this.negotiatedCapabilities = this.remoteCapabilities.filter((c: string) => localSet.has(c));
-      console.log('[HELLO] Remote capabilities:', this.remoteCapabilities, '→ negotiated:', this.negotiatedCapabilities);
-
-      // N5: Enforce envelope-v1 in identity-configured sessions.
-      // If we reach processHello(), identity IS configured. Remote MUST
-      // advertise bolt.profile-envelope-v1 — omission is downgrade attack.
-      if (!rawCaps.includes('bolt.profile-envelope-v1')) {
-        console.warn('[PROTOCOL_VIOLATION] Remote omitted required capability bolt.profile-envelope-v1 — disconnecting');
-        this.sendErrorAndDisconnect('PROTOCOL_VIOLATION', 'Missing required capability: bolt.profile-envelope-v1');
-        return;
-      }
-
-      console.log('[HELLO] Received identity from peer', this.remotePeerCode);
-
-      // TOFU verification — determines verification state
-      let verificationState: VerificationState = 'unverified';
-
-      if (this.options.pinStore) {
-        try {
-          const result = await verifyPinnedIdentity(
-            this.options.pinStore,
-            this.remotePeerCode,
-            remoteIdentityKey,
-          );
-          if (result.outcome === 'pinned') {
-            console.log('[TOFU] First contact — pinned identity for', this.remotePeerCode);
-            verificationState = 'unverified';
-          } else {
-            console.log('[TOFU] Identity verified for', this.remotePeerCode);
-            verificationState = result.verified ? 'verified' : 'unverified';
-          }
-        } catch (error) {
-          if (error instanceof KeyMismatchError) {
-            console.error('[TOFU] IDENTITY MISMATCH — aborting session:', error.message);
-            this.onError(new ConnectionError('Identity key mismatch (TOFU violation)', error));
-            this.sendErrorAndDisconnect('KEY_MISMATCH', 'Identity key mismatch');
-            return;
-          }
-          throw error;
-        }
-      }
-
-      // Compute SAS — only when all 4 keys are available (never in legacy path)
-      let sasCode: string | null = null;
-      if (this.options.identityPublicKey && this.keyPair && this.remotePublicKey) {
-        sasCode = await computeSas(
-          this.options.identityPublicKey,
-          remoteIdentityKey,
-          this.keyPair.publicKey,
-          this.remotePublicKey,
-        );
-        console.log('[SAS] Computed verification code:', sasCode);
-      }
-
-      // Emit verification state exactly once per HELLO
-      this.verificationInfo = { state: verificationState, sasCode };
-      this.options.onVerificationState?.(this.verificationInfo);
-
-      // HELLO complete — transition state
-      if (this.helloTimeout) {
-        clearTimeout(this.helloTimeout);
-        this.helloTimeout = null;
-      }
-      this.sessionState = 'post_hello';
-      this.helloComplete = true;
-      this.sessionLegacy = false;
-      if (this.helloResolve) {
-        this.helloResolve();
-        this.helloResolve = null;
-      }
-    } finally {
-      this.helloProcessing = false;
-    }
+    return this.handshake.processHello(msg);
   }
 
   /**
@@ -1257,6 +1129,11 @@ class WebRTCService {
     return this.negotiatedCapabilities.includes(name);
   }
 
+  /** Mark the current peer as verified. Persists to pin store. */
+  async markPeerVerified(): Promise<void> {
+    return this.handshake.markPeerVerified();
+  }
+
   // ─── Profile Envelope v1 ─────────────────────────────────────────────
 
   /** Whether profile-envelope-v1 was mutually negotiated. */
@@ -1286,14 +1163,6 @@ class WebRTCService {
     } else {
       this.dc.send(JSON.stringify(innerMsg));
     }
-  }
-
-  /** Mark the current peer as verified. Persists to pin store. */
-  async markPeerVerified(): Promise<void> {
-    if (!this.options.pinStore || !this.remotePeerCode) return;
-    await this.options.pinStore.markVerified(this.remotePeerCode);
-    this.verificationInfo = { ...this.verificationInfo, state: 'verified' };
-    this.options.onVerificationState?.(this.verificationInfo);
   }
 }
 
