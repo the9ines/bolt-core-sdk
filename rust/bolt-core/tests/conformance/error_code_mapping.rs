@@ -1,9 +1,13 @@
-//! Conformance: Error Code Mapping (Appendix A, Rust-surface only)
+//! Conformance: Error Code Mapping (BoltError → Wire Code)
 //!
 //! Tests that Rust-exposed error types are stable and correctly mapped.
 //!
-//! PROTOCOL_ENFORCEMENT.md Appendix A defines 14 transport-level error codes.
-//! Of these, the Rust core SDK exposes:
+//! PROTOCOL.md §10 defines 22 wire error codes (11 PROTOCOL + 11 ENFORCEMENT).
+//! The canonical string registry is now in Rust bolt-core (`errors::WIRE_ERROR_CODES`)
+//! and TS bolt-core (`errors.ts::WIRE_ERROR_CODES`). See `wire_error_registry.rs`
+//! for registry conformance tests.
+//!
+//! This file tests BoltError enum ↔ wire code mapping for Rust-surface errors:
 //! - BoltError::Encryption  — maps to ENVELOPE_DECRYPT_FAIL, HELLO_DECRYPT_FAIL
 //! - BoltError::Encoding    — maps to encoding/parse failures
 //! - BoltError::Integrity   — maps to file integrity failures
@@ -11,13 +15,14 @@
 //! - BoltError::Transfer    — maps to transfer-level errors
 //! - KeyMismatchError       — maps to KEY_MISMATCH
 //!
-//! Appendix A codes NOT represented as stable Rust types (TS-owned):
+//! Wire codes emitted only at transport layer (TS-owned):
 //! - DUPLICATE_HELLO, ENVELOPE_REQUIRED, ENVELOPE_UNNEGOTIATED,
 //!   ENVELOPE_INVALID, HELLO_PARSE_ERROR, HELLO_SCHEMA_ERROR,
 //!   INVALID_MESSAGE, UNKNOWN_MESSAGE_TYPE, INVALID_STATE,
 //!   LIMIT_EXCEEDED, PROTOCOL_VIOLATION
 //!
-//! These are documented in the AAR as TS-owned invariants.
+//! Daemon maintains its own 22-code copy; refactor to import from bolt-core
+//! is a future phase.
 
 // ── Conformance: BoltError Variant Stability ────────────────────
 

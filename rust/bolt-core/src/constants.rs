@@ -28,6 +28,24 @@ pub const SAS_LENGTH: usize = 6;
 /// NaCl box overhead (Poly1305 MAC).
 pub const BOX_OVERHEAD: usize = 16;
 
+/// Transfer ID length in bytes (§14).
+pub const TRANSFER_ID_LENGTH: usize = 16;
+
+/// SAS entropy in bits (§14).
+pub const SAS_ENTROPY: usize = 24;
+
+/// File hash algorithm identifier (§14).
+pub const FILE_HASH_ALGORITHM: &str = "SHA-256";
+
+/// File hash length in bytes (§14).
+pub const FILE_HASH_LENGTH: usize = 32;
+
+/// Bolt Protocol version (§14).
+pub const BOLT_VERSION: usize = 1;
+
+/// Capability namespace prefix (§14). All capability strings start with this.
+pub const CAPABILITY_NAMESPACE: &str = "bolt.";
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -42,6 +60,12 @@ mod tests {
         assert_eq!(PEER_CODE_ALPHABET, "ABCDEFGHJKMNPQRSTUVWXYZ23456789");
         assert_eq!(SAS_LENGTH, 6);
         assert_eq!(BOX_OVERHEAD, 16);
+        assert_eq!(TRANSFER_ID_LENGTH, 16);
+        assert_eq!(SAS_ENTROPY, 24);
+        assert_eq!(FILE_HASH_ALGORITHM, "SHA-256");
+        assert_eq!(FILE_HASH_LENGTH, 32);
+        assert_eq!(BOLT_VERSION, 1);
+        assert_eq!(CAPABILITY_NAMESPACE, "bolt.");
     }
 
     #[test]

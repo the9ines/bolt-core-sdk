@@ -23,3 +23,4 @@ mod envelope_validation;
 mod sas_determinism;
 
 mod error_code_mapping;
+mod wire_error_registry;
