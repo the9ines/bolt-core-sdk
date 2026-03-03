@@ -1,5 +1,5 @@
-// Constants
-export { DEFAULT_CHUNK_SIZE, } from './constants.js';
+// Constants (§14)
+export { NONCE_LENGTH, PUBLIC_KEY_LENGTH, SECRET_KEY_LENGTH, DEFAULT_CHUNK_SIZE, PEER_CODE_LENGTH, PEER_CODE_ALPHABET, SAS_LENGTH, BOLT_VERSION, TRANSFER_ID_LENGTH, SAS_ENTROPY, FILE_HASH_ALGORITHM, FILE_HASH_LENGTH, CAPABILITY_NAMESPACE, } from './constants.js';
 // Encoding
 export { toBase64, fromBase64 } from './encoding.js';
 // Crypto primitives
