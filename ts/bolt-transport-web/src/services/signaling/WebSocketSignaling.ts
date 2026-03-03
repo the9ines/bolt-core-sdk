@@ -279,6 +279,20 @@ export class WebSocketSignaling implements SignalingProvider {
   }
 
   private handlePeersList(msg: PeersMessage): void {
+    // Build the new peer set from the server's authoritative list.
+    const newPeerCodes = new Set(msg.peers.map((p) => p.peer_code));
+
+    // Emit peerLost for any peers that were in the old list but not the new one.
+    // This cleans stale entries from the UI after reconnection (DP-3c).
+    for (const [code] of this.peers) {
+      if (!newPeerCodes.has(code)) {
+        console.log(`[WS-SIGNAL] Stale peer removed on reconnect: ${code}`);
+        if (this.peerLostCallback) {
+          this.peerLostCallback(code);
+        }
+      }
+    }
+
     this.peers.clear();
     for (const p of msg.peers) {
       const device = this.toDiscoveredDevice(p);
