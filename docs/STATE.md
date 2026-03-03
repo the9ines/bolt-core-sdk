@@ -4,10 +4,10 @@ Current state of the bolt-core-sdk repository.
 
 ## Current Version
 
-**Latest Tag (main):** `sdk-v0.5.23-dp3c-stale-peer-cleanup`
-**Commit (main):** `5496030`
+**Latest Tag (main):** `sdk-v0.5.26-bolt-core-dist-sync`
+**Commit (main):** `b5965ce`
 **Branch:** `main`
-**TS Package:** `@the9ines/bolt-core` v0.4.0 (dead exports removed, 21 public exports)
+**TS Package:** `@the9ines/bolt-core` v0.5.0 (wire error code registry published, 35 public exports)
 **TS Package:** `@the9ines/bolt-transport-web` v0.6.0 (Profile Envelope v1)
 **Rust Crate:** `bolt-core` v0.4.0 (R0-R3 complete, all 8 modules at full TS parity)
 
@@ -28,7 +28,7 @@ See [SDK_STABILITY.md](SDK_STABILITY.md) for the stability contract.
 |------|--------|
 | Bolt Core v1 spec | Draft (`PROTOCOL.md`) |
 | LocalBolt Profile v1 spec | Draft (`LOCALBOLT_PROFILE.md`) |
-| TypeScript SDK (`@the9ines/bolt-core`) | Published (v0.4.0) |
+| TypeScript SDK (`@the9ines/bolt-core`) | Published (v0.5.0) |
 | Transport Web (`@the9ines/bolt-transport-web`) | **v0.6.0** (Profile Envelope v1) |
 | Rust crate (`bolt-core`) | v0.4.0 — all 8 modules complete, full TS parity (`rust/bolt-core/`) |
 | Rust vector generator | Complete (`rust/bolt-core/src/vectors.rs`) |

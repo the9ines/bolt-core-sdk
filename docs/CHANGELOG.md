@@ -2,6 +2,56 @@
 
 All notable changes to bolt-core-sdk are documented here. Newest first.
 
+## [sdk-v0.5.26-bolt-core-dist-sync — Rebuild bolt-core dist to match 0.5.0 source] - 2026-03-03
+
+dist/ was stale — missing §14 constant exports (`TRANSFER_ID_LENGTH`,
+`SAS_ENTROPY`, `FILE_HASH_ALGORITHM`, `FILE_HASH_LENGTH`,
+`CAPABILITY_NAMESPACE`) and the wire error code registry
+(`WIRE_ERROR_CODES`, `isValidWireErrorCode`) that were added to source
+in AC-9 and SA2/AC-8 respectively. Rebuilt dist to match the published
+`@the9ines/bolt-core@0.5.0` package.
+
+### Fixed (bolt-core)
+- `dist/constants.js` and `dist/constants.d.ts` now include the 5 §14
+  constant exports that were present in source but missing from dist.
+- `dist/index.js` and `dist/index.d.ts` now re-export
+  `WIRE_ERROR_CODES`, `isValidWireErrorCode`, and `WireErrorCode` from
+  `errors.js`.
+- `dist/crypto.js` updated to match current source.
+
+### Files Changed
+- `ts/bolt-core/dist/constants.d.ts`
+- `ts/bolt-core/dist/constants.js`
+- `ts/bolt-core/dist/crypto.js`
+- `ts/bolt-core/dist/index.d.ts`
+- `ts/bolt-core/dist/index.js`
+
+**Tag:** `sdk-v0.5.26-bolt-core-dist-sync` (`b5965ce`)
+
+---
+
+## [sdk-v0.5.25-bolt-core-050 — Publish wire error code registry via version bump] - 2026-03-03
+
+bolt-core 0.4.0 was published before `WIRE_ERROR_CODES` and
+`isValidWireErrorCode` were added to source (SA2/AC-8). transport-web
+0.6.1 imports `isValidWireErrorCode` from bolt-core, causing build
+failures in consumers still on 0.4.0. Bumps bolt-core from 0.4.0 to
+0.5.0 to publish the new public API surface (22-code wire error registry
++ type guard).
+
+### Changed (bolt-core)
+- `package.json` version bumped from `0.4.0` to `0.5.0` (minor bump,
+  pre-1.0 semver — new public exports).
+- Public export count: 21 -> 35 (adds 5 §14 constants, 2 wire error
+  registry exports, and `WireErrorCode` type).
+
+### Files Changed
+- `ts/bolt-core/package.json`
+
+**Tag:** `sdk-v0.5.25-bolt-core-050` (`c776118`)
+
+---
+
 ## [sdk-v0.5.23-dp3c-stale-peer-cleanup — Stale Peer Cleanup on Reconnect] - 2026-03-03
 
 Fixes stale peer entries surviving WebSocket reconnection. When the
