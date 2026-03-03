@@ -180,11 +180,17 @@ export function createFileUpload(): HTMLElement {
     fileInput.value = '';
   });
 
-  // Also handle incoming file receives (receiver side progress from store)
+  // Also handle incoming file receives (receiver side progress from store).
+  // DP-6: must also clear local progress when store resets transferProgress
+  // to null, otherwise the send button stays permanently disabled after
+  // the responder receives a file.
   store.subscribe(() => {
     const { transferProgress } = store.getState();
     if (transferProgress && transferProgress !== progress) {
       progress = transferProgress;
+      renderActions();
+    } else if (!transferProgress && progress) {
+      progress = null;
       renderActions();
     }
   });
