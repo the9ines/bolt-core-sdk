@@ -2,6 +2,29 @@
 
 All notable changes to bolt-core-sdk are documented here. Newest first.
 
+## [sdk-v0.5.23-dp3c-stale-peer-cleanup — Stale Peer Cleanup on Reconnect] - 2026-03-03
+
+Fixes stale peer entries surviving WebSocket reconnection. When the
+signaling server sends an authoritative peers list after reconnect,
+peers present in the local map but absent from the new server list
+are now emitted as `peerLost` and removed. Previously, stale entries
+persisted in the UI until a full page reload.
+
+### Fixed (bolt-transport-web)
+- `WebSocketSignaling.handlePeersList()` now diffs the incoming
+  authoritative peer set against the local `this.peers` map before
+  clearing. Any peer code missing from the new list triggers
+  `peerLostCallback` and a `[WS-SIGNAL] Stale peer removed on reconnect`
+  log line. This ensures the discovery UI stays in sync after transient
+  disconnections.
+
+### Files Changed
+- `ts/bolt-transport-web/src/services/signaling/WebSocketSignaling.ts`
+
+**Tag:** `sdk-v0.5.23-dp3c-stale-peer-cleanup` (`5496030`)
+
+---
+
 ## [sdk-v0.5.20-protocol-converge-2 — §15 Handshake Invariant Coverage] - 2026-03-02
 
 Complete §15 handshake invariant coverage. Renamed mislabeled

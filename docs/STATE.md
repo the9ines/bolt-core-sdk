@@ -4,8 +4,8 @@ Current state of the bolt-core-sdk repository.
 
 ## Current Version
 
-**Latest Tag (main):** `sdk-v0.5.20-protocol-converge-2`
-**Commit (main):** `28c3baf`
+**Latest Tag (main):** `sdk-v0.5.23-dp3c-stale-peer-cleanup`
+**Commit (main):** `5496030`
 **Branch:** `main`
 **TS Package:** `@the9ines/bolt-core` v0.4.0 (dead exports removed, 21 public exports)
 **TS Package:** `@the9ines/bolt-transport-web` v0.6.0 (Profile Envelope v1)
