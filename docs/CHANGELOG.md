@@ -2,6 +2,33 @@
 
 All notable changes to bolt-core-sdk are documented here. Newest first.
 
+## [transport-web-v0.6.10-nf1-envelope-filename — Envelope path filename validation] - 2026-03-03
+
+NF-1: Envelope code path in `handleMessage` forwarded `file-chunk` messages
+to `routeInnerMessage` without validating `inner.filename`. The plaintext
+path already rejected missing/empty filenames with `INVALID_MESSAGE` +
+disconnect (SA9). The envelope path silently dropped the message via
+`routeInnerMessage`'s guard. Both paths now enforce identical validation.
+
+### Fixed (bolt-transport-web)
+- Added filename validation in envelope path (`WebRTCService.ts:659–663`)
+  mirroring the existing plaintext path guard. Missing or empty filename
+  on an enveloped `file-chunk` now emits `INVALID_MESSAGE` + disconnect.
+
+### Added (bolt-transport-web)
+- `nf1-envelope-filename-validation.test.ts` — 4 tests (3 UNIT + 1
+  ADVERSARIAL) covering valid filename, missing filename, empty filename,
+  and null filename via envelope injection.
+- Transport-web test count: 249 → 253.
+
+### Files Changed
+- `ts/bolt-transport-web/src/services/webrtc/WebRTCService.ts`
+- `ts/bolt-transport-web/src/__tests__/nf1-envelope-filename-validation.test.ts`
+
+**Tag:** `transport-web-v0.6.10-nf1-envelope-filename`
+
+---
+
 ## [sdk-v0.5.26-bolt-core-dist-sync — Rebuild bolt-core dist to match 0.5.0 source] - 2026-03-03
 
 dist/ was stale — missing §14 constant exports (`TRANSFER_ID_LENGTH`,

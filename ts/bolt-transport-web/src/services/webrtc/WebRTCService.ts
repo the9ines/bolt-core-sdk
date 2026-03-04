@@ -656,6 +656,12 @@ class WebRTCService {
           this.sendErrorAndDisconnect('UNKNOWN_MESSAGE_TYPE', `Unknown message type: ${inner.type}`);
           return;
         }
+        // NF-1: reject malformed file-chunk (missing/empty filename) — mirrors plaintext path
+        if (!inner.filename) {
+          console.warn('[INVALID_MESSAGE] enveloped file-chunk with missing/empty filename — disconnecting');
+          this.sendErrorAndDisconnect('INVALID_MESSAGE', 'file-chunk missing filename');
+          return;
+        }
         this.transfer.routeInnerMessage(inner);
         return;
       }
