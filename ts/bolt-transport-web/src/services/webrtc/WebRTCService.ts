@@ -367,6 +367,9 @@ class WebRTCService {
   private setupDataChannel(channel: RTCDataChannel) {
     this.dc = channel;
     this.dc.binaryType = 'arraybuffer';
+    // DP-9: Set threshold so onbufferedamountlow fires before buffer fully drains to 0.
+    // Default (0) causes the event to never fire reliably on received data channels.
+    this.dc.bufferedAmountLowThreshold = 65536; // 64 KB
     this.sessionState = 'pre_hello';
     this.dc.onmessage = (event) => this.handleMessage(event);
     this.dc.onopen = () => {

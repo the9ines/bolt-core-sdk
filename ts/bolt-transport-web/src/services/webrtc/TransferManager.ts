@@ -88,12 +88,25 @@ export interface TransferContext {
   waitForHello(): Promise<void>;
 }
 
+/** DP-9: Max time (ms) to wait for onbufferedamountlow before polling fallback. */
+const BACKPRESSURE_TIMEOUT_MS = 5000;
+
 export class TransferManager {
+  // DP-9: Guard against concurrent sendFile calls (property overwrite on onbufferedamountlow)
+  private sendInProgress = false;
+
   constructor(private ctx: TransferContext) {}
 
   // ─── File Transfer (Send) ──────────────────────────────────────────
 
   async sendFile(file: File): Promise<void> {
+    // DP-9: Prevent concurrent sendFile calls — property-based onbufferedamountlow
+    // only supports one handler at a time; concurrent sends overwrite each other.
+    if (this.sendInProgress) {
+      throw new TransferError('Transfer already in progress');
+    }
+    this.sendInProgress = true;
+
     // Wait for HELLO handshake before allowing file transfer
     if (!this.ctx.isHelloComplete()) {
       await this.ctx.waitForHello();
@@ -101,6 +114,7 @@ export class TransferManager {
 
     const dc = this.ctx.getDc();
     if (!dc || dc.readyState !== 'open') {
+      this.sendInProgress = false;
       throw new TransferError('Data channel not open');
     }
     const remotePublicKey = this.ctx.getRemotePublicKey();
@@ -161,13 +175,19 @@ export class TransferManager {
         };
 
         // Backpressure — wait for buffer to drain (N1: cancelable by disconnect)
+        // DP-9: Added timeout fallback — if onbufferedamountlow never fires
+        // (e.g. threshold misconfiguration, browser quirk on received DC),
+        // fall back to polling after BACKPRESSURE_TIMEOUT_MS.
         const currentDc = this.ctx.getDc();
         if (currentDc && currentDc.bufferedAmount > currentDc.bufferedAmountLowThreshold) {
           const gen = this.ctx.getSessionGeneration();
           this.ctx.getMetricsCollector()?.enterBufferDrainWait();
           await new Promise<void>((resolve, reject) => {
             this.ctx.setBackpressureReject(reject);
-            currentDc.onbufferedamountlow = () => {
+            let settled = false;
+            const settle = () => {
+              if (settled) return;
+              settled = true;
               this.ctx.setBackpressureReject(undefined);
               this.ctx.getMetricsCollector()?.exitBufferDrainWait();
               const dcNow = this.ctx.getDc();
@@ -178,6 +198,21 @@ export class TransferManager {
               }
               resolve();
             };
+            currentDc.onbufferedamountlow = settle;
+            // DP-9: Timeout fallback — poll bufferedAmount if event never fires
+            setTimeout(() => {
+              if (settled) return;
+              const dcCheck = this.ctx.getDc();
+              if (!dcCheck || dcCheck.readyState !== 'open') {
+                settled = true;
+                this.ctx.setBackpressureReject(undefined);
+                reject(new TransferError('Data channel closed during backpressure wait'));
+                return;
+              }
+              // Buffer may have drained by now; resolve regardless to unblock transfer
+              console.warn('[TRANSFER] Backpressure timeout — forcing drain resolve (bufferedAmount=' + dcCheck.bufferedAmount + ')');
+              settle();
+            }, BACKPRESSURE_TIMEOUT_MS);
           });
         }
 
@@ -203,7 +238,9 @@ export class TransferManager {
       this.ctx.setCompletionTimeout(setTimeout(() => {
         this.emitProgress(file.name, totalChunks, totalChunks, file.size, file.size, 'completed');
       }, 50));
+      this.sendInProgress = false;
     } catch (error) {
+      this.sendInProgress = false;
       this.ctx.getSendTransferIds().delete(file.name);
 
       const collector = this.ctx.getMetricsCollector();
