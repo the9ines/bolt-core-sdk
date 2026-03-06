@@ -49,7 +49,7 @@ jobs:
       - run: npm run build
       - run: npm run test
 
-      - run: npm publish
+      - run: npm publish --registry https://npm.pkg.github.com
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
