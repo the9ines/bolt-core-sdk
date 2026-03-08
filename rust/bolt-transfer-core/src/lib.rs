@@ -24,6 +24,7 @@
 //! | [`receive`] | Receive-side state machine |
 //! | [`backpressure`] | Watermark-based flow control |
 //! | [`transport`] | Transport/integrity trait interfaces |
+//! | [`policy`] | Pure deterministic scheduling policy (S2A) |
 
 /// Canonical transfer state enums (PROTOCOL.md §9).
 pub mod state;
@@ -43,9 +44,16 @@ pub mod backpressure;
 /// Transport and integrity trait interfaces.
 pub mod transport;
 
+/// Transfer policy — pure, deterministic chunk scheduling (S2A).
+pub mod policy;
+
 // Re-export primary types for convenience.
-pub use backpressure::{BackpressureConfig, BackpressureController, BackpressureSignal};
+pub use backpressure::{BackpressureConfig, BackpressureController};
 pub use error::TransferError;
+pub use policy::{
+    decide, Backpressure, ChunkId, DeviceClass, FairnessMode, LinkStats, PolicyInput,
+    PressureState, ScheduleDecision, TransferConstraints,
+};
 pub use receive::ReceiveSession;
 pub use send::{SendChunk, SendOffer, SendSession};
 pub use state::{CancelReason, TransferState};

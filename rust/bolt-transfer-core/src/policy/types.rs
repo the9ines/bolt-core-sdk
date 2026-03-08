@@ -1,4 +1,4 @@
-//! Transfer policy types — greenfield performance infrastructure.
+//! Transfer policy types — performance infrastructure.
 //!
 //! These types define the interface for a pure, deterministic transfer
 //! scheduling policy. The policy core has NO IO, NO clocks, NO global
@@ -9,8 +9,8 @@
 //!
 //! These types are designed to be WASM-friendly (no references, no
 //! lifetimes, simple enums). A future `wasm-bindgen` build will expose
-//! them to the TypeScript transfer runtime (`bolt-transport-web`).
-//! That integration is out of scope for S2A.
+//! them to the TypeScript transfer runtime. That integration is out of
+//! scope for S2A.
 
 /// Opaque chunk identifier, caller-owned.
 /// The policy never creates or inspects chunk content — it only
@@ -27,8 +27,6 @@ pub struct LinkStats {
     pub rtt_ms: u32,
     /// Packet loss in parts-per-million (0 = no loss, 1_000_000 = 100%).
     pub loss_ppm: u32,
-    /// Bytes currently in-flight (sent but not yet acknowledged).
-    pub in_flight_bytes: u32,
 }
 
 /// Performance-tier classification of the local device.
@@ -56,6 +54,10 @@ pub struct TransferConstraints {
     pub priority: u8,
     /// Scheduling fairness mode.
     pub fairness_mode: FairnessMode,
+    /// Configured chunk size in bytes (e.g. 16384).
+    pub configured_chunk_size: u32,
+    /// Transport maximum message size in bytes (from TransportQuery).
+    pub transport_max_message_size: u32,
 }
 
 /// Scheduling fairness mode.
@@ -69,6 +71,22 @@ pub enum FairnessMode {
     Latency,
 }
 
+/// Backpressure state from the BackpressureController.
+///
+/// This is the single authoritative pressure input to the policy.
+/// Callers obtain this by mapping `BackpressureController::is_paused()`
+/// and the most recent `BackpressureSignal`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PressureState {
+    /// Transport buffer is within budget. Normal scheduling.
+    Clear,
+    /// Transport buffer is elevated (between low and high watermark).
+    /// Controller has not yet signalled Pause.
+    Elevated,
+    /// Transport buffer exceeded high watermark. Controller signalled Pause.
+    Pressured,
+}
+
 /// Input to the policy decision function.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PolicyInput {
@@ -80,6 +98,8 @@ pub struct PolicyInput {
     pub device_class: DeviceClass,
     /// Transfer constraints.
     pub constraints: TransferConstraints,
+    /// Backpressure state from the BackpressureController.
+    pub pressure: PressureState,
 }
 
 /// Backpressure signal from the policy to the caller.
@@ -104,6 +124,8 @@ pub struct ScheduleDecision {
     pub window_suggestion_chunks: u16,
     /// Backpressure signal.
     pub backpressure: Backpressure,
+    /// Effective chunk size after applying transport cap (bytes).
+    pub effective_chunk_size: u32,
 }
 
 /// Maximum allowed pacing delay (milliseconds).

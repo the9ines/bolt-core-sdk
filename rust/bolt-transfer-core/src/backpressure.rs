@@ -5,21 +5,14 @@
 //! - When buffered bytes drop below `low_watermark`, signal Resume.
 //! - Otherwise, no change.
 //!
-//! This is the v1 subset. Full S2 tuning (hysteresis, fairness heuristics,
-//! RTT/loss hints) is deferred.
+//! # S2A Unified Authority
+//!
+//! This controller is the SOLE evaluator of transport pressure. Its output
+//! feeds into `PolicyInput::pressure` as a `PressureState`. The policy
+//! module emits the final `Backpressure` signal — no dual-path overlap.
 
+use crate::policy::types::{Backpressure, PressureState};
 use crate::transport::TransportQuery;
-
-/// Backpressure signal from the transfer core to the caller.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum BackpressureSignal {
-    /// Caller should pause sending.
-    Pause,
-    /// Caller should resume sending.
-    Resume,
-    /// No change to current state.
-    NoChange,
-}
 
 /// Configuration for watermark-based backpressure.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -55,6 +48,10 @@ impl Default for BackpressureConfig {
 }
 
 /// Backpressure controller — evaluates transport state against watermarks.
+///
+/// Single authoritative source for pressure evaluation. Callers use
+/// [`pressure_state()`](Self::pressure_state) to obtain a [`PressureState`]
+/// for [`PolicyInput`](crate::policy::types::PolicyInput).
 #[derive(Debug)]
 pub struct BackpressureController {
     config: BackpressureConfig,
@@ -70,17 +67,34 @@ impl BackpressureController {
     }
 
     /// Evaluate backpressure based on current transport state.
-    pub fn evaluate(&mut self, transport: &dyn TransportQuery) -> BackpressureSignal {
+    ///
+    /// Returns the unified `Backpressure` signal.
+    pub fn evaluate(&mut self, transport: &dyn TransportQuery) -> Backpressure {
         let buffered = transport.buffered_bytes();
 
         if !self.is_paused && buffered >= self.config.high_watermark {
             self.is_paused = true;
-            BackpressureSignal::Pause
+            Backpressure::Pause
         } else if self.is_paused && buffered <= self.config.low_watermark {
             self.is_paused = false;
-            BackpressureSignal::Resume
+            Backpressure::Resume
         } else {
-            BackpressureSignal::NoChange
+            Backpressure::NoChange
+        }
+    }
+
+    /// Current pressure state for use in `PolicyInput::pressure`.
+    ///
+    /// Maps the controller's internal state + transport observation
+    /// to a `PressureState` suitable for the policy decision function.
+    pub fn pressure_state(&self, transport: &dyn TransportQuery) -> PressureState {
+        let buffered = transport.buffered_bytes();
+        if self.is_paused {
+            PressureState::Pressured
+        } else if buffered >= self.config.low_watermark {
+            PressureState::Elevated
+        } else {
+            PressureState::Clear
         }
     }
 
@@ -127,7 +141,7 @@ mod tests {
     fn below_high_watermark_no_change() {
         let mut ctrl = BackpressureController::new(BackpressureConfig::default());
         let sig = ctrl.evaluate(&transport(1_000));
-        assert_eq!(sig, BackpressureSignal::NoChange);
+        assert_eq!(sig, Backpressure::NoChange);
         assert!(!ctrl.is_paused());
     }
 
@@ -135,7 +149,7 @@ mod tests {
     fn at_high_watermark_pauses() {
         let mut ctrl = BackpressureController::new(BackpressureConfig::default());
         let sig = ctrl.evaluate(&transport(65_536));
-        assert_eq!(sig, BackpressureSignal::Pause);
+        assert_eq!(sig, Backpressure::Pause);
         assert!(ctrl.is_paused());
     }
 
@@ -143,7 +157,7 @@ mod tests {
     fn above_high_watermark_pauses() {
         let mut ctrl = BackpressureController::new(BackpressureConfig::default());
         let sig = ctrl.evaluate(&transport(100_000));
-        assert_eq!(sig, BackpressureSignal::Pause);
+        assert_eq!(sig, Backpressure::Pause);
         assert!(ctrl.is_paused());
     }
 
@@ -152,7 +166,7 @@ mod tests {
         let mut ctrl = BackpressureController::new(BackpressureConfig::default());
         ctrl.evaluate(&transport(100_000)); // pause
         let sig = ctrl.evaluate(&transport(30_000)); // between high and low
-        assert_eq!(sig, BackpressureSignal::NoChange);
+        assert_eq!(sig, Backpressure::NoChange);
         assert!(ctrl.is_paused());
     }
 
@@ -161,7 +175,7 @@ mod tests {
         let mut ctrl = BackpressureController::new(BackpressureConfig::default());
         ctrl.evaluate(&transport(100_000)); // pause
         let sig = ctrl.evaluate(&transport(16_384)); // at low
-        assert_eq!(sig, BackpressureSignal::Resume);
+        assert_eq!(sig, Backpressure::Resume);
         assert!(!ctrl.is_paused());
     }
 
@@ -170,7 +184,7 @@ mod tests {
         let mut ctrl = BackpressureController::new(BackpressureConfig::default());
         ctrl.evaluate(&transport(100_000)); // pause
         let sig = ctrl.evaluate(&transport(0));
-        assert_eq!(sig, BackpressureSignal::Resume);
+        assert_eq!(sig, Backpressure::Resume);
         assert!(!ctrl.is_paused());
     }
 
@@ -180,21 +194,17 @@ mod tests {
         ctrl.evaluate(&transport(100_000)); // pause
         ctrl.evaluate(&transport(0)); // resume
         let sig = ctrl.evaluate(&transport(10_000)); // below high
-        assert_eq!(sig, BackpressureSignal::NoChange);
+        assert_eq!(sig, Backpressure::NoChange);
         assert!(!ctrl.is_paused());
     }
 
     #[test]
     fn hysteresis_prevents_flapping() {
         let mut ctrl = BackpressureController::new(BackpressureConfig::new(100, 20));
-        // Pause
-        assert_eq!(ctrl.evaluate(&transport(100)), BackpressureSignal::Pause);
-        // Drop to between low and high — still paused
-        assert_eq!(ctrl.evaluate(&transport(50)), BackpressureSignal::NoChange);
-        // Drop to low — resume
-        assert_eq!(ctrl.evaluate(&transport(20)), BackpressureSignal::Resume);
-        // Rise to between low and high — still unpaused
-        assert_eq!(ctrl.evaluate(&transport(50)), BackpressureSignal::NoChange);
+        assert_eq!(ctrl.evaluate(&transport(100)), Backpressure::Pause);
+        assert_eq!(ctrl.evaluate(&transport(50)), Backpressure::NoChange);
+        assert_eq!(ctrl.evaluate(&transport(20)), Backpressure::Resume);
+        assert_eq!(ctrl.evaluate(&transport(50)), Backpressure::NoChange);
     }
 
     #[test]
@@ -210,15 +220,43 @@ mod tests {
     fn custom_watermarks() {
         let config = BackpressureConfig::new(1_000, 200);
         let mut ctrl = BackpressureController::new(config);
-        assert_eq!(ctrl.evaluate(&transport(999)), BackpressureSignal::NoChange);
-        assert_eq!(ctrl.evaluate(&transport(1_000)), BackpressureSignal::Pause);
-        assert_eq!(ctrl.evaluate(&transport(201)), BackpressureSignal::NoChange);
-        assert_eq!(ctrl.evaluate(&transport(200)), BackpressureSignal::Resume);
+        assert_eq!(ctrl.evaluate(&transport(999)), Backpressure::NoChange);
+        assert_eq!(ctrl.evaluate(&transport(1_000)), Backpressure::Pause);
+        assert_eq!(ctrl.evaluate(&transport(201)), Backpressure::NoChange);
+        assert_eq!(ctrl.evaluate(&transport(200)), Backpressure::Resume);
     }
 
     #[test]
     #[should_panic(expected = "low_watermark must be less than high_watermark")]
     fn invalid_config_panics() {
         BackpressureConfig::new(100, 100);
+    }
+
+    // ── PressureState tests ──
+
+    #[test]
+    fn pressure_state_clear() {
+        let ctrl = BackpressureController::new(BackpressureConfig::default());
+        assert_eq!(ctrl.pressure_state(&transport(1_000)), PressureState::Clear);
+    }
+
+    #[test]
+    fn pressure_state_elevated() {
+        let ctrl = BackpressureController::new(BackpressureConfig::default());
+        // At low_watermark (16384) → Elevated
+        assert_eq!(
+            ctrl.pressure_state(&transport(16_384)),
+            PressureState::Elevated
+        );
+    }
+
+    #[test]
+    fn pressure_state_pressured_after_pause() {
+        let mut ctrl = BackpressureController::new(BackpressureConfig::default());
+        ctrl.evaluate(&transport(100_000)); // triggers pause
+        assert_eq!(
+            ctrl.pressure_state(&transport(50_000)),
+            PressureState::Pressured
+        );
     }
 }
