@@ -2,5 +2,6 @@
 members = [
     "bolt-core",
     "bolt-transfer-core",
+    "bolt-transfer-policy-wasm",
 ]
 resolver = "2"

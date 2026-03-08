@@ -48,6 +48,10 @@ export {
   isLocalCandidate,
 } from './lib/platform-utils.js';
 
+// ── Policy ──────────────────────────────────────────────────────────────────
+export { initPolicyAdapter, getPolicyAdapter } from './services/webrtc/PolicyAdapter.js';
+export type { PolicyAdapter, ScheduleDecision, StallResult, ProgressResult } from './services/webrtc/PolicyAdapter.js';
+
 // ── Types ────────────────────────────────────────────────────────────────────
 export { SignalingError } from './types/webrtc-errors.js';
 export { WebRTCError, ConnectionError, TransferError, EncryptionError } from './types/webrtc-errors.js';
