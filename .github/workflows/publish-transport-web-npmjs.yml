@@ -42,7 +42,9 @@ jobs:
           npm run test
 
       - name: Override scoped registry for npmjs publish
-        run: echo '@the9ines:registry=https://registry.npmjs.org' > .npmrc
+        run: |
+          echo '@the9ines:registry=https://registry.npmjs.org' > .npmrc
+          echo '//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}' >> .npmrc
 
       - name: Publish to npmjs.org
         if: inputs.dry_run != 'true'
