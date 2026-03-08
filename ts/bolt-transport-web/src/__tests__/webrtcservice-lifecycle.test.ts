@@ -262,14 +262,12 @@ describe('Phase 8B.1: WebRTCService Lifecycle Coverage', () => {
 
     service.cancelTransfer('cancel-test.bin', false);
 
-    // Should have sent a cancel control message
+    // UI-XFER-1: Should have sent a canonical cancel control message
     expect(sentMessages.length).toBe(1);
     const msg = JSON.parse(sentMessages[0]);
-    expect(msg.type).toBe('file-chunk');
-    expect(msg.filename).toBe('cancel-test.bin');
-    expect(msg.cancelled).toBe(true);
-    expect(msg.cancelledBy).toBe('sender');
+    expect(msg.type).toBe('cancel');
     expect(msg.transferId).toBe(tid);
+    expect(msg.cancelledBy).toBe('sender');
 
     // sendTransferIds should be cleaned
     expect((service as any).sendTransferIds.has('cancel-test.bin')).toBe(false);
@@ -296,12 +294,13 @@ describe('Phase 8B.1: WebRTCService Lifecycle Coverage', () => {
     // Two control messages sent
     expect(sentMessages.length).toBe(2);
 
+    // UI-XFER-1: canonical control message shapes
     const pauseMsg = JSON.parse(sentMessages[0]);
-    expect(pauseMsg.paused).toBe(true);
+    expect(pauseMsg.type).toBe('pause');
     expect(pauseMsg.transferId).toBe(tid);
 
     const resumeMsg = JSON.parse(sentMessages[1]);
-    expect(resumeMsg.resumed).toBe(true);
+    expect(resumeMsg.type).toBe('resume');
     expect(resumeMsg.transferId).toBe(tid);
 
     service.disconnect();

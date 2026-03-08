@@ -11,6 +11,7 @@ import type { TransferContext } from './TransferManager.js';
 
 // ─── Types (canonical definitions in ./types.ts; re-exported here for API stability) ──
 import type { FileChunkMessage, ActiveTransfer } from './types.js';
+import { CANONICAL_CONTROL_TYPES } from './types.js';
 export type { TransferStats, TransferProgress, VerificationState, VerificationInfo, WebRTCServiceOptions } from './types.js';
 import type { TransferProgress, VerificationInfo, WebRTCServiceOptions } from './types.js';
 
@@ -654,6 +655,16 @@ class WebRTCService {
           this.disconnect();
           return;
         }
+        // UI-XFER-1: canonical control messages (pause/resume/cancel) route to transfer manager
+        if (CANONICAL_CONTROL_TYPES.has(inner.type)) {
+          if (!inner.transferId) {
+            console.warn(`[INVALID_MESSAGE] enveloped ${inner.type} missing transferId — disconnecting`);
+            this.sendErrorAndDisconnect('INVALID_MESSAGE', `${inner.type} missing transferId`);
+            return;
+          }
+          this.transfer.routeInnerMessage(inner);
+          return;
+        }
         if (inner.type !== 'file-chunk') {
           console.warn(`[UNKNOWN_MESSAGE_TYPE] unknown inner type "${inner.type}" — disconnecting`);
           this.sendErrorAndDisconnect('UNKNOWN_MESSAGE_TYPE', `Unknown message type: ${inner.type}`);
@@ -694,6 +705,16 @@ class WebRTCService {
         return;
       }
 
+      // UI-XFER-1: canonical control messages (pause/resume/cancel) route to transfer manager
+      if (CANONICAL_CONTROL_TYPES.has(msg.type)) {
+        if (!msg.transferId) {
+          console.warn(`[INVALID_MESSAGE] plaintext ${msg.type} missing transferId — disconnecting`);
+          this.sendErrorAndDisconnect('INVALID_MESSAGE', `${msg.type} missing transferId`);
+          return;
+        }
+        this.transfer.routeInnerMessage(msg);
+        return;
+      }
       // SA9: reject unknown type (non-file-chunk) — no silent drops
       if (msg.type !== 'file-chunk') {
         console.warn(`[UNKNOWN_MESSAGE_TYPE] unknown plaintext type "${msg.type}" — disconnecting`);

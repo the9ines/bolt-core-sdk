@@ -12,7 +12,8 @@ import { sealBoxPayload, openBoxPayload, DEFAULT_CHUNK_SIZE, EncryptionError, In
 import { WebRTCError, TransferError } from '../../types/webrtc-errors.js';
 import { ENABLE_TRANSFER_METRICS, TransferMetricsCollector, summarizeTransfer } from './transferMetrics.js';
 import { dcSendMessage } from './EnvelopeCodec.js';
-import type { FileChunkMessage, ActiveTransfer, TransferProgress } from './types.js';
+import type { FileChunkMessage, ActiveTransfer, TransferProgress, DcControlMessage } from './types.js';
+import { CANONICAL_CONTROL_TYPES } from './types.js';
 
 /** Generate a spec-compliant transfer_id (bytes16 → hex, 32 chars). */
 function generateTransferId(): string {
@@ -235,7 +236,9 @@ export class TransferManager {
       }
 
       // Emit completion after a brief delay so UI can process final progress
+      // UI-XFER-1: guard against false completion after cancel terminal state
       this.ctx.setCompletionTimeout(setTimeout(() => {
+        if (this.ctx.getTransferCancelled()) return;
         this.emitProgress(file.name, totalChunks, totalChunks, file.size, file.size, 'completed');
       }, 50));
       this.sendInProgress = false;
@@ -262,26 +265,85 @@ export class TransferManager {
 
   /** Route a decoded inner message (from envelope or legacy plaintext). */
   routeInnerMessage(msg: any): void {
+    // ─── Canonical DC control messages (UI-XFER-1) ───────────────────
+    if (msg.type === 'pause' && msg.transferId) {
+      const filename = this.resolveFilename(msg.transferId);
+      this.ctx.setTransferPaused(true);
+      this.emitProgress(filename ?? 'unknown', 0, 0, 0, 0, 'paused');
+      return;
+    }
+    if (msg.type === 'resume' && msg.transferId) {
+      const filename = this.resolveFilename(msg.transferId);
+      this.ctx.setTransferPaused(false);
+      this.emitProgress(filename ?? 'unknown', 0, 0, 0, 0, 'transferring');
+      return;
+    }
+    if (msg.type === 'cancel' && msg.transferId) {
+      const filename = this.resolveFilename(msg.transferId) ?? 'unknown';
+      this.handleRemoteCancelCanonical(msg.transferId, filename, msg.cancelledBy);
+      return;
+    }
+
+    // ─── Legacy file-chunk control flags (deprecated — receive-only compat) ──
     if (msg.type !== 'file-chunk' || !msg.filename) return;
 
-    // Control messages
     if (msg.paused) {
+      console.warn('[UI-XFER-1] Legacy pause control received (type=file-chunk) — accepted but deprecated');
       this.ctx.setTransferPaused(true);
       this.emitProgress(msg.filename, 0, 0, 0, 0, 'paused');
       return;
     }
     if (msg.resumed) {
+      console.warn('[UI-XFER-1] Legacy resume control received (type=file-chunk) — accepted but deprecated');
       this.ctx.setTransferPaused(false);
       this.emitProgress(msg.filename, 0, 0, 0, 0, 'transferring');
       return;
     }
     if (msg.cancelled) {
+      console.warn('[UI-XFER-1] Legacy cancel control received (type=file-chunk) — accepted but deprecated');
       this.handleRemoteCancel(msg);
       return;
     }
 
     // Data chunk
     this.processChunk(msg);
+  }
+
+  /** Resolve filename from transferId by searching all transfer maps. */
+  private resolveFilename(transferId: string): string | null {
+    // Check guarded transfers (receiver side)
+    const guarded = this.ctx.getGuardedTransfers().get(transferId);
+    if (guarded) return guarded.filename;
+    // Check send transfer IDs (sender side — reverse lookup)
+    for (const [fn, tid] of this.ctx.getSendTransferIds()) {
+      if (tid === transferId) return fn;
+    }
+    // Check recv transfer IDs (receiver side — reverse lookup)
+    for (const [fn, tid] of this.ctx.getRecvTransferIds()) {
+      if (tid === transferId) return fn;
+    }
+    return null;
+  }
+
+  /** UI-XFER-1: Clear pending completion timeout to prevent false completion after cancel. */
+  private clearCompletionTimeout(): void {
+    const timeout = this.ctx.getCompletionTimeout();
+    if (timeout) {
+      clearTimeout(timeout);
+      this.ctx.setCompletionTimeout(null);
+    }
+  }
+
+  /** Handle canonical cancel message (type="cancel"). */
+  private handleRemoteCancelCanonical(transferId: string, filename: string, cancelledBy?: string): void {
+    const status = cancelledBy === 'receiver' ? 'canceled_by_receiver' : 'canceled_by_sender';
+    this.ctx.getReceiveBuffers().delete(filename);
+    this.ctx.getGuardedTransfers().delete(transferId);
+    this.ctx.getRecvTransferIds().delete(filename);
+    this.ctx.getSendTransferIds().delete(filename);
+    this.ctx.setTransferCancelled(true);
+    this.clearCompletionTimeout();
+    this.emitProgress(filename, 0, 0, 0, 0, status);
   }
 
   private handleRemoteCancel(msg: FileChunkMessage): void {
@@ -297,6 +359,7 @@ export class TransferManager {
       this.ctx.getRecvTransferIds().delete(msg.filename);
     }
     this.ctx.setTransferCancelled(true);
+    this.clearCompletionTimeout();
     this.emitProgress(msg.filename, 0, 0, 0, 0, status);
   }
 
@@ -474,15 +537,24 @@ export class TransferManager {
   // ─── Transfer Control ──────────────────────────────────────────────
 
   pauseTransfer(filename: string): void {
+    const transferId = this.ctx.getSendTransferIds().get(filename);
+    if (!transferId) {
+      console.error(`[UI-XFER-1] pauseTransfer: no transferId for "${filename}" — no control message sent`);
+      return;
+    }
     this.ctx.setTransferPaused(true);
     this.ctx.setLastPausedAt(Date.now());
     this.ctx.getMetricsCollector()?.markPaused();
-    const transferId = this.ctx.getSendTransferIds().get(filename);
-    this.sendControlMessage(filename, { paused: true, ...(transferId && { transferId }) });
+    this.sendCanonicalControl({ type: 'pause', transferId });
     this.emitProgress(filename, 0, 0, 0, 0, 'paused');
   }
 
   resumeTransfer(filename: string): void {
+    const transferId = this.ctx.getSendTransferIds().get(filename);
+    if (!transferId) {
+      console.error(`[UI-XFER-1] resumeTransfer: no transferId for "${filename}" — no control message sent`);
+      return;
+    }
     const lastPausedAt = this.ctx.getLastPausedAt();
     if (lastPausedAt) {
       this.ctx.setPauseDuration(this.ctx.getPauseDuration() + Date.now() - lastPausedAt);
@@ -490,34 +562,42 @@ export class TransferManager {
     }
     this.ctx.setTransferPaused(false);
     this.ctx.getMetricsCollector()?.markResumed();
-    const transferId = this.ctx.getSendTransferIds().get(filename);
-    this.sendControlMessage(filename, { resumed: true, ...(transferId && { transferId }) });
+    this.sendCanonicalControl({ type: 'resume', transferId });
     this.emitProgress(filename, 0, 0, 0, 0, 'transferring');
   }
 
   cancelTransfer(filename: string, isReceiver: boolean = false): void {
-    this.ctx.setTransferCancelled(true);
     const transferId = isReceiver
       ? this.ctx.getRecvTransferIds().get(filename)
       : this.ctx.getSendTransferIds().get(filename);
-    this.sendControlMessage(filename, {
-      cancelled: true,
+    if (!transferId) {
+      console.error(`[UI-XFER-1] cancelTransfer: no transferId for "${filename}" — no control message sent`);
+      // Still set cancelled state locally to stop any in-progress send loop
+      this.ctx.setTransferCancelled(true);
+      this.clearCompletionTimeout();
+      const status = isReceiver ? 'canceled_by_receiver' : 'canceled_by_sender';
+      this.emitProgress(filename, 0, 0, 0, 0, status);
+      return;
+    }
+    this.ctx.setTransferCancelled(true);
+    this.sendCanonicalControl({
+      type: 'cancel',
+      transferId,
       cancelledBy: isReceiver ? 'receiver' : 'sender',
-      ...(transferId && { transferId }),
     });
     this.ctx.getReceiveBuffers().delete(filename);
-    if (transferId) {
-      this.ctx.getGuardedTransfers().delete(transferId);
-      this.ctx.getRecvTransferIds().delete(filename);
-      this.ctx.getSendTransferIds().delete(filename);
-    }
+    this.ctx.getGuardedTransfers().delete(transferId);
+    this.ctx.getRecvTransferIds().delete(filename);
+    this.ctx.getSendTransferIds().delete(filename);
+    this.clearCompletionTimeout();
     const status = isReceiver ? 'canceled_by_receiver' : 'canceled_by_sender';
     this.emitProgress(filename, 0, 0, 0, 0, status);
   }
 
-  private sendControlMessage(filename: string, fields: Partial<FileChunkMessage>): void {
+  /** UI-XFER-1: Emit a canonical DC control message (no legacy file-chunk shape). */
+  private sendCanonicalControl(msg: DcControlMessage): void {
     if (!this.ctx.getDc() || this.ctx.getDc()!.readyState !== 'open') return;
-    this.ctx.sendMessage({ type: 'file-chunk', filename, ...fields });
+    this.ctx.sendMessage(msg);
   }
 
   // ─── Progress ──────────────────────────────────────────────────────
