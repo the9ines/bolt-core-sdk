@@ -4,12 +4,12 @@ Current state of the bolt-core-sdk repository.
 
 ## Current Version
 
-**Latest Tag (main):** `sdk-v0.5.26-bolt-core-dist-sync`
-**Commit (main):** `b5965ce`
+**Latest Tag (main):** `sdk-v0.5.30-tstream0-transfer-core-v1`
 **Branch:** `main`
 **TS Package:** `@the9ines/bolt-core` v0.5.0 (wire error code registry published, 35 public exports)
 **TS Package:** `@the9ines/bolt-transport-web` v0.6.0 (Profile Envelope v1)
 **Rust Crate:** `bolt-core` v0.4.0 (R0-R3 complete, all 8 modules at full TS parity)
+**Rust Crate:** `bolt-transfer-core` v0.1.0 (T-STREAM-0 — transport-agnostic transfer SM, 60 tests, WASM-compatible)
 
 ## Authority Model
 

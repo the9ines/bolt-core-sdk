@@ -1,0 +1,6 @@
+[workspace]
+members = [
+    "bolt-core",
+    "bolt-transfer-core",
+]
+resolver = "2"

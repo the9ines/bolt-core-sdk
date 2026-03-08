@@ -2,6 +2,62 @@
 
 All notable changes to bolt-core-sdk are documented here. Newest first.
 
+## [sdk-v0.5.30-tstream0-transfer-core-v1 — T-STREAM-0 Transfer Core] - 2026-03-08
+
+T-STREAM-0: Transport-agnostic transfer state machine extracted from bolt-daemon
+into a new shared `bolt-transfer-core` crate, added as a workspace member.
+
+### Added (Rust — bolt-transfer-core v0.1.0)
+- `rust/Cargo.toml` — NEW workspace root (members: bolt-core, bolt-transfer-core)
+- `rust/bolt-transfer-core/` — NEW crate, 6 modules:
+  - `state.rs` — canonical §9 state enums (Idle, Offered, Accepted, Transferring, Paused, Completed, Cancelled, Error)
+  - `error.rs` — TransferError (InvalidTransition, IntegrityFailed)
+  - `send.rs` — send-side state machine (extracted from daemon SendSession)
+  - `receive.rs` — receive-side state machine (extracted from daemon TransferSession)
+  - `backpressure.rs` — watermark-based pause/resume flow control (AC-TC-05)
+  - `transport.rs` — TransportQuery + IntegrityVerifier traits (logic boundary)
+- 60 deterministic unit tests:
+  - 3 state enum tests (§9 coverage, transfer_id extraction, cancel reasons)
+  - 22 receive-side tests (offer lifecycle, chunk validation, hash verification, cancel)
+  - 24 send-side tests (full lifecycle, pause/resume, cancel, completion-race guard)
+  - 11 backpressure tests (watermarks, hysteresis, reset)
+- Zero transport dependencies, zero crypto dependencies
+- WASM compilation gate: `cargo build --target wasm32-unknown-unknown` passes
+  - rlib size: 107 KB uncompressed, 49 KB gzipped
+
+### AC-TC Evidence Matrix
+| ID | Criterion | Evidence |
+|----|-----------|---------|
+| AC-TC-01 | Transport-agnostic transfer SM crate | `bolt-transfer-core` compiles with zero transport deps |
+| AC-TC-02 | Daemon consumes core crate | 362 daemon tests pass with `bolt-transfer-core` dependency |
+| AC-TC-03 | States match PROTOCOL.md §9 | `state_names_match_protocol_s9` test — all 8 states |
+| AC-TC-04 | No UDP transport binding | Crate dependency audit: zero transport deps in Cargo.toml |
+| AC-TC-05 | Backpressure signals (S2 subset) | 11 backpressure tests (watermarks, hysteresis) |
+| AC-TC-06 | WASM build target compiles | `cargo build --target wasm32-unknown-unknown` PASS |
+
+### PM-FB-04 Resolution
+- **Crate name:** `bolt-transfer-core`
+- **Location:** `bolt-core-sdk/rust/bolt-transfer-core/` (workspace member)
+- **Consumption:** Path dependency (`../bolt-core-sdk/rust/bolt-transfer-core`)
+- **Justification:** Co-located with bolt-core; daemon already uses path dep; WASM-compatible
+
+### Files Changed
+- `rust/Cargo.toml` (NEW)
+- `rust/bolt-transfer-core/Cargo.toml` (NEW)
+- `rust/bolt-transfer-core/src/lib.rs` (NEW)
+- `rust/bolt-transfer-core/src/state.rs` (NEW)
+- `rust/bolt-transfer-core/src/error.rs` (NEW)
+- `rust/bolt-transfer-core/src/send.rs` (NEW)
+- `rust/bolt-transfer-core/src/receive.rs` (NEW)
+- `rust/bolt-transfer-core/src/backpressure.rs` (NEW)
+- `rust/bolt-transfer-core/src/transport.rs` (NEW)
+- `docs/STATE.md`
+- `docs/CHANGELOG.md`
+
+**Tag:** `sdk-v0.5.30-tstream0-transfer-core-v1`
+
+---
+
 ## [transport-web-v0.6.10-nf1-envelope-filename — Envelope path filename validation] - 2026-03-03
 
 NF-1: Envelope code path in `handleMessage` forwarded `file-chunk` messages

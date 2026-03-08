@@ -1,0 +1,15 @@
+[package]
+name = "bolt-transfer-core"
+version = "0.1.0"
+edition = "2021"
+description = "Transport-agnostic transfer state machine for the Bolt Protocol (§9)"
+license = "MIT"
+repository = "https://github.com/the9ines/bolt-core-sdk"
+
+[dependencies]
+# No transport dependencies. No crypto dependencies.
+# Transfer core is pure logic: state machines, backpressure, error types.
+
+[dev-dependencies]
+# Tests use bolt-core only for DEFAULT_CHUNK_SIZE constant verification.
+bolt-core = { path = "../bolt-core" }
