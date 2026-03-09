@@ -1,6 +1,6 @@
 {
   "name": "@the9ines/bolt-transport-web",
-  "version": "0.6.5",
+  "version": "0.6.6",
   "description": "Shared browser transport, signaling, and UI components for Bolt-based web applications",
   "type": "module",
   "main": "./dist/index.js",
@@ -28,6 +28,7 @@
   },
   "files": [
     "dist",
+    "wasm",
     "API.md",
     "README.md",
     "package.json"
