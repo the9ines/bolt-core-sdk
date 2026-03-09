@@ -245,11 +245,13 @@ export async function initPolicyAdapter(): Promise<PolicyAdapter> {
     // Dynamic import — bundlers will code-split the WASM binary.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const wasm = await import('../../../wasm/bolt_transfer_policy_wasm.js' as any);
+    console.log('[POLICY] WASM glue loaded, calling init...');
     await wasm.default();
     activeAdapter = new WasmPolicyAdapter(wasm);
     console.log('[POLICY] WASM policy adapter initialized');
   } catch (e) {
-    console.warn('[POLICY] WASM load failed, using TS fallback:', e);
+    const msg = e instanceof Error ? e.message : String(e);
+    console.warn(`[POLICY] WASM load failed (${msg}), using TS fallback`);
     activeAdapter = new TsFallbackPolicyAdapter();
   }
 
