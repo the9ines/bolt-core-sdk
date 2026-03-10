@@ -34,7 +34,7 @@ pub enum BoltError {
 
 // ── Wire Error Code Registry (PROTOCOL.md §10, v0.1.3-spec) ──────────
 
-/// Canonical wire error code registry — 22 codes (11 PROTOCOL + 11 ENFORCEMENT).
+/// Canonical wire error code registry — 26 codes (11 PROTOCOL + 11 ENFORCEMENT + 4 BTR).
 ///
 /// Every error frame sent on the wire MUST use a code from this array.
 /// String identifiers match the TS `WIRE_ERROR_CODES` array in `errors.ts`.
@@ -44,7 +44,7 @@ pub enum BoltError {
 /// at the transport layer (transport-web). The conformance test in
 /// `tests/conformance/error_code_mapping.rs` documents which error
 /// flows/types are represented where.
-pub const WIRE_ERROR_CODES: [&str; 22] = [
+pub const WIRE_ERROR_CODES: [&str; 26] = [
     // PROTOCOL class (11)
     "VERSION_MISMATCH",
     "ENCRYPTION_FAILED",
@@ -69,6 +69,11 @@ pub const WIRE_ERROR_CODES: [&str; 22] = [
     "INVALID_MESSAGE",
     "UNKNOWN_MESSAGE_TYPE",
     "PROTOCOL_VIOLATION",
+    // BTR class (4) — §16.7
+    "RATCHET_STATE_ERROR",
+    "RATCHET_CHAIN_ERROR",
+    "RATCHET_DECRYPT_FAIL",
+    "RATCHET_DOWNGRADE_REJECTED",
 ];
 
 /// Returns `true` if the given string is a canonical wire error code
@@ -100,8 +105,8 @@ mod tests {
     }
 
     #[test]
-    fn wire_error_registry_has_22_codes() {
-        assert_eq!(WIRE_ERROR_CODES.len(), 22);
+    fn wire_error_registry_has_26_codes() {
+        assert_eq!(WIRE_ERROR_CODES.len(), 26);
     }
 
     #[test]
@@ -115,11 +120,20 @@ mod tests {
 
     #[test]
     fn wire_error_registry_enforcement_class_count() {
-        // Last 11 are ENFORCEMENT class
-        let enforcement = &WIRE_ERROR_CODES[11..];
+        // Indices 11..22 are ENFORCEMENT class
+        let enforcement = &WIRE_ERROR_CODES[11..22];
         assert_eq!(enforcement.len(), 11);
         assert_eq!(enforcement[0], "DUPLICATE_HELLO");
         assert_eq!(enforcement[10], "PROTOCOL_VIOLATION");
+    }
+
+    #[test]
+    fn wire_error_registry_btr_class_count() {
+        // Indices 22..26 are BTR class (§16.7)
+        let btr = &WIRE_ERROR_CODES[22..];
+        assert_eq!(btr.len(), 4);
+        assert_eq!(btr[0], "RATCHET_STATE_ERROR");
+        assert_eq!(btr[3], "RATCHET_DOWNGRADE_REJECTED");
     }
 
     #[test]

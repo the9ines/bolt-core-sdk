@@ -1,18 +1,18 @@
-//! Conformance: Wire Error Code Registry (PROTOCOL.md §10)
+//! Conformance: Wire Error Code Registry (PROTOCOL.md §10 + §16.7)
 //!
-//! Asserts the canonical 22-code registry exists in Rust bolt-core and
+//! Asserts the canonical 26-code registry exists in Rust bolt-core and
 //! matches the expected exact list and order from PROTOCOL.md §10
-//! (as unified in PROTO-HARDEN-1R1, v0.1.3-spec).
+//! (11 PROTOCOL + 11 ENFORCEMENT + 4 BTR).
 //!
 //! TS parity: `ts/bolt-core/__tests__/wire-error-codes.test.ts` asserts
-//! the same 22-code list in TypeScript.
+//! the same code list in TypeScript.
 
 use bolt_core::errors::{is_valid_wire_error_code, WIRE_ERROR_CODES};
 
-/// Exact list and order must match PROTOCOL.md §10.
+/// Exact list and order must match PROTOCOL.md §10 + §16.7.
 #[test]
 fn conformance_wire_error_registry_exact_list() {
-    let expected: [&str; 22] = [
+    let expected: [&str; 26] = [
         // PROTOCOL class (11)
         "VERSION_MISMATCH",
         "ENCRYPTION_FAILED",
@@ -37,18 +37,23 @@ fn conformance_wire_error_registry_exact_list() {
         "INVALID_MESSAGE",
         "UNKNOWN_MESSAGE_TYPE",
         "PROTOCOL_VIOLATION",
+        // BTR class (4) — §16.7
+        "RATCHET_STATE_ERROR",
+        "RATCHET_CHAIN_ERROR",
+        "RATCHET_DECRYPT_FAIL",
+        "RATCHET_DOWNGRADE_REJECTED",
     ];
 
     assert_eq!(
         WIRE_ERROR_CODES, expected,
-        "WIRE_ERROR_CODES drift from PROTOCOL.md §10"
+        "WIRE_ERROR_CODES drift from PROTOCOL.md §10 + §16.7"
     );
 }
 
-/// Length must be exactly 22.
+/// Length must be exactly 26 (11 PROTOCOL + 11 ENFORCEMENT + 4 BTR).
 #[test]
 fn conformance_wire_error_registry_length() {
-    assert_eq!(WIRE_ERROR_CODES.len(), 22);
+    assert_eq!(WIRE_ERROR_CODES.len(), 26);
 }
 
 /// All codes must be unique.
@@ -60,7 +65,7 @@ fn conformance_wire_error_registry_unique() {
     }
 }
 
-/// is_valid_wire_error_code accepts all 22 canonical codes.
+/// is_valid_wire_error_code accepts all 26 canonical codes.
 #[test]
 fn conformance_wire_error_validator_accepts_all() {
     for code in &WIRE_ERROR_CODES {

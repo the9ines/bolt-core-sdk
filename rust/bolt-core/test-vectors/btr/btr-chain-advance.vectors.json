@@ -1,0 +1,36 @@
+{
+  "_WARNING": "TEST FIXTURES ONLY — deterministic keys, not for production.",
+  "description": "BTR per-chunk symmetric chain KDF (§16.3).",
+  "vectors": [
+    {
+      "id": "chain-step-0",
+      "chain_key_hex": "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20",
+      "expected_message_key_hex": "a4e53f48d6a8f6f992802dc0dab2ac6aaac4fa3baf75c8c02f4f60a273fcdfb1",
+      "expected_next_chain_key_hex": "aa659d2f3fc3391c814e634b230e1a3160e0be9df47d78912284064f2746f033"
+    },
+    {
+      "id": "chain-step-1",
+      "chain_key_hex": "aa659d2f3fc3391c814e634b230e1a3160e0be9df47d78912284064f2746f033",
+      "expected_message_key_hex": "e0a8b8b0ea44123935b1f88a424c433acdb381e7856ddc436251332aa56d9fec",
+      "expected_next_chain_key_hex": "80c50c2d3d490ec0e26163ef84216a7da12c0888ae7062ee052653e567cfe516"
+    },
+    {
+      "id": "chain-step-2",
+      "chain_key_hex": "80c50c2d3d490ec0e26163ef84216a7da12c0888ae7062ee052653e567cfe516",
+      "expected_message_key_hex": "81423f1ed1362e31990e322b853e44c9a6432c019289dd14ea53e5c27a114f38",
+      "expected_next_chain_key_hex": "b8052f35de3c61fe1ac18194ba324198638295058394199a064248a07d6d9eeb"
+    },
+    {
+      "id": "chain-step-3",
+      "chain_key_hex": "b8052f35de3c61fe1ac18194ba324198638295058394199a064248a07d6d9eeb",
+      "expected_message_key_hex": "0fa892a7a8cccdf2b31a1c18f562d5fdbb9be65f8db74b281cd9292603f9532a",
+      "expected_next_chain_key_hex": "98862be8d26835422b5eea3bcf8a4ca533d7e70bbeb5d474e99e3fceb6521ce8"
+    },
+    {
+      "id": "chain-step-4",
+      "chain_key_hex": "98862be8d26835422b5eea3bcf8a4ca533d7e70bbeb5d474e99e3fceb6521ce8",
+      "expected_message_key_hex": "76a604f2f269647ff15bc9edcb53950cbed8ea3a7d18a91d57605a531b604e0e",
+      "expected_next_chain_key_hex": "05c5a95e88b64ebcd2b4730cea6bae97b4c4e69d4edf1b9abfc09b6d12af4399"
+    }
+  ]
+}

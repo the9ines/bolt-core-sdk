@@ -1,0 +1,60 @@
+{
+  "_WARNING": "TEST FIXTURES ONLY — deterministic test data.",
+  "description": "BTR capability negotiation matrix (§4, 6 cells).",
+  "vectors": [
+    {
+      "id": "both-support-ok",
+      "description": "Both peers support BTR, well-formed.",
+      "local_supports_btr": true,
+      "remote_supports_btr": true,
+      "remote_well_formed": true,
+      "expected_mode": "FULL_BTR",
+      "expected_log_token": null
+    },
+    {
+      "id": "local-only",
+      "description": "Only local supports BTR.",
+      "local_supports_btr": true,
+      "remote_supports_btr": false,
+      "remote_well_formed": true,
+      "expected_mode": "DOWNGRADE",
+      "expected_log_token": "[BTR_DOWNGRADE]"
+    },
+    {
+      "id": "remote-only",
+      "description": "Only remote supports BTR.",
+      "local_supports_btr": false,
+      "remote_supports_btr": true,
+      "remote_well_formed": true,
+      "expected_mode": "DOWNGRADE",
+      "expected_log_token": "[BTR_DOWNGRADE]"
+    },
+    {
+      "id": "neither",
+      "description": "Neither peer supports BTR.",
+      "local_supports_btr": false,
+      "remote_supports_btr": false,
+      "remote_well_formed": true,
+      "expected_mode": "STATIC_EPHEMERAL",
+      "expected_log_token": null
+    },
+    {
+      "id": "both-malformed-remote",
+      "description": "Both support but remote is malformed.",
+      "local_supports_btr": true,
+      "remote_supports_btr": true,
+      "remote_well_formed": false,
+      "expected_mode": "REJECT",
+      "expected_log_token": "[BTR_DOWNGRADE_REJECTED]"
+    },
+    {
+      "id": "local-no-remote-malformed",
+      "description": "Local does not support, remote malformed — downgrade (malformation irrelevant).",
+      "local_supports_btr": false,
+      "remote_supports_btr": true,
+      "remote_well_formed": false,
+      "expected_mode": "DOWNGRADE",
+      "expected_log_token": "[BTR_DOWNGRADE]"
+    }
+  ]
+}

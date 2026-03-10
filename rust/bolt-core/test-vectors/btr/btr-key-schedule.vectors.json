@@ -1,0 +1,21 @@
+{
+  "_WARNING": "TEST FIXTURES ONLY — deterministic keys, not for production.",
+  "description": "BTR session root derivation via HKDF-SHA256 (§16.3).",
+  "vectors": [
+    {
+      "id": "session-root-0",
+      "ephemeral_shared_secret_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "expected_session_root_key_hex": "beff9b312b06cff7d24e1acb6fddc01cf12ab35eca1c93cf498433b51f8ae488"
+    },
+    {
+      "id": "session-root-1",
+      "ephemeral_shared_secret_hex": "32333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f5051",
+      "expected_session_root_key_hex": "2119b11d9a46af3f381d3567ff21a127517ede4fcf4337848fedda6289f6a2ca"
+    },
+    {
+      "id": "session-root-2",
+      "ephemeral_shared_secret_hex": "6465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f80818283",
+      "expected_session_root_key_hex": "7db9ef6fa789fcc7401a5351f1932744fcbc8bc5ade144ab2172f3bd99a74bae"
+    }
+  ]
+}

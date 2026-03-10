@@ -357,8 +357,8 @@ mod tests {
         let chunks: Vec<u32> = vec![0, 1, 2, 3, 4];
         let wasm_result = policy_decide(
             &chunks,
-            10,    // rtt_ms
-            0,     // loss_ppm
+            10, // rtt_ms
+            0,  // loss_ppm
             WasmDeviceClass::Desktop,
             4,     // max_parallel_chunks
             65536, // max_in_flight_bytes
@@ -395,7 +395,10 @@ mod tests {
             wasm_result.window_suggestion_chunks,
             native_result.window_suggestion_chunks
         );
-        assert_eq!(wasm_result.effective_chunk_size, native_result.effective_chunk_size);
+        assert_eq!(
+            wasm_result.effective_chunk_size,
+            native_result.effective_chunk_size
+        );
     }
 
     #[test]

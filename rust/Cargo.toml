@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "bolt-core",
+    "bolt-btr",
     "bolt-transfer-core",
     "bolt-transfer-policy-wasm",
 ]

@@ -2,7 +2,7 @@
 //!
 //! Tests that Rust-exposed error types are stable and correctly mapped.
 //!
-//! PROTOCOL.md §10 defines 22 wire error codes (11 PROTOCOL + 11 ENFORCEMENT).
+//! PROTOCOL.md §10 + §16.7 defines 26 wire error codes (11 PROTOCOL + 11 ENFORCEMENT + 4 BTR).
 //! The canonical string registry is now in Rust bolt-core (`errors::WIRE_ERROR_CODES`)
 //! and TS bolt-core (`errors.ts::WIRE_ERROR_CODES`). See `wire_error_registry.rs`
 //! for registry conformance tests.
@@ -21,7 +21,7 @@
 //!   INVALID_MESSAGE, UNKNOWN_MESSAGE_TYPE, INVALID_STATE,
 //!   LIMIT_EXCEEDED, PROTOCOL_VIOLATION
 //!
-//! Daemon maintains its own 22-code copy; refactor to import from bolt-core
+//! Daemon maintains its own copy; refactor to import from bolt-core
 //! is a future phase.
 
 // ── Conformance: BoltError Variant Stability ────────────────────

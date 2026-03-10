@@ -1,0 +1,64 @@
+{
+  "_WARNING": "TEST FIXTURES ONLY — deterministic test data.",
+  "description": "BTR replay rejection for (transfer_id, ratchet_generation, chain_index) (§11).",
+  "vectors": [
+    {
+      "id": "accept-first-chunk",
+      "description": "First chunk of first transfer — must accept.",
+      "transfer_id_hex": "0102030405060708090a0b0c0d0e0f10",
+      "ratchet_generation": 0,
+      "chain_index": 0,
+      "prior_accepted": [],
+      "expected_reject": false,
+      "expected_error_code": null
+    },
+    {
+      "id": "reject-duplicate",
+      "description": "Same (tid, gen, idx) replayed — must reject.",
+      "transfer_id_hex": "0102030405060708090a0b0c0d0e0f10",
+      "ratchet_generation": 0,
+      "chain_index": 0,
+      "prior_accepted": [
+        {
+          "transfer_id_hex": "0102030405060708090a0b0c0d0e0f10",
+          "ratchet_generation": 0,
+          "chain_index": 0
+        }
+      ],
+      "expected_reject": true,
+      "expected_error_code": "RATCHET_CHAIN_ERROR"
+    },
+    {
+      "id": "reject-skipped-index",
+      "description": "chain_index=2 when expected=1 — ORDER-BTR violation.",
+      "transfer_id_hex": "0102030405060708090a0b0c0d0e0f10",
+      "ratchet_generation": 0,
+      "chain_index": 2,
+      "prior_accepted": [
+        {
+          "transfer_id_hex": "0102030405060708090a0b0c0d0e0f10",
+          "ratchet_generation": 0,
+          "chain_index": 0
+        }
+      ],
+      "expected_reject": true,
+      "expected_error_code": "RATCHET_CHAIN_ERROR"
+    },
+    {
+      "id": "reject-wrong-generation",
+      "description": "Generation mismatch — cross-generation replay attempt.",
+      "transfer_id_hex": "02030405060708090a0b0c0d0e0f1011",
+      "ratchet_generation": 1,
+      "chain_index": 0,
+      "prior_accepted": [
+        {
+          "transfer_id_hex": "0102030405060708090a0b0c0d0e0f10",
+          "ratchet_generation": 0,
+          "chain_index": 0
+        }
+      ],
+      "expected_reject": true,
+      "expected_error_code": "RATCHET_STATE_ERROR"
+    }
+  ]
+}

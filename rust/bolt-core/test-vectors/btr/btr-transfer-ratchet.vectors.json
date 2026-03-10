@@ -1,0 +1,30 @@
+{
+  "_WARNING": "TEST FIXTURES ONLY — deterministic keys, not for production.",
+  "description": "BTR transfer root derivation via HKDF-SHA256 (§16.3).",
+  "vectors": [
+    {
+      "id": "transfer-root-0",
+      "session_root_key_hex": "abacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9ca",
+      "transfer_id_hex": "000102030405060708090a0b0c0d0e0f",
+      "expected_transfer_root_key_hex": "7c1ebdbd5891cc85e8bfdcfc8ee0a87b859cb4bc3d2767a6f743fdb0bb879ccd"
+    },
+    {
+      "id": "transfer-root-1",
+      "session_root_key_hex": "abacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9ca",
+      "transfer_id_hex": "1e1f202122232425262728292a2b2c2d",
+      "expected_transfer_root_key_hex": "eb194da0ab02cf5988f087c61edf66f05db5db3a731fdfca7ddbcf4027219152"
+    },
+    {
+      "id": "transfer-root-2",
+      "session_root_key_hex": "abacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9ca",
+      "transfer_id_hex": "3c3d3e3f404142434445464748494a4b",
+      "expected_transfer_root_key_hex": "b6a36ef59820e859275ef4b46ac548c3659b944f379d4eb0558f6a0a09c9972b"
+    },
+    {
+      "id": "transfer-root-3",
+      "session_root_key_hex": "abacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9ca",
+      "transfer_id_hex": "5a5b5c5d5e5f60616263646566676869",
+      "expected_transfer_root_key_hex": "b10b8ca67aea9169b4711b6dac4e0e021643a0ef8120d1ce26f33efa40cd9fa9"
+    }
+  ]
+}
