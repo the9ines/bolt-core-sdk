@@ -229,6 +229,7 @@ impl WasmProgressResult {
 ///
 /// Accepts `pending_chunk_ids` as a `&[u32]` (maps from JS Uint32Array).
 /// All other parameters are scalar/enum.
+#[allow(clippy::too_many_arguments)] // WASM binding — flat signature required by JS
 #[wasm_bindgen(js_name = policyDecide)]
 pub fn policy_decide(
     pending_chunk_ids: &[u32],

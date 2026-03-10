@@ -1,0 +1,28 @@
+{
+  "_WARNING": "TEST FIXTURES ONLY — deterministic keys, not for production.",
+  "description": "BTR adversarial vectors: wrong-key decrypt and chain-index desync.",
+  "vectors": [
+    {
+      "id": "wrong-key-decrypt",
+      "description": "Valid ciphertext sealed with correct_key, opened with wrong_key — MAC must reject.",
+      "type": "wrong_key_decrypt",
+      "correct_key_hex": "f0f1f2f3f4f5f6f7f8f9fafbfcfdfeff000102030405060708090a0b0c0d0e0f",
+      "wrong_key_hex": "f1f2f3f4f5f6f7f8f9fafbfcfdfeff000102030405060708090a0b0c0d0e0f10",
+      "nonce_hex": "505152535455565758595a5b5c5d5e5f6061626364656667",
+      "plaintext_hex": "616476657273617269616c2d746573742d7061796c6f6164",
+      "sealed_hex": "505152535455565758595a5b5c5d5e5f60616263646566670572ba76b4d97ebc18eb319671f1521649e894acf3e7cf4c6f26eaa3d78c714fabf50f9ddc49d5b3",
+      "expected_error": "RATCHET_DECRYPT_FAIL"
+    },
+    {
+      "id": "chain-index-desync",
+      "description": "Sender sealed 3 chunks (idx 0,1,2). Receiver attempts open at idx=2 when chain is at idx=0 — RATCHET_CHAIN_ERROR.",
+      "type": "chain_index_desync",
+      "session_root_key_hex": "e1e2e3e4e5e6e7e8e9eaebecedeeeff0f1f2f3f4f5f6f7f8f9fafbfcfdfeff00",
+      "transfer_id_hex": "7778797a7b7c7d7e7f80818283848586",
+      "transfer_root_key_hex": "e36137875ca2572dbdb066251ba058765172d04ef8d06a919ef5176fb18e712d",
+      "sender_chunk_count": 3,
+      "receiver_open_at_index": 2,
+      "expected_error": "RATCHET_CHAIN_ERROR"
+    }
+  ]
+}

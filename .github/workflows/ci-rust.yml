@@ -23,7 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: rust/bolt-core
+        working-directory: rust
     steps:
       - uses: actions/checkout@v4
 
@@ -32,16 +32,16 @@ jobs:
           components: rustfmt, clippy
 
       - name: cargo fmt --check
-        run: cargo fmt --check
+        run: cargo fmt --check --all
 
       - name: cargo clippy (default features, deny warnings)
-        run: cargo clippy -- -D warnings
+        run: cargo clippy --workspace -- -D warnings
 
       - name: cargo clippy (vectors feature, deny warnings)
-        run: cargo clippy --features vectors -- -D warnings
+        run: cargo clippy --workspace --features vectors -- -D warnings
 
       - name: cargo test (default features)
-        run: cargo test
+        run: cargo test --workspace
 
       - name: cargo test (vectors feature)
-        run: cargo test --features vectors
+        run: cargo test --workspace --features vectors

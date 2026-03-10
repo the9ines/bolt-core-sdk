@@ -1,0 +1,89 @@
+{
+  "_WARNING": "TEST FIXTURES ONLY — deterministic keys and nonces, not for production.",
+  "description": "Full BTR lifecycle: init → 2 transfers × 3 chunks. Proves DH ratchet session root advancement, transfer isolation, and deterministic seal/open.",
+  "ephemeral_shared_secret_hex": "d0d1d2d3d4d5d6d7d8d9dadbdcdddedfe0e1e2e3e4e5e6e7e8e9eaebecedeeef",
+  "transfers": [
+    {
+      "id": "transfer-0",
+      "transfer_id_hex": "101112131415161718191a1b1c1d1e1f",
+      "sender_scalar_hex": "a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0",
+      "receiver_scalar_hex": "b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecfd0",
+      "sender_public_hex": "ad438bfae31f6c093d61d4339255ea798092c9fadd07b97827f4b0ae9dee7c1c",
+      "receiver_public_hex": "cd700e88f9e99b19c1a8a8dcd58182fd101e5e032a69ce317fde23e8ee265c51",
+      "dh_output_hex": "d06de44b2932862b7175258873e335ee4b98d04c888656c512c95609ea41d305",
+      "session_root_key_after_hex": "db6aaa0396739becf95331d8fafda743c6bb0ff169bb70641a75bdba686a7f67",
+      "ratchet_generation_after": 1,
+      "transfer_root_key_hex": "bdaa5b269dbfe911576265031a39ac18371a05adae96c9684b9559e0a5758292",
+      "chunks": [
+        {
+          "chain_index": 0,
+          "chain_key_hex": "bdaa5b269dbfe911576265031a39ac18371a05adae96c9684b9559e0a5758292",
+          "message_key_hex": "8e5ea005ee0597d51c1afb98880064d0ff1c2cc44ec2715fcdb495383be71406",
+          "next_chain_key_hex": "c38250947854463fc4a9999295fd8939973fa667675d096569dbb623fb996057",
+          "nonce_hex": "303132333435363738393a3b3c3d3e3f4041424344454647",
+          "plaintext_hex": "6c6966656379636c652d6368756e6b2d30",
+          "sealed_hex": "303132333435363738393a3b3c3d3e3f40414243444546478d29825c1afbb85e394554f655358496fa4bd8b5c4841ad61c98ad86b37856fffd"
+        },
+        {
+          "chain_index": 1,
+          "chain_key_hex": "c38250947854463fc4a9999295fd8939973fa667675d096569dbb623fb996057",
+          "message_key_hex": "d5ffdd2918840354968c66d97b1662133f47d16844c6d6368a1988907d36b8fd",
+          "next_chain_key_hex": "864ac45a6e76e5acdc59d468724ee4754c41b78cdef0209d506ca3a8fdafd529",
+          "nonce_hex": "48494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f",
+          "plaintext_hex": "6c6966656379636c652d6368756e6b2d31",
+          "sealed_hex": "48494a4b4c4d4e4f505152535455565758595a5b5c5d5e5fe036affaefdad4f3f832368565f84b159e1be5bb1e7a3877a99b6d2fde27bd1302"
+        },
+        {
+          "chain_index": 2,
+          "chain_key_hex": "864ac45a6e76e5acdc59d468724ee4754c41b78cdef0209d506ca3a8fdafd529",
+          "message_key_hex": "7fca06ef3eaf71b680dc634545c6a9024a29c1f16b763bf6c501d745eb3f5dc5",
+          "next_chain_key_hex": "5a22b81937699d09ccf07eeb52b5c66454bfad00c0326e4d5560a2f2d3ba14c6",
+          "nonce_hex": "606162636465666768696a6b6c6d6e6f7071727374757677",
+          "plaintext_hex": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+          "sealed_hex": "606162636465666768696a6b6c6d6e6f70717273747576775dfba3bded55aa05cb49b251cd0c39a0111fcf876d60db32bd66d7e98ee0a23b85c8ae89a67c17324a94e5d589dfd2720901fd6a26cdcf7491dfd975d05f0b94c740484c831f0add1ccd11d0ea4422d1f6c24fbe72c9f0655507e6486dea90441fbf7bd2f9b249a53f2ee7b58ac9e8b40cbf9b92332b3f14cb71d32dd2600996d7b181a0f510980ee9bed9ce292fa5a9"
+        }
+      ]
+    },
+    {
+      "id": "transfer-1",
+      "transfer_id_hex": "202122232425262728292a2b2c2d2e2f",
+      "sender_scalar_hex": "a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1",
+      "receiver_scalar_hex": "b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecfd0d1",
+      "sender_public_hex": "144be1c3be732a013afe709054ac1d54fb8515bb715fedba95d3987586ab6330",
+      "receiver_public_hex": "0750dfba4c5b7d1c711c0e3be6206aad38560eba30998f95092d330006abbb62",
+      "dh_output_hex": "216c0e76ca4e5941e8658f14482ef77a45923d14e03230f2998f637a3a8fad45",
+      "session_root_key_after_hex": "cf69afa1f5c87829cbc63e239c1e49b312f242514e85df6144272a36ee95ab52",
+      "ratchet_generation_after": 2,
+      "transfer_root_key_hex": "bd63942cf9cdb7953af89c5ce65c25d8d36052d0652d7de646a0513c83222b64",
+      "chunks": [
+        {
+          "chain_index": 0,
+          "chain_key_hex": "bd63942cf9cdb7953af89c5ce65c25d8d36052d0652d7de646a0513c83222b64",
+          "message_key_hex": "face4d2cc939502fbbe46116f8e3a849bea59a73adc2e6b9e206dba19360e628",
+          "next_chain_key_hex": "1bb7c66a015253028ec9af2ff88db02ba3c938a7d6b58287838d4ffd07c1a0d0",
+          "nonce_hex": "78797a7b7c7d7e7f808182838485868788898a8b8c8d8e8f",
+          "plaintext_hex": "7472616e73666572322d6368756e6b2d30",
+          "sealed_hex": "78797a7b7c7d7e7f808182838485868788898a8b8c8d8e8fe61115e35145f58467f541e17533755adab515be61579e6d1d1406fc6f370944c0"
+        },
+        {
+          "chain_index": 1,
+          "chain_key_hex": "1bb7c66a015253028ec9af2ff88db02ba3c938a7d6b58287838d4ffd07c1a0d0",
+          "message_key_hex": "d2fc76111d0d51a6c8a03262d808c09fd75bff2b28f3074c3a3918a991f09f68",
+          "next_chain_key_hex": "cc4d02e3f4bc1d7bbb6da3e2a30f01dbae3e2e1399ea8993e073fd77aad995c8",
+          "nonce_hex": "909192939495969798999a9b9c9d9e9fa0a1a2a3a4a5a6a7",
+          "plaintext_hex": "7472616e73666572322d6368756e6b2d31",
+          "sealed_hex": "909192939495969798999a9b9c9d9e9fa0a1a2a3a4a5a6a798facacbefcfd81a1ff1da668f7b6f0d65a59f5ba3ffe9176ab408d4986c7b7120"
+        },
+        {
+          "chain_index": 2,
+          "chain_key_hex": "cc4d02e3f4bc1d7bbb6da3e2a30f01dbae3e2e1399ea8993e073fd77aad995c8",
+          "message_key_hex": "f6257e15f9fe3b095880048b06686be3a9924ba830129ce42558ea387d224390",
+          "next_chain_key_hex": "3be8f3ace81f7f11729be7d0e5292e5db9e68c595f553170dc070b97f4122a7c",
+          "nonce_hex": "a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebf",
+          "plaintext_hex": "",
+          "sealed_hex": "a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebf4656af1cec7c8b33cc13dc6a594b37ab"
+        }
+      ]
+    }
+  ]
+}

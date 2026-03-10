@@ -104,6 +104,22 @@ fn generate_dh_sanity_vectors() {
     );
 }
 
+#[test]
+fn generate_lifecycle_vectors() {
+    write_and_verify(
+        "btr-lifecycle.vectors.json",
+        vectors::generate_lifecycle_json,
+    );
+}
+
+#[test]
+fn generate_adversarial_vectors() {
+    write_and_verify(
+        "btr-adversarial.vectors.json",
+        vectors::generate_adversarial_json,
+    );
+}
+
 /// Generates all vector files and then verifies they all exist.
 #[test]
 fn all_vector_files_present() {
@@ -140,6 +156,14 @@ fn all_vector_files_present() {
         (
             "btr-dh-sanity.vectors.json",
             vectors::generate_dh_sanity_json,
+        ),
+        (
+            "btr-lifecycle.vectors.json",
+            vectors::generate_lifecycle_json,
+        ),
+        (
+            "btr-adversarial.vectors.json",
+            vectors::generate_adversarial_json,
         ),
     ];
     for (filename, gen) in &generators {

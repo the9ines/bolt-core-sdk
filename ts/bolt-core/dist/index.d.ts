@@ -9,3 +9,4 @@ export type { IdentityKeyPair } from './identity.js';
 export { BoltError, EncryptionError, ConnectionError, TransferError, IntegrityError } from './errors.js';
 export { WIRE_ERROR_CODES, isValidWireErrorCode } from './errors.js';
 export type { WireErrorCode } from './errors.js';
+export * from './btr/index.js';

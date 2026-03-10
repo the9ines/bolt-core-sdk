@@ -414,9 +414,8 @@ struct EncryptDecryptVector {
 pub fn generate_encrypt_decrypt_json() -> String {
     let key = make_key(0xE0);
     let nonce_bytes: [u8; 24] = [
-        0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
-        0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10,
-        0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18,
+        0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
+        0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18,
     ];
 
     let cipher = XSalsa20Poly1305::new((&key).into());
@@ -550,21 +549,11 @@ struct DhSanityVector {
 pub fn generate_dh_sanity_json() -> String {
     // Use StaticSecret for deterministic scalar injection.
     // EphemeralSecret cannot be constructed from known bytes.
-    let scalars: Vec<[u8; 32]> = vec![
-        make_key(0xA0),
-        make_key(0xB0),
-        make_key(0xC0),
-    ];
+    let scalars: Vec<[u8; 32]> = vec![make_key(0xA0), make_key(0xB0), make_key(0xC0)];
 
-    let secrets: Vec<StaticSecret> = scalars
-        .iter()
-        .map(|s| StaticSecret::from(*s))
-        .collect();
+    let secrets: Vec<StaticSecret> = scalars.iter().map(|s| StaticSecret::from(*s)).collect();
 
-    let publics: Vec<PublicKey> = secrets
-        .iter()
-        .map(PublicKey::from)
-        .collect();
+    let publics: Vec<PublicKey> = secrets.iter().map(PublicKey::from).collect();
 
     let vectors = vec![
         // Alice (A0) × Bob (B0)
@@ -583,7 +572,8 @@ pub fn generate_dh_sanity_json() -> String {
             let shared = secrets[1].diffie_hellman(&publics[0]);
             DhSanityVector {
                 id: "dh-b0-a0".into(),
-                description: "scalar B0 × public A0 — commutativity check (must equal dh-a0-b0).".into(),
+                description: "scalar B0 × public A0 — commutativity check (must equal dh-a0-b0)."
+                    .into(),
                 secret_scalar_hex: to_hex(&scalars[1]),
                 remote_public_hex: to_hex(publics[0].as_bytes()),
                 expected_shared_secret_hex: to_hex(shared.as_bytes()),
@@ -594,7 +584,8 @@ pub fn generate_dh_sanity_json() -> String {
             let shared = secrets[2].diffie_hellman(&publics[0]);
             DhSanityVector {
                 id: "dh-c0-a0".into(),
-                description: "scalar C0 × public A0 — different pair yields different output.".into(),
+                description: "scalar C0 × public A0 — different pair yields different output."
+                    .into(),
                 secret_scalar_hex: to_hex(&scalars[2]),
                 remote_public_hex: to_hex(publics[0].as_bytes()),
                 expected_shared_secret_hex: to_hex(shared.as_bytes()),
@@ -607,10 +598,9 @@ pub fn generate_dh_sanity_json() -> String {
                 description: "scalar A0 × basepoint — public key derivation sanity.".into(),
                 secret_scalar_hex: to_hex(&scalars[0]),
                 remote_public_hex: to_hex(&[
-                    0x09, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                    0x09, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
                 ]), // X25519 basepoint
                 expected_shared_secret_hex: to_hex(publics[0].as_bytes()),
             }
@@ -619,7 +609,286 @@ pub fn generate_dh_sanity_json() -> String {
 
     let data = DhSanityVectors {
         warning: "TEST FIXTURES ONLY — deterministic scalars, not for production.".into(),
-        description: "X25519 DH cross-library sanity: x25519-dalek (Rust) vs tweetnacl.scalarMult (TS).".into(),
+        description:
+            "X25519 DH cross-library sanity: x25519-dalek (Rust) vs tweetnacl.scalarMult (TS)."
+                .into(),
+        vectors,
+    };
+    serde_json::to_string_pretty(&data).unwrap() + "\n"
+}
+
+// ── btr-lifecycle (composed, deterministic, multi-transfer) ─────────
+
+#[derive(Serialize)]
+struct LifecycleVectors {
+    #[serde(rename = "_WARNING")]
+    warning: String,
+    description: String,
+    ephemeral_shared_secret_hex: String,
+    transfers: Vec<LifecycleTransfer>,
+}
+
+#[derive(Serialize)]
+struct LifecycleTransfer {
+    id: String,
+    transfer_id_hex: String,
+    sender_scalar_hex: String,
+    receiver_scalar_hex: String,
+    sender_public_hex: String,
+    receiver_public_hex: String,
+    dh_output_hex: String,
+    session_root_key_after_hex: String,
+    ratchet_generation_after: u32,
+    transfer_root_key_hex: String,
+    chunks: Vec<LifecycleChunk>,
+}
+
+#[derive(Serialize)]
+struct LifecycleChunk {
+    chain_index: u32,
+    chain_key_hex: String,
+    message_key_hex: String,
+    next_chain_key_hex: String,
+    nonce_hex: String,
+    plaintext_hex: String,
+    sealed_hex: String,
+}
+
+/// Generate a full-lifecycle vector: init → 2 transfers × 3 chunks each.
+///
+/// Proves:
+/// 1. DH ratchet advances session root between transfers.
+/// 2. Each transfer derives independent transfer root + chain.
+/// 3. Multi-chunk seal/open produces byte-identical output cross-language.
+/// 4. All operations use deterministic key material (StaticSecret, fixed nonces).
+pub fn generate_lifecycle_json() -> String {
+    use crate::key_schedule::{chain_advance, derive_session_root, derive_transfer_root};
+    use crate::ratchet::derive_ratcheted_session_root;
+
+    let ephemeral_shared_secret = make_key(0xD0);
+    let mut session_root_key = derive_session_root(&ephemeral_shared_secret);
+    let mut generation: u32 = 0;
+
+    // Fixed nonces per chunk — deterministic, never reused with same key.
+    let nonces: Vec<[u8; 24]> = (0..6)
+        .map(|i| {
+            let mut n = [0u8; 24];
+            for (j, b) in n.iter_mut().enumerate() {
+                *b = ((i * 24 + j) as u8).wrapping_add(0x30);
+            }
+            n
+        })
+        .collect();
+
+    // Transfer configs: (transfer_id_seed, sender_scalar_seed, receiver_scalar_seed)
+    let transfer_configs: [(u8, u8, u8); 2] = [(0x10, 0xA1, 0xB1), (0x20, 0xA2, 0xB2)];
+
+    let plaintexts: Vec<Vec<u8>> = vec![
+        b"lifecycle-chunk-0".to_vec(),
+        b"lifecycle-chunk-1".to_vec(),
+        vec![0xFFu8; 128], // binary chunk
+        b"transfer2-chunk-0".to_vec(),
+        b"transfer2-chunk-1".to_vec(),
+        b"".to_vec(), // empty chunk
+    ];
+
+    let mut transfers = Vec::new();
+
+    for (t_idx, (tid_seed, sender_seed, receiver_seed)) in transfer_configs.iter().enumerate() {
+        let transfer_id = make_tid(*tid_seed);
+
+        let sender_scalar = make_key(*sender_seed);
+        let receiver_scalar = make_key(*receiver_seed);
+
+        let sender_secret = StaticSecret::from(sender_scalar);
+        let receiver_secret = StaticSecret::from(receiver_scalar);
+
+        let sender_public = PublicKey::from(&sender_secret);
+        let receiver_public = PublicKey::from(&receiver_secret);
+
+        // DH: sender_secret × receiver_public
+        let dh_output = sender_secret.diffie_hellman(&receiver_public);
+
+        // Verify commutativity
+        let dh_reverse = receiver_secret.diffie_hellman(&sender_public);
+        assert_eq!(
+            dh_output.as_bytes(),
+            dh_reverse.as_bytes(),
+            "DH commutativity broken for transfer {t_idx}"
+        );
+
+        // DH ratchet step
+        let new_srk = derive_ratcheted_session_root(&session_root_key, dh_output.as_bytes());
+        session_root_key = new_srk;
+        generation += 1;
+
+        // Transfer root
+        let transfer_root_key = derive_transfer_root(&session_root_key, &transfer_id);
+
+        // Chain: 3 chunks per transfer
+        let mut chain_key = transfer_root_key;
+        let mut chunks = Vec::new();
+
+        for c_idx in 0..3u32 {
+            let global_chunk_idx = t_idx * 3 + c_idx as usize;
+            let adv = chain_advance(&chain_key);
+            let nonce = &nonces[global_chunk_idx];
+            let plaintext = &plaintexts[global_chunk_idx];
+
+            // Deterministic seal: nonce || secretbox(key, nonce, plaintext)
+            let cipher = XSalsa20Poly1305::new((&adv.message_key).into());
+            let ct = cipher
+                .encrypt(Nonce::from_slice(nonce), plaintext.as_slice())
+                .unwrap();
+            let mut sealed = Vec::with_capacity(24 + ct.len());
+            sealed.extend_from_slice(nonce);
+            sealed.extend_from_slice(&ct);
+
+            chunks.push(LifecycleChunk {
+                chain_index: c_idx,
+                chain_key_hex: to_hex(&chain_key),
+                message_key_hex: to_hex(&adv.message_key),
+                next_chain_key_hex: to_hex(&adv.next_chain_key),
+                nonce_hex: to_hex(nonce),
+                plaintext_hex: to_hex(plaintext),
+                sealed_hex: to_hex(&sealed),
+            });
+
+            chain_key = adv.next_chain_key;
+        }
+
+        transfers.push(LifecycleTransfer {
+            id: format!("transfer-{t_idx}"),
+            transfer_id_hex: to_hex(&transfer_id),
+            sender_scalar_hex: to_hex(&sender_scalar),
+            receiver_scalar_hex: to_hex(&receiver_scalar),
+            sender_public_hex: to_hex(sender_public.as_bytes()),
+            receiver_public_hex: to_hex(receiver_public.as_bytes()),
+            dh_output_hex: to_hex(dh_output.as_bytes()),
+            session_root_key_after_hex: to_hex(&session_root_key),
+            ratchet_generation_after: generation,
+            transfer_root_key_hex: to_hex(&transfer_root_key),
+            chunks,
+        });
+    }
+
+    // Assert inter-transfer SRK advancement (self-check)
+    assert_ne!(
+        transfers[0].session_root_key_after_hex, transfers[1].session_root_key_after_hex,
+        "DH ratchet must produce different session roots per transfer"
+    );
+    assert_ne!(
+        transfers[0].transfer_root_key_hex, transfers[1].transfer_root_key_hex,
+        "Transfer roots must differ"
+    );
+
+    let data = LifecycleVectors {
+        warning: "TEST FIXTURES ONLY — deterministic keys and nonces, not for production.".into(),
+        description: "Full BTR lifecycle: init → 2 transfers × 3 chunks. Proves DH ratchet session root advancement, transfer isolation, and deterministic seal/open.".into(),
+        ephemeral_shared_secret_hex: to_hex(&ephemeral_shared_secret),
+        transfers,
+    };
+    serde_json::to_string_pretty(&data).unwrap() + "\n"
+}
+
+// ── btr-adversarial (wrong-key + chain desync) ──────────────────────
+
+#[derive(Serialize)]
+struct AdversarialVectors {
+    #[serde(rename = "_WARNING")]
+    warning: String,
+    description: String,
+    vectors: Vec<AdversarialVector>,
+}
+
+#[derive(Serialize)]
+struct AdversarialVector {
+    id: String,
+    description: String,
+    #[serde(flatten)]
+    payload: AdversarialPayload,
+}
+
+#[derive(Serialize)]
+#[serde(tag = "type")]
+enum AdversarialPayload {
+    #[serde(rename = "wrong_key_decrypt")]
+    WrongKeyDecrypt {
+        correct_key_hex: String,
+        wrong_key_hex: String,
+        nonce_hex: String,
+        plaintext_hex: String,
+        sealed_hex: String,
+        expected_error: String,
+    },
+    #[serde(rename = "chain_index_desync")]
+    ChainIndexDesync {
+        session_root_key_hex: String,
+        transfer_id_hex: String,
+        transfer_root_key_hex: String,
+        sender_chunk_count: u32,
+        receiver_open_at_index: u32,
+        expected_error: String,
+    },
+}
+
+/// Generate adversarial vectors for wrong-key decrypt and chain desync.
+pub fn generate_adversarial_json() -> String {
+    let correct_key = make_key(0xF0);
+    let wrong_key = make_key(0xF1);
+    let nonce_bytes: [u8; 24] = {
+        let mut n = [0u8; 24];
+        for (i, b) in n.iter_mut().enumerate() {
+            *b = (i as u8).wrapping_add(0x50);
+        }
+        n
+    };
+    let plaintext = b"adversarial-test-payload";
+
+    // Wrong-key: seal with correct_key, attempt open with wrong_key
+    let cipher = XSalsa20Poly1305::new((&correct_key).into());
+    let ct = cipher
+        .encrypt(Nonce::from_slice(&nonce_bytes), plaintext.as_slice())
+        .unwrap();
+    let mut sealed = Vec::with_capacity(24 + ct.len());
+    sealed.extend_from_slice(&nonce_bytes);
+    sealed.extend_from_slice(&ct);
+
+    // Chain desync: derive a transfer context, record its root
+    let srk = make_key(0xE1);
+    let tid = make_tid(0x77);
+    let trk = crate::key_schedule::derive_transfer_root(&srk, &tid);
+
+    let vectors = vec![
+        AdversarialVector {
+            id: "wrong-key-decrypt".into(),
+            description: "Valid ciphertext sealed with correct_key, opened with wrong_key — MAC must reject.".into(),
+            payload: AdversarialPayload::WrongKeyDecrypt {
+                correct_key_hex: to_hex(&correct_key),
+                wrong_key_hex: to_hex(&wrong_key),
+                nonce_hex: to_hex(&nonce_bytes),
+                plaintext_hex: to_hex(plaintext),
+                sealed_hex: to_hex(&sealed),
+                expected_error: "RATCHET_DECRYPT_FAIL".into(),
+            },
+        },
+        AdversarialVector {
+            id: "chain-index-desync".into(),
+            description: "Sender sealed 3 chunks (idx 0,1,2). Receiver attempts open at idx=2 when chain is at idx=0 — RATCHET_CHAIN_ERROR.".into(),
+            payload: AdversarialPayload::ChainIndexDesync {
+                session_root_key_hex: to_hex(&srk),
+                transfer_id_hex: to_hex(&tid),
+                transfer_root_key_hex: to_hex(&trk),
+                sender_chunk_count: 3,
+                receiver_open_at_index: 2,
+                expected_error: "RATCHET_CHAIN_ERROR".into(),
+            },
+        },
+    ];
+
+    let data = AdversarialVectors {
+        warning: "TEST FIXTURES ONLY — deterministic keys, not for production.".into(),
+        description: "BTR adversarial vectors: wrong-key decrypt and chain-index desync.".into(),
         vectors,
     };
     serde_json::to_string_pretty(&data).unwrap() + "\n"
