@@ -36,7 +36,7 @@ export class IntegrityError extends BoltError {
 // ── Wire Error Code Registry (PROTOCOL.md §10, v0.1.3-spec) ──────────
 
 /**
- * Canonical wire error code registry — 22 codes (11 PROTOCOL + 11 ENFORCEMENT).
+ * Canonical wire error code registry — 26 codes (11 PROTOCOL + 11 ENFORCEMENT + 4 BTR).
  * Every error frame sent on the wire MUST use a code from this array.
  * Implementations MUST reject inbound error frames carrying codes not listed here.
  */
@@ -65,6 +65,11 @@ export const WIRE_ERROR_CODES = [
   'INVALID_MESSAGE',
   'UNKNOWN_MESSAGE_TYPE',
   'PROTOCOL_VIOLATION',
+  // BTR class (4) — §16.7
+  'RATCHET_STATE_ERROR',
+  'RATCHET_CHAIN_ERROR',
+  'RATCHET_DECRYPT_FAIL',
+  'RATCHET_DOWNGRADE_REJECTED',
 ] as const;
 
 /** A valid wire error code string from PROTOCOL.md §10. */

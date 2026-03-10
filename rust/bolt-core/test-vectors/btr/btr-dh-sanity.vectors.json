@@ -1,0 +1,34 @@
+{
+  "_WARNING": "TEST FIXTURES ONLY — deterministic scalars, not for production.",
+  "description": "X25519 DH cross-library sanity: x25519-dalek (Rust) vs tweetnacl.scalarMult (TS).",
+  "vectors": [
+    {
+      "id": "dh-a0-b0",
+      "description": "scalar A0 × public B0 — basic DH.",
+      "secret_scalar_hex": "a0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebf",
+      "remote_public_hex": "3f3e5f6d86926c9c128cf84581574f96840d98ee5ab53b1ec3b76e2bb25b945e",
+      "expected_shared_secret_hex": "27f4802c43844880772a93bad3be1d31b1c912485a98e9da7d9103cc0339c61b"
+    },
+    {
+      "id": "dh-b0-a0",
+      "description": "scalar B0 × public A0 — commutativity check (must equal dh-a0-b0).",
+      "secret_scalar_hex": "b0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecf",
+      "remote_public_hex": "605a725d2a4adfeeb1a29e17edd621c1b7593ee8cdbc44ac6c4ab6e2f805d23c",
+      "expected_shared_secret_hex": "27f4802c43844880772a93bad3be1d31b1c912485a98e9da7d9103cc0339c61b"
+    },
+    {
+      "id": "dh-c0-a0",
+      "description": "scalar C0 × public A0 — different pair yields different output.",
+      "secret_scalar_hex": "c0c1c2c3c4c5c6c7c8c9cacbcccdcecfd0d1d2d3d4d5d6d7d8d9dadbdcdddedf",
+      "remote_public_hex": "605a725d2a4adfeeb1a29e17edd621c1b7593ee8cdbc44ac6c4ab6e2f805d23c",
+      "expected_shared_secret_hex": "3b87c5035cce13678dd93d2dbc3a3d42039ebec86444a1ff82cd61b84c6fe968"
+    },
+    {
+      "id": "scalar-to-public-a0",
+      "description": "scalar A0 × basepoint — public key derivation sanity.",
+      "secret_scalar_hex": "a0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebf",
+      "remote_public_hex": "0900000000000000000000000000000000000000000000000000000000000000",
+      "expected_shared_secret_hex": "605a725d2a4adfeeb1a29e17edd621c1b7593ee8cdbc44ac6c4ab6e2f805d23c"
+    }
+  ]
+}

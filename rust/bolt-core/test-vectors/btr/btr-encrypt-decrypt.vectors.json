@@ -1,0 +1,56 @@
+{
+  "_WARNING": "TEST FIXTURES ONLY — fixed nonces, not for production.",
+  "description": "BTR deterministic encrypt/decrypt via NaCl secretbox (§16.4). Fixed nonces for cross-language parity.",
+  "vectors": [
+    {
+      "id": "empty-plaintext",
+      "description": "Empty plaintext — secretbox must handle zero-length.",
+      "message_key_hex": "e0e1e2e3e4e5e6e7e8e9eaebecedeeeff0f1f2f3f4f5f6f7f8f9fafbfcfdfeff",
+      "nonce_hex": "0102030405060708090a0b0c0d0e0f101112131415161718",
+      "plaintext_hex": "",
+      "expected_ciphertext_hex": "0102030405060708090a0b0c0d0e0f1011121314151617189c847c60193d4c2aa3f390f13273e155"
+    },
+    {
+      "id": "small-plaintext",
+      "description": "5-byte ASCII plaintext.",
+      "message_key_hex": "e0e1e2e3e4e5e6e7e8e9eaebecedeeeff0f1f2f3f4f5f6f7f8f9fafbfcfdfeff",
+      "nonce_hex": "0102030405060708090a0b0c0d0e0f101112131415161718",
+      "plaintext_hex": "68656c6c6f",
+      "expected_ciphertext_hex": "0102030405060708090a0b0c0d0e0f1011121314151617181a406ac107f43c1755e815fd50afc9a16dd386d325"
+    },
+    {
+      "id": "chunk-sized-plaintext",
+      "description": "256-byte sequential plaintext (representative chunk).",
+      "message_key_hex": "e0e1e2e3e4e5e6e7e8e9eaebecedeeeff0f1f2f3f4f5f6f7f8f9fafbfcfdfeff",
+      "nonce_hex": "0102030405060708090a0b0c0d0e0f101112131415161718",
+      "plaintext_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f606162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9fa0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecfd0d1d2d3d4d5d6d7d8d9dadbdcdddedfe0e1e2e3e4e5e6e7e8e9eaebecedeeeff0f1f2f3f4f5f6f7f8f9fafbfcfdfeff",
+      "expected_ciphertext_hex": "0102030405060708090a0b0c0d0e0f10111213141516171804c52933084c0928f4317ff349005b8a05b7e8bc4e02c89a565d26d06d2e618bb63d57860543e4e5b5d43dc0ab46471c920be8a3728d82ecf53da59079699853c7425663b457a6ca884f316639d5eb24e45d255973073fc730b96faaef492387d6b4007d2a13039a9bd9e9e060cdb3970a92cbbff1796f434839d824c41c6329cc2e359200e55c0a5e28b49e74825850b9033ec4e9682cba2ac73ddec35486d292db909c0b48175162709e34cb252c8bebf7cb1cf38d7487c9730d79ffd811e0a63f832fe9e9e44de8f503013d56fb57baf9c39ca1fa72cb35f63b708b9b2192857d6068d5f1b1b89bf418a4113dba374815387a3b8426712407f33150018567434ba7223bafee3ed73534a01c97864c"
+    },
+    {
+      "id": "multi-byte-plaintext",
+      "description": "73-byte pseudo-random plaintext.",
+      "message_key_hex": "e0e1e2e3e4e5e6e7e8e9eaebecedeeeff0f1f2f3f4f5f6f7f8f9fafbfcfdfeff",
+      "nonce_hex": "0102030405060708090a0b0c0d0e0f101112131415161718",
+      "plaintext_hex": "0d141b222930373e454c535a61686f767d848b9299a0a7aeb5bcc3cad1d8dfe6edf4fb020910171e252c333a41484f565d646b727980878e959ca3aab1b8bfc6cdd4dbe2e9f0f7fe05",
+      "expected_ciphertext_hex": "0102030405060708090a0b0c0d0e0f101112131415161718ce3e1e9e4d55778044cf8502aee9838808a2f19d6337f9a31b187f81004b00f2dba8ce0788f6555c1871e411668386e55fde31825fb8b3d5f838bc81140cf92aaa170f22f9e2177325eaa8f7b4506add69c8bcf8deb28e7e7d"
+    },
+    {
+      "id": "tampered-ciphertext",
+      "description": "Last byte of ciphertext flipped — MAC must reject.",
+      "message_key_hex": "e0e1e2e3e4e5e6e7e8e9eaebecedeeeff0f1f2f3f4f5f6f7f8f9fafbfcfdfeff",
+      "nonce_hex": "0102030405060708090a0b0c0d0e0f101112131415161718",
+      "plaintext_hex": "",
+      "expected_ciphertext_hex": "0102030405060708090a0b0c0d0e0f101112131415161718d97ca175fd67a62928a36955ed4d4e2571d787cf2f75e3e93b2759",
+      "expect_error": "RATCHET_DECRYPT_FAIL"
+    },
+    {
+      "id": "truncated-ciphertext",
+      "description": "Sealed payload shorter than nonce+MAC — must reject.",
+      "message_key_hex": "e0e1e2e3e4e5e6e7e8e9eaebecedeeeff0f1f2f3f4f5f6f7f8f9fafbfcfdfeff",
+      "nonce_hex": "0102030405060708090a0b0c0d0e0f101112131415161718",
+      "plaintext_hex": "",
+      "expected_ciphertext_hex": "00000000000000000000",
+      "expect_error": "RATCHET_DECRYPT_FAIL"
+    }
+  ]
+}

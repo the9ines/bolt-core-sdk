@@ -2,8 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { WIRE_ERROR_CODES, isValidWireErrorCode } from '../src/errors.js';
 
 describe('Wire Error Code Registry (PROTOCOL.md §10)', () => {
-  it('contains exactly 22 entries', () => {
-    expect(WIRE_ERROR_CODES).toHaveLength(22);
+  it('contains exactly 26 entries (22 base + 4 BTR)', () => {
+    expect(WIRE_ERROR_CODES).toHaveLength(26);
   });
 
   it('all entries are unique', () => {
@@ -15,7 +15,7 @@ describe('Wire Error Code Registry (PROTOCOL.md §10)', () => {
     expect(isValidWireErrorCode('INVALID_STATE')).toBe(true);
   });
 
-  it('isValidWireErrorCode accepts all 22 codes', () => {
+  it('isValidWireErrorCode accepts all 26 codes', () => {
     for (const code of WIRE_ERROR_CODES) {
       expect(isValidWireErrorCode(code)).toBe(true);
     }

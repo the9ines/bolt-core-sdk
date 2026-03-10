@@ -1,6 +1,6 @@
 //! BTR golden vector generator — Rust authority for cross-language parity.
 //!
-//! Generates deterministic JSON fixtures for 5 BTR vector categories.
+//! Generates deterministic JSON fixtures for 8 BTR vector categories.
 //! Output path: `bolt-core-sdk/rust/bolt-core/test-vectors/btr/`
 //! TS parity consumption: `bolt-core-sdk/ts/bolt-core/__tests__/vectors/btr/`
 //!
@@ -11,6 +11,10 @@ use serde::Serialize;
 use crate::key_schedule::{chain_advance, derive_session_root, derive_transfer_root};
 use crate::negotiate::{negotiate_btr, BtrMode};
 use crate::ratchet::derive_ratcheted_session_root;
+
+use crypto_secretbox::aead::Aead;
+use crypto_secretbox::{KeyInit, Nonce, XSalsa20Poly1305};
+use x25519_dalek::{PublicKey, StaticSecret};
 
 fn to_hex(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{:02x}", b)).collect()
@@ -376,6 +380,246 @@ pub fn generate_dh_ratchet_json() -> String {
     let data = DhRatchetVectors {
         warning: "TEST FIXTURES ONLY — deterministic keys, not for production.".into(),
         description: "BTR inter-transfer DH ratchet step via HKDF-SHA256 (§16.3).".into(),
+        vectors,
+    };
+    serde_json::to_string_pretty(&data).unwrap() + "\n"
+}
+
+// ── btr-encrypt-decrypt (deterministic fixed-nonce) ─────────────────
+
+#[derive(Serialize)]
+struct EncryptDecryptVectors {
+    #[serde(rename = "_WARNING")]
+    warning: String,
+    description: String,
+    vectors: Vec<EncryptDecryptVector>,
+}
+
+#[derive(Serialize)]
+struct EncryptDecryptVector {
+    id: String,
+    description: String,
+    message_key_hex: String,
+    nonce_hex: String,
+    plaintext_hex: String,
+    expected_ciphertext_hex: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    expect_error: Option<String>,
+}
+
+/// Generate deterministic encrypt/decrypt vectors using fixed nonces.
+///
+/// Uses NaCl secretbox (XSalsa20-Poly1305) directly with known nonces
+/// so that TS can reproduce byte-identical ciphertext.
+pub fn generate_encrypt_decrypt_json() -> String {
+    let key = make_key(0xE0);
+    let nonce_bytes: [u8; 24] = [
+        0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
+        0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10,
+        0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18,
+    ];
+
+    let cipher = XSalsa20Poly1305::new((&key).into());
+    let nonce = Nonce::from_slice(&nonce_bytes);
+
+    // Helper: encrypt with fixed nonce, return nonce || ciphertext hex
+    let seal = |plaintext: &[u8]| -> String {
+        let ct = cipher.encrypt(nonce, plaintext).unwrap();
+        let mut combined = Vec::with_capacity(24 + ct.len());
+        combined.extend_from_slice(&nonce_bytes);
+        combined.extend_from_slice(&ct);
+        to_hex(&combined)
+    };
+
+    // Vector 1: empty plaintext
+    let empty_pt = vec![];
+    let empty_ct = seal(&empty_pt);
+
+    // Vector 2: small plaintext
+    let small_pt = b"hello";
+    let small_ct = seal(small_pt);
+
+    // Vector 3: chunk-sized (256 bytes — representative, not 16K for file size)
+    let chunk_pt: Vec<u8> = (0..256).map(|i| (i & 0xFF) as u8).collect();
+    let chunk_ct = seal(&chunk_pt);
+
+    // Vector 4: multi-byte random-ish plaintext
+    let multi_pt: Vec<u8> = (0..73).map(|i| ((i * 7 + 13) & 0xFF) as u8).collect();
+    let multi_ct = seal(&multi_pt);
+
+    // Vector 5: tampered ciphertext — flip last byte of a valid seal
+    let valid_sealed = {
+        let ct = cipher.encrypt(nonce, b"tamper-test".as_slice()).unwrap();
+        let mut combined = Vec::with_capacity(24 + ct.len());
+        combined.extend_from_slice(&nonce_bytes);
+        combined.extend_from_slice(&ct);
+        combined
+    };
+    let mut tampered = valid_sealed.clone();
+    let last = tampered.len() - 1;
+    tampered[last] ^= 0x01;
+
+    let vectors = vec![
+        EncryptDecryptVector {
+            id: "empty-plaintext".into(),
+            description: "Empty plaintext — secretbox must handle zero-length.".into(),
+            message_key_hex: to_hex(&key),
+            nonce_hex: to_hex(&nonce_bytes),
+            plaintext_hex: to_hex(&empty_pt),
+            expected_ciphertext_hex: empty_ct,
+            expect_error: None,
+        },
+        EncryptDecryptVector {
+            id: "small-plaintext".into(),
+            description: "5-byte ASCII plaintext.".into(),
+            message_key_hex: to_hex(&key),
+            nonce_hex: to_hex(&nonce_bytes),
+            plaintext_hex: to_hex(small_pt),
+            expected_ciphertext_hex: small_ct,
+            expect_error: None,
+        },
+        EncryptDecryptVector {
+            id: "chunk-sized-plaintext".into(),
+            description: "256-byte sequential plaintext (representative chunk).".into(),
+            message_key_hex: to_hex(&key),
+            nonce_hex: to_hex(&nonce_bytes),
+            plaintext_hex: to_hex(&chunk_pt),
+            expected_ciphertext_hex: chunk_ct,
+            expect_error: None,
+        },
+        EncryptDecryptVector {
+            id: "multi-byte-plaintext".into(),
+            description: "73-byte pseudo-random plaintext.".into(),
+            message_key_hex: to_hex(&key),
+            nonce_hex: to_hex(&nonce_bytes),
+            plaintext_hex: to_hex(&multi_pt),
+            expected_ciphertext_hex: multi_ct,
+            expect_error: None,
+        },
+        EncryptDecryptVector {
+            id: "tampered-ciphertext".into(),
+            description: "Last byte of ciphertext flipped — MAC must reject.".into(),
+            message_key_hex: to_hex(&key),
+            nonce_hex: to_hex(&nonce_bytes),
+            plaintext_hex: "".into(),
+            expected_ciphertext_hex: to_hex(&tampered),
+            expect_error: Some("RATCHET_DECRYPT_FAIL".into()),
+        },
+        EncryptDecryptVector {
+            id: "truncated-ciphertext".into(),
+            description: "Sealed payload shorter than nonce+MAC — must reject.".into(),
+            message_key_hex: to_hex(&key),
+            nonce_hex: to_hex(&nonce_bytes),
+            plaintext_hex: "".into(),
+            expected_ciphertext_hex: to_hex(&[0u8; 10]),
+            expect_error: Some("RATCHET_DECRYPT_FAIL".into()),
+        },
+    ];
+
+    let data = EncryptDecryptVectors {
+        warning: "TEST FIXTURES ONLY — fixed nonces, not for production.".into(),
+        description: "BTR deterministic encrypt/decrypt via NaCl secretbox (§16.4). Fixed nonces for cross-language parity.".into(),
+        vectors,
+    };
+    serde_json::to_string_pretty(&data).unwrap() + "\n"
+}
+
+// ── btr-dh-sanity (X25519 cross-library) ────────────────────────────
+
+#[derive(Serialize)]
+struct DhSanityVectors {
+    #[serde(rename = "_WARNING")]
+    warning: String,
+    description: String,
+    vectors: Vec<DhSanityVector>,
+}
+
+#[derive(Serialize)]
+struct DhSanityVector {
+    id: String,
+    description: String,
+    secret_scalar_hex: String,
+    remote_public_hex: String,
+    expected_shared_secret_hex: String,
+}
+
+/// Generate DH sanity check vectors for tweetnacl.scalarMult vs x25519-dalek.
+///
+/// Uses deterministic secret scalars (NOT CSPRNG) and derives public keys
+/// from them, then computes DH outputs for cross-library verification.
+pub fn generate_dh_sanity_json() -> String {
+    // Use StaticSecret for deterministic scalar injection.
+    // EphemeralSecret cannot be constructed from known bytes.
+    let scalars: Vec<[u8; 32]> = vec![
+        make_key(0xA0),
+        make_key(0xB0),
+        make_key(0xC0),
+    ];
+
+    let secrets: Vec<StaticSecret> = scalars
+        .iter()
+        .map(|s| StaticSecret::from(*s))
+        .collect();
+
+    let publics: Vec<PublicKey> = secrets
+        .iter()
+        .map(PublicKey::from)
+        .collect();
+
+    let vectors = vec![
+        // Alice (A0) × Bob (B0)
+        {
+            let shared = secrets[0].diffie_hellman(&publics[1]);
+            DhSanityVector {
+                id: "dh-a0-b0".into(),
+                description: "scalar A0 × public B0 — basic DH.".into(),
+                secret_scalar_hex: to_hex(&scalars[0]),
+                remote_public_hex: to_hex(publics[1].as_bytes()),
+                expected_shared_secret_hex: to_hex(shared.as_bytes()),
+            }
+        },
+        // Bob (B0) × Alice (A0) — must equal A0×B0 (commutativity)
+        {
+            let shared = secrets[1].diffie_hellman(&publics[0]);
+            DhSanityVector {
+                id: "dh-b0-a0".into(),
+                description: "scalar B0 × public A0 — commutativity check (must equal dh-a0-b0).".into(),
+                secret_scalar_hex: to_hex(&scalars[1]),
+                remote_public_hex: to_hex(publics[0].as_bytes()),
+                expected_shared_secret_hex: to_hex(shared.as_bytes()),
+            }
+        },
+        // Charlie (C0) × Alice (A0)
+        {
+            let shared = secrets[2].diffie_hellman(&publics[0]);
+            DhSanityVector {
+                id: "dh-c0-a0".into(),
+                description: "scalar C0 × public A0 — different pair yields different output.".into(),
+                secret_scalar_hex: to_hex(&scalars[2]),
+                remote_public_hex: to_hex(publics[0].as_bytes()),
+                expected_shared_secret_hex: to_hex(shared.as_bytes()),
+            }
+        },
+        // Scalar-to-basepoint: derive public key from scalar A0
+        {
+            DhSanityVector {
+                id: "scalar-to-public-a0".into(),
+                description: "scalar A0 × basepoint — public key derivation sanity.".into(),
+                secret_scalar_hex: to_hex(&scalars[0]),
+                remote_public_hex: to_hex(&[
+                    0x09, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                ]), // X25519 basepoint
+                expected_shared_secret_hex: to_hex(publics[0].as_bytes()),
+            }
+        },
+    ];
+
+    let data = DhSanityVectors {
+        warning: "TEST FIXTURES ONLY — deterministic scalars, not for production.".into(),
+        description: "X25519 DH cross-library sanity: x25519-dalek (Rust) vs tweetnacl.scalarMult (TS).".into(),
         vectors,
     };
     serde_json::to_string_pretty(&data).unwrap() + "\n"

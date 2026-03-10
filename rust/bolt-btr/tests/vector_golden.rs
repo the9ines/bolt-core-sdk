@@ -88,6 +88,22 @@ fn generate_dh_ratchet_vectors() {
     );
 }
 
+#[test]
+fn generate_encrypt_decrypt_vectors() {
+    write_and_verify(
+        "btr-encrypt-decrypt.vectors.json",
+        vectors::generate_encrypt_decrypt_json,
+    );
+}
+
+#[test]
+fn generate_dh_sanity_vectors() {
+    write_and_verify(
+        "btr-dh-sanity.vectors.json",
+        vectors::generate_dh_sanity_json,
+    );
+}
+
 /// Generates all vector files and then verifies they all exist.
 #[test]
 fn all_vector_files_present() {
@@ -116,6 +132,14 @@ fn all_vector_files_present() {
         (
             "btr-dh-ratchet.vectors.json",
             vectors::generate_dh_ratchet_json,
+        ),
+        (
+            "btr-encrypt-decrypt.vectors.json",
+            vectors::generate_encrypt_decrypt_json,
+        ),
+        (
+            "btr-dh-sanity.vectors.json",
+            vectors::generate_dh_sanity_json,
         ),
     ];
     for (filename, gen) in &generators {
