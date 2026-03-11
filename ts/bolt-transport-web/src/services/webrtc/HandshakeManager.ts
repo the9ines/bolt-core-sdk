@@ -9,7 +9,7 @@
  * via `(service as any).fieldName`). The manager reads/writes shared state
  * through the ConnectionContext bridge.
  */
-import { openBoxPayload, sealBoxPayload, toBase64, fromBase64, KeyMismatchError, computeSas } from '@the9ines/bolt-core';
+import { openBoxPayload, sealBoxPayload, toBase64, fromBase64, KeyMismatchError, computeSas, negotiateBtr, btrLogToken, BtrMode } from '@the9ines/bolt-core';
 import { ConnectionError } from '../../types/webrtc-errors.js';
 import { verifyPinnedIdentity } from '../identity/pin-store.js';
 import type { HandshakeContext } from './context.js';
@@ -135,6 +135,29 @@ export class HandshakeManager {
       const localSet = new Set(this.ctx.getLocalCapabilities());
       this.ctx.setNegotiatedCapabilities(rawCaps.filter((c: string) => localSet.has(c)));
       console.log('[HELLO] Remote capabilities:', rawCaps, '→ negotiated:', this.ctx.getNegotiatedCapabilities());
+
+      // BTR negotiation (§16.2): determine BTR mode from capability intersection
+      const localSupportsBtr = localSet.has('bolt.transfer-ratchet-v1');
+      const remoteSupportsBtr = rawCaps.includes('bolt.transfer-ratchet-v1');
+      // Remote is well-formed if they advertise BTR and pass all other validation
+      // (reaching this point means no protocol violations detected)
+      const remoteWellFormed = remoteSupportsBtr;
+      const btrMode = negotiateBtr(localSupportsBtr, remoteSupportsBtr, remoteWellFormed);
+      this.ctx.setBtrMode(btrMode);
+
+      const btrToken = btrLogToken(btrMode);
+      if (btrMode === BtrMode.FullBtr) {
+        console.log('[BTR_FULL] BTR negotiated — per-transfer DH ratchet + per-chunk chain active');
+      } else if (btrToken) {
+        console.warn(`${btrToken} BTR mode: ${btrMode}`);
+      }
+      if (btrMode === BtrMode.Reject) {
+        this.ctx.onFatalError('RATCHET_DOWNGRADE_REJECTED', 'Malformed BTR capability advertisement');
+        return;
+      }
+      if (btrMode === BtrMode.Downgrade) {
+        options.onBtrDowngrade?.();
+      }
 
       // N5: Enforce envelope-v1 in identity-configured sessions.
       // If we reach processHello(), identity IS configured. Remote MUST

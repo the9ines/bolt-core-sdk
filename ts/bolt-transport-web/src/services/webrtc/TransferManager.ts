@@ -8,7 +8,12 @@
  * TransferManager reads/writes through a TransferContext bridge so that
  * tests (which set fields via `(service as any).fieldName`) continue to work.
  */
-import { sealBoxPayload, openBoxPayload, DEFAULT_CHUNK_SIZE, EncryptionError, IntegrityError, hashFile, toBase64, bufferToHex } from '@the9ines/bolt-core';
+import { sealBoxPayload, openBoxPayload, DEFAULT_CHUNK_SIZE, EncryptionError, IntegrityError, hashFile, toBase64, fromBase64, bufferToHex } from '@the9ines/bolt-core';
+
+import type { BtrModeValue } from '@the9ines/bolt-core';
+
+/** BTR mode string constant — avoids importing BtrMode (which breaks mocked tests). */
+const BTR_FULL = 'FULL_BTR' as const;
 import { WebRTCError, TransferError } from '../../types/webrtc-errors.js';
 import { ENABLE_TRANSFER_METRICS, TransferMetricsCollector, summarizeTransfer } from './transferMetrics.js';
 import { dcSendMessage } from './EnvelopeCodec.js';
@@ -16,6 +21,7 @@ import type { FileChunkMessage, ActiveTransfer, TransferProgress, DcControlMessa
 import { CANONICAL_CONTROL_TYPES } from './types.js';
 import { getPolicyAdapter } from './PolicyAdapter.js';
 import type { PolicyAdapter, PolicyDecideInput } from './PolicyAdapter.js';
+import type { BtrTransferAdapter, BtrEnvelopeFields } from './BtrTransferAdapter.js';
 
 /** Generate a spec-compliant transfer_id (bytes16 → hex, 32 chars). */
 function generateTransferId(): string {
@@ -85,10 +91,14 @@ export interface TransferContext {
   disconnect(): void;
 
   // Envelope send helper
-  sendMessage(innerMsg: any): void;
+  sendMessage(innerMsg: any, btrFields?: BtrEnvelopeFields): void;
 
   // HELLO wait (delegates to service's waitForHello)
   waitForHello(): Promise<void>;
+
+  // BTR state
+  getBtrMode(): BtrModeValue | null;
+  getBtrAdapter(): BtrTransferAdapter | null;
 }
 
 /** DP-9: Max time (ms) to wait for onbufferedamountlow before polling fallback. */
@@ -133,6 +143,22 @@ export class TransferManager {
     let fileHash: string | undefined;
     if (this.ctx.hasCapability('bolt.file-hash')) {
       fileHash = await hashFile(file);
+    }
+
+    // BTR: initialize transfer context if FullBtr negotiated
+    const btrAdapter = this.ctx.getBtrAdapter();
+    const isBtrMode = this.ctx.getBtrMode() === BTR_FULL && btrAdapter !== null;
+    let senderRatchetPub: Uint8Array | undefined;
+    if (isBtrMode) {
+      const transferIdBytes = fromBase64(toBase64(new TextEncoder().encode(transferId.slice(0, 16).padEnd(16, '\0')))).slice(0, 16);
+      // Use hex transferId as 16-byte identifier
+      const tidBytes = new Uint8Array(16);
+      for (let i = 0; i < 16 && i * 2 < transferId.length; i++) {
+        tidBytes[i] = parseInt(transferId.slice(i * 2, i * 2 + 2), 16);
+      }
+      const [_btrCtx, ratchetPub] = btrAdapter.beginSend(tidBytes, remotePublicKey);
+      senderRatchetPub = ratchetPub;
+      console.log(`[BTR_TRANSFER_SEND] DH ratchet step complete, generation=${btrAdapter.generation}`);
     }
 
     console.log(`[TRANSFER] Sending ${file.name} (${file.size} bytes, ${totalChunks} chunks, tid=${transferId})`);
@@ -220,7 +246,19 @@ export class TransferManager {
 
           const keyPair = this.ctx.getKeyPair();
           if (!keyPair) throw new EncryptionError('No ephemeral key pair');
-          const encrypted = sealBoxPayload(raw, remotePublicKey, keyPair.secretKey);
+
+          let encrypted: string;
+          let btrFields: BtrEnvelopeFields | undefined;
+
+          if (isBtrMode && btrAdapter?.activeTransferCtx) {
+            // BTR mode: encrypt chunk with chain-derived message key (NaCl secretbox)
+            const [chainIdx, sealed] = btrAdapter.activeTransferCtx.sealChunk(raw);
+            encrypted = toBase64(sealed);
+            btrFields = btrAdapter.buildEnvelopeFields(chainIdx, chunkIndex === 0 ? senderRatchetPub : undefined);
+          } else {
+            // Static ephemeral mode: encrypt chunk with NaCl box
+            encrypted = sealBoxPayload(raw, remotePublicKey, keyPair.secretKey);
+          }
 
           const msg: FileChunkMessage = {
             type: 'file-chunk',
@@ -241,7 +279,7 @@ export class TransferManager {
           chunksSent++;
           lastProgressAt = Date.now();
           this.ctx.getMetricsCollector()?.recordChunkSend(this.ctx.getDc()!.bufferedAmount, chunksSent);
-          this.ctx.sendMessage(msg);
+          this.ctx.sendMessage(msg, btrFields);
 
           // Progress cadence — policy decides whether to emit
           const now = Date.now();
@@ -283,6 +321,12 @@ export class TransferManager {
 
       console.log(`[TRANSFER] All chunks sent for ${file.name}`);
       this.ctx.getSendTransferIds().delete(file.name);
+
+      // BTR: cleanup transfer context
+      if (isBtrMode && btrAdapter) {
+        btrAdapter.endTransfer();
+        console.log('[BTR_TRANSFER_COMPLETE] Transfer context cleaned up');
+      }
 
       const collector = this.ctx.getMetricsCollector();
       if (collector) {
@@ -507,6 +551,11 @@ export class TransferManager {
     const { filename, chunk, chunkIndex, totalChunks, fileSize, transferId } = msg;
     const remoteIdKey = this.ctx.getRemoteIdentityKey();
     const identityKey = remoteIdKey ? toBase64(remoteIdKey) : '';
+    const btrAdapter = this.ctx.getBtrAdapter();
+    const isBtrMode = this.ctx.getBtrMode() === BTR_FULL && btrAdapter !== null;
+
+    // BTR: extract envelope-level fields from the message (attached by WebRTCService.handleMessage)
+    const btrEnvelopeFields: BtrEnvelopeFields | null = (msg as any)._btrEnvelopeFields ?? null;
 
     // Lookup or create guarded transfer
     const guardedTransfers = this.ctx.getGuardedTransfers();
@@ -529,6 +578,20 @@ export class TransferManager {
       this.ctx.getRecvTransferIds().set(filename, transferId!);
       this.ctx.setTransferStartTime(Date.now());
       this.ctx.setPauseDuration(0);
+
+      // BTR: initialize receive-side transfer context on first chunk
+      if (isBtrMode && btrEnvelopeFields?.ratchet_public_key) {
+        const keyPair = this.ctx.getKeyPair();
+        if (!keyPair) throw new EncryptionError('No ephemeral key pair for BTR DH');
+        const senderRatchetPub = fromBase64(btrEnvelopeFields.ratchet_public_key);
+        // Parse hex transferId to bytes
+        const tidBytes = new Uint8Array(16);
+        for (let i = 0; i < 16 && i * 2 < transferId!.length; i++) {
+          tidBytes[i] = parseInt(transferId!.slice(i * 2, i * 2 + 2), 16);
+        }
+        btrAdapter.beginReceive(tidBytes, senderRatchetPub, keyPair.secretKey);
+        console.log(`[BTR_TRANSFER_RECV] DH ratchet step complete, generation=${btrAdapter.generation}`);
+      }
     } else if (transfer.remoteIdentityKey !== identityKey) {
       // Same transferId but different sender identity — cross-peer collision
       console.warn(`[REPLAY_XFER_MISMATCH] transferId=${transferId} bound to different sender identity — ignored`);
@@ -544,7 +607,16 @@ export class TransferManager {
     try {
       const keyPair = this.ctx.getKeyPair();
       if (!keyPair) throw new EncryptionError('No ephemeral key pair');
-      const decrypted = openBoxPayload(chunk!, this.ctx.getRemotePublicKey()!, keyPair.secretKey);
+
+      let decrypted: Uint8Array;
+      if (isBtrMode && btrAdapter?.activeTransferCtx && btrEnvelopeFields) {
+        // BTR mode: decrypt with chain-derived message key
+        const sealed = fromBase64(chunk!);
+        decrypted = btrAdapter.activeTransferCtx.openChunk(btrEnvelopeFields.chain_index, sealed);
+      } else {
+        // Static ephemeral mode: decrypt with NaCl box
+        decrypted = openBoxPayload(chunk!, this.ctx.getRemotePublicKey()!, keyPair.secretKey);
+      }
       transfer.buffer[chunkIndex!] = new Blob([decrypted as BlobPart]);
       transfer.receivedSet.add(chunkIndex!);
 
@@ -589,6 +661,11 @@ export class TransferManager {
         console.log(`[TRANSFER] Completed receiving ${filename} (tid=${transferId})`);
         guardedTransfers.delete(transferId!);
         this.ctx.getRecvTransferIds().delete(filename);
+        // BTR: cleanup receive-side transfer context
+        if (isBtrMode && btrAdapter) {
+          btrAdapter.endTransfer();
+          console.log('[BTR_TRANSFER_COMPLETE] Receive transfer context cleaned up');
+        }
         this.emitProgress(filename, totalChunks!, totalChunks!, fileSize!, fileSize!, 'completed');
         this.ctx.onReceiveFile(assembledBlob, filename);
       }
@@ -596,6 +673,10 @@ export class TransferManager {
       console.error(`[TRANSFER] Error processing chunk ${chunkIndex} of ${filename} (tid=${transferId}):`, error);
       guardedTransfers.delete(transferId!);
       this.ctx.getRecvTransferIds().delete(filename);
+      // BTR: cleanup on error
+      if (isBtrMode && btrAdapter) {
+        btrAdapter.cancelTransfer();
+      }
       this.emitProgress(filename, 0, totalChunks!, 0, fileSize!, 'error');
       this.ctx.onError(error instanceof WebRTCError ? error : new TransferError('Chunk processing failed', error));
     }

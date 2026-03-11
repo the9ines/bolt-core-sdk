@@ -75,6 +75,13 @@ export interface ProfileEnvelopeV1 {
   version: 1;
   encoding: 'base64';
   payload: string;
+  // BTR envelope-level fields (§16.2, BTR-0 wire lock)
+  /** Base64-encoded 32-byte ratchet public key. Present on first chunk of a transfer (DH ratchet step). */
+  ratchet_public_key?: string;
+  /** DH ratchet epoch counter. Present with ratchet_public_key. */
+  ratchet_generation?: number;
+  /** Symmetric chain position (0-based). Present on every FILE_CHUNK in a BTR session. */
+  chain_index?: number;
 }
 
 /** Receiver-side state for a guarded transfer (transferId present). */
@@ -103,4 +110,8 @@ export interface WebRTCServiceOptions {
   pinStore?: import('../identity/pin-store.js').PinPersistence;
   /** Callback fired when verification state changes (after HELLO or on legacy timeout). */
   onVerificationState?: (info: VerificationInfo) => void;
+  /** Enable BTR (Bolt Transfer Ratchet) capability advertisement. Default: false (dark launch). */
+  btrEnabled?: boolean;
+  /** Callback fired when BTR downgrade occurs (one-sided support). */
+  onBtrDowngrade?: () => void;
 }

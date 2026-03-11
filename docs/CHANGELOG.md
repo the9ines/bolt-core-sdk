@@ -2,6 +2,65 @@
 
 All notable changes to bolt-core-sdk are documented here. Newest first.
 
+## [sdk-v0.5.39-btr4-wire-integration — BTR-4 Wire Integration] - 2026-03-11
+
+BTR-4: Wire integration of Bolt Transfer Ratchet into SDK runtime flow behind
+capability negotiation gates, with backward compatibility and kill switch.
+
+### Added (bolt-transport-web)
+- `BtrTransferAdapter` — adapter bridging BTR core primitives to transport layer
+  - Sender: fresh DH ratchet keypair per transfer, `sealChunk()` via BTR secretbox
+  - Receiver: DH commutativity via existing ephemeral secret key, `openChunk()`
+  - Session root key evolution via `deriveRatchetedSessionRoot()`
+  - Key zeroization on end/cancel/disconnect
+- BTR capability negotiation in HELLO handshake (`bolt.transfer-ratchet-v1`)
+  - 5-cell matrix: FullBtr, Downgrade, StaticEphemeral, Reject
+  - Kill switch via `WebRTCServiceOptions.btrEnabled` (default false)
+  - `onBtrDowngrade` callback for one-sided BTR awareness
+- BTR envelope-level fields on `ProfileEnvelopeV1` (per BTR-0 wire lock)
+  - `ratchet_public_key` (base64, first chunk only)
+  - `ratchet_generation` (uint32, first chunk only)
+  - `chain_index` (uint32, every chunk)
+- `encodeProfileEnvelopeV1` extended with optional `btrFields` parameter
+- `extractBtrEnvelopeFields()` for inbound BTR metadata extraction
+- `dcSendMessage` extended with `btrFields` pass-through
+- BTR mode storage on `HandshakeContext` interface
+- Transfer path integration: `sendFile()` and `processChunkGuarded()` route through
+  BTR adapter when `btrMode === 'FULL_BTR'`
+- Structured log tokens: `[BTR_FULL]`, `[BTR_DOWNGRADE]`, `[BTR_DOWNGRADE_REJECTED]`
+- 40 new tests in `btr4-wire-integration.test.ts`:
+  - P1: Negotiation matrix (5 cells), kill switch (3), log tokens (4)
+  - P2: Envelope encode/decode (3), extractBtrEnvelopeFields (4)
+  - P3: Adapter init (1), beginSend (2), beginReceive (1), buildEnvelopeFields (2), cleanup (3)
+  - P4: Backward compat (4)
+  - P6: Chain desync (3), compatibility matrix (3), reconnect/reset (2)
+- BTR mock stubs added to 21 existing test files for `negotiateBtr`, `btrLogToken`, `BtrMode`, `scalarMult`
+
+### Files Changed
+- `ts/bolt-transport-web/src/services/webrtc/BtrTransferAdapter.ts` (NEW)
+- `ts/bolt-transport-web/src/__tests__/btr4-wire-integration.test.ts` (NEW)
+- `ts/bolt-transport-web/src/services/webrtc/types.ts`
+- `ts/bolt-transport-web/src/services/webrtc/context.ts`
+- `ts/bolt-transport-web/src/services/webrtc/HandshakeManager.ts`
+- `ts/bolt-transport-web/src/services/webrtc/EnvelopeCodec.ts`
+- `ts/bolt-transport-web/src/services/webrtc/WebRTCService.ts`
+- `ts/bolt-transport-web/src/services/webrtc/TransferManager.ts`
+- `ts/bolt-transport-web/src/__tests__/*.test.ts` (21 files — BTR mock stubs)
+- `docs/STATE.md`
+- `docs/CHANGELOG.md`
+
+### Validation Gates
+- TypeScript type check: PASS
+- Transport-web tests: 338/338 pass (29 files)
+- BTR conformance suite: 5/5 pass
+- Rust fmt: clean
+- Rust clippy: clean
+- BTR constants cross-language parity: PASS
+
+**Tag:** `sdk-v0.5.39-btr4-wire-integration`
+
+---
+
 ## [sdk-v0.5.30-tstream0-transfer-core-v1 — T-STREAM-0 Transfer Core] - 2026-03-08
 
 T-STREAM-0: Transport-agnostic transfer state machine extracted from bolt-daemon

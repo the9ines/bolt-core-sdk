@@ -59,4 +59,8 @@ export interface HandshakeContext {
   getNegotiatedCapabilities(): string[];
   setNegotiatedCapabilities(caps: string[]): void;
   setRemoteCapabilities(caps: string[]): void;
+
+  // ─── BTR state (read/write) ───────────────────────────────────
+  getBtrMode(): string | null;
+  setBtrMode(mode: string | null): void;
 }

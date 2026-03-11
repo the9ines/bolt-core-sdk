@@ -68,6 +68,10 @@ vi.mock('@the9ines/bolt-core', () => ({
       'ENVELOPE_INVALID', 'HELLO_PARSE_ERROR', 'HELLO_DECRYPT_FAIL', 'HELLO_SCHEMA_ERROR',
       'INVALID_MESSAGE', 'UNKNOWN_MESSAGE_TYPE', 'PROTOCOL_VIOLATION',
     ].includes(x as string),
+  negotiateBtr: () => 'STATIC_EPHEMERAL',
+  btrLogToken: () => null,
+  BtrMode: { FullBtr: 'FULL_BTR', Downgrade: 'DOWNGRADE', StaticEphemeral: 'STATIC_EPHEMERAL', Reject: 'REJECT' },
+  scalarMult: () => new Uint8Array(32),
 }));
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────

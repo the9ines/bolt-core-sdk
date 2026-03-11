@@ -62,6 +62,10 @@ vi.mock('@the9ines/bolt-core', () => ({
     'PROTOCOL_VIOLATION',
   ],
   isValidWireErrorCode: (x: unknown) => typeof x === 'string',
+  negotiateBtr: () => 'STATIC_EPHEMERAL',
+  btrLogToken: () => null,
+  BtrMode: { FullBtr: 'FULL_BTR', Downgrade: 'DOWNGRADE', StaticEphemeral: 'STATIC_EPHEMERAL', Reject: 'REJECT' },
+  scalarMult: () => new Uint8Array(32),
 }));
 
 // ─── Helpers ──────────────────────────────────────────────────────────────

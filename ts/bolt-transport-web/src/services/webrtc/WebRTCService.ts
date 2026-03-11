@@ -1,11 +1,14 @@
-import { generateEphemeralKeyPair, toBase64, fromBase64, openBoxPayload, isValidWireErrorCode } from '@the9ines/bolt-core';
+import { generateEphemeralKeyPair, toBase64, fromBase64, openBoxPayload, isValidWireErrorCode, scalarMult, BtrMode } from '@the9ines/bolt-core';
+import type { BtrModeValue } from '@the9ines/bolt-core';
 import { WebRTCError, ConnectionError, TransferError } from '../../types/webrtc-errors.js';
 import { getLocalOnlyRTCConfig } from '../../lib/platform-utils.js';
 import type { SignalingProvider, SignalMessage } from '../signaling/index.js';
 import type { TransferMetricsCollector } from './transferMetrics.js';
 import { HandshakeManager } from './HandshakeManager.js';
 import { TransferManager } from './TransferManager.js';
-import { encodeProfileEnvelopeV1, dcSendMessage } from './EnvelopeCodec.js';
+import { encodeProfileEnvelopeV1, dcSendMessage, extractBtrEnvelopeFields } from './EnvelopeCodec.js';
+import { BtrTransferAdapter } from './BtrTransferAdapter.js';
+import type { BtrEnvelopeFields } from './BtrTransferAdapter.js';
 import type { HandshakeContext } from './context.js';
 import type { TransferContext } from './TransferManager.js';
 
@@ -83,9 +86,13 @@ class WebRTCService {
   private verificationInfo: VerificationInfo = { state: 'legacy', sasCode: null };
 
   // Capabilities negotiation
-  private localCapabilities: string[] = ['bolt.file-hash', 'bolt.profile-envelope-v1'];
+  private localCapabilities: string[];
   private remoteCapabilities: string[] = [];
   private negotiatedCapabilities: string[] = [];
+
+  // BTR state
+  private btrMode: BtrModeValue | null = null;
+  private btrAdapter: BtrTransferAdapter | null = null;
 
   // ─── Decomposed managers ────────────────────────────────────────
   private handshake: HandshakeManager;
@@ -104,6 +111,12 @@ class WebRTCService {
     this.options = options ?? {};
     this.signaling = signaling;
     this.signalUnsub = this.signaling.onSignal((signal) => this.handleSignal(signal));
+
+    // Build capabilities list — BTR capability only when kill switch is on
+    this.localCapabilities = ['bolt.file-hash', 'bolt.profile-envelope-v1'];
+    if (this.options.btrEnabled) {
+      this.localCapabilities.push('bolt.transfer-ratchet-v1');
+    }
 
     // Build context bridges and instantiate managers
     this.handshake = new HandshakeManager(this.buildHandshakeContext());
@@ -144,6 +157,16 @@ class WebRTCService {
       getNegotiatedCapabilities: () => this.negotiatedCapabilities,
       setNegotiatedCapabilities: (v) => { this.negotiatedCapabilities = v; },
       setRemoteCapabilities: (v) => { this.remoteCapabilities = v; },
+      getBtrMode: () => this.btrMode,
+      setBtrMode: (v) => {
+        this.btrMode = v as BtrModeValue | null;
+        // Initialize BTR adapter when FullBtr negotiated
+        if (v === BtrMode.FullBtr && this.keyPair && this.remotePublicKey) {
+          const sharedSecret = scalarMult(this.keyPair.secretKey, this.remotePublicKey);
+          this.btrAdapter = new BtrTransferAdapter(sharedSecret);
+          console.log('[BTR_INIT] BTR adapter initialized');
+        }
+      },
     };
   }
 
@@ -184,8 +207,10 @@ class WebRTCService {
       onReceiveFile: (file, filename) => this.onReceiveFile(file, filename),
       onError: (error) => this.onError(error instanceof WebRTCError ? error : new TransferError('Transfer error', error)),
       disconnect: () => this.disconnect(),
-      sendMessage: (innerMsg) => this.dcSendMessage(innerMsg),
+      sendMessage: (innerMsg, btrFields?) => this.dcSendMessage(innerMsg, btrFields),
       waitForHello: () => this.waitForHello(),
+      getBtrMode: () => this.btrMode,
+      getBtrAdapter: () => this.btrAdapter,
     };
   }
 
@@ -581,6 +606,13 @@ class WebRTCService {
     // Clear capabilities
     this.remoteCapabilities = [];
     this.negotiatedCapabilities = [];
+
+    // Clear BTR state
+    if (this.btrAdapter) {
+      this.btrAdapter.cleanupDisconnect();
+      this.btrAdapter = null;
+    }
+    this.btrMode = null;
   }
 
   // ─── Message Routing ──────────────────────────────────────────────────
@@ -675,6 +707,11 @@ class WebRTCService {
           console.warn('[INVALID_MESSAGE] enveloped file-chunk with missing/empty filename — disconnecting');
           this.sendErrorAndDisconnect('INVALID_MESSAGE', 'file-chunk missing filename');
           return;
+        }
+        // BTR-4: extract envelope-level BTR fields and attach to inner message for transfer routing
+        const btrFields = extractBtrEnvelopeFields(msg);
+        if (btrFields) {
+          inner._btrEnvelopeFields = btrFields;
         }
         this.transfer.routeInnerMessage(inner);
         return;
@@ -812,8 +849,8 @@ class WebRTCService {
   // SA18: decodeProfileEnvelopeV1 removed — dead code with silent null return.
   // Inline decryption in handleMessage() is the active path (fail-closed).
 
-  private dcSendMessage(innerMsg: any): void {
-    dcSendMessage(this.dc, innerMsg, this.negotiatedEnvelopeV1(), this.helloComplete, this.keyPair, this.remotePublicKey);
+  private dcSendMessage(innerMsg: any, btrFields?: BtrEnvelopeFields): void {
+    dcSendMessage(this.dc, innerMsg, this.negotiatedEnvelopeV1(), this.helloComplete, this.keyPair, this.remotePublicKey, btrFields);
   }
 }
 
