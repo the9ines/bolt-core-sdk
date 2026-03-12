@@ -802,12 +802,12 @@ class WebRTCService {
     return this.transfer.sendFile(file);
   }
 
-  pauseTransfer(filename: string) {
-    this.transfer.pauseTransfer(filename);
+  pauseTransfer(filename: string, isReceiver: boolean = false) {
+    this.transfer.pauseTransfer(filename, isReceiver);
   }
 
-  resumeTransfer(filename: string) {
-    this.transfer.resumeTransfer(filename);
+  resumeTransfer(filename: string, isReceiver: boolean = false) {
+    this.transfer.resumeTransfer(filename, isReceiver);
   }
 
   cancelTransfer(filename: string, isReceiver: boolean = false) {

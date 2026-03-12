@@ -722,8 +722,10 @@ export class TransferManager {
 
   // ─── Transfer Control ──────────────────────────────────────────────
 
-  pauseTransfer(filename: string): void {
-    const transferId = this.ctx.getSendTransferIds().get(filename);
+  pauseTransfer(filename: string, isReceiver: boolean = false): void {
+    const transferId = isReceiver
+      ? this.ctx.getRecvTransferIds().get(filename)
+      : this.ctx.getSendTransferIds().get(filename);
     if (!transferId) {
       console.error(`[UI-XFER-1] pauseTransfer: no transferId for "${filename}" — no control message sent`);
       return;
@@ -735,8 +737,10 @@ export class TransferManager {
     this.emitProgress(filename, 0, 0, 0, 0, 'paused');
   }
 
-  resumeTransfer(filename: string): void {
-    const transferId = this.ctx.getSendTransferIds().get(filename);
+  resumeTransfer(filename: string, isReceiver: boolean = false): void {
+    const transferId = isReceiver
+      ? this.ctx.getRecvTransferIds().get(filename)
+      : this.ctx.getSendTransferIds().get(filename);
     if (!transferId) {
       console.error(`[UI-XFER-1] resumeTransfer: no transferId for "${filename}" — no control message sent`);
       return;

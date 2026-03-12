@@ -513,4 +513,96 @@ describe('UI-XFER-1: Canonical DC Control Messages', () => {
     const parsed = JSON.parse(errorMsg!);
     expect(parsed.code).toBe('INVALID_MESSAGE');
   });
+
+  // ─── 11. CBTR-F1: Receiver-initiated pause/resume ──────────────────────────
+
+  it('receiver pauseTransfer looks up recvTransferIds and sends canonical pause', () => {
+    const service = createService();
+    const { sentMessages } = attachDataChannel(service);
+    // Receiver has recvTransferIds, NOT sendTransferIds
+    (service as any).recvTransferIds.set('incoming.bin', TID);
+
+    service.pauseTransfer('incoming.bin', true);
+
+    expect(sentMessages.length).toBe(1);
+    const msg = JSON.parse(sentMessages[0]);
+    expect(msg.type).toBe('pause');
+    expect(msg.transferId).toBe(TID);
+
+    service.disconnect();
+  });
+
+  it('receiver resumeTransfer looks up recvTransferIds and sends canonical resume', () => {
+    const service = createService();
+    const { sentMessages } = attachDataChannel(service);
+    (service as any).recvTransferIds.set('incoming.bin', TID);
+    (service as any).transferPaused = true;
+
+    service.resumeTransfer('incoming.bin', true);
+
+    expect(sentMessages.length).toBe(1);
+    const msg = JSON.parse(sentMessages[0]);
+    expect(msg.type).toBe('resume');
+    expect(msg.transferId).toBe(TID);
+    expect((service as any).transferPaused).toBe(false);
+
+    service.disconnect();
+  });
+
+  it('receiver pauseTransfer fails gracefully when only sendTransferIds exist', () => {
+    const service = createService();
+    const { sentMessages } = attachDataChannel(service);
+    // Only sender map has the file — receiver lookup should miss
+    (service as any).sendTransferIds.set('outgoing.bin', TID);
+
+    service.pauseTransfer('outgoing.bin', true);
+
+    // No message sent — isReceiver=true checks recvTransferIds, not sendTransferIds
+    expect(sentMessages.length).toBe(0);
+
+    service.disconnect();
+  });
+
+  it('receiver resumeTransfer fails gracefully when only sendTransferIds exist', () => {
+    const service = createService();
+    const { sentMessages } = attachDataChannel(service);
+    (service as any).sendTransferIds.set('outgoing.bin', TID);
+
+    service.resumeTransfer('outgoing.bin', true);
+
+    expect(sentMessages.length).toBe(0);
+
+    service.disconnect();
+  });
+
+  it('sender pauseTransfer still works (isReceiver defaults to false)', () => {
+    const service = createService();
+    const { sentMessages } = attachDataChannel(service);
+    (service as any).sendTransferIds.set('test.bin', TID);
+
+    // No isReceiver argument — defaults to false (sender)
+    service.pauseTransfer('test.bin');
+
+    expect(sentMessages.length).toBe(1);
+    const msg = JSON.parse(sentMessages[0]);
+    expect(msg.type).toBe('pause');
+    expect(msg.transferId).toBe(TID);
+
+    service.disconnect();
+  });
+
+  it('sender resumeTransfer still works (isReceiver defaults to false)', () => {
+    const service = createService();
+    const { sentMessages } = attachDataChannel(service);
+    (service as any).sendTransferIds.set('test.bin', TID);
+
+    service.resumeTransfer('test.bin');
+
+    expect(sentMessages.length).toBe(1);
+    const msg = JSON.parse(sentMessages[0]);
+    expect(msg.type).toBe('resume');
+    expect(msg.transferId).toBe(TID);
+
+    service.disconnect();
+  });
 });
