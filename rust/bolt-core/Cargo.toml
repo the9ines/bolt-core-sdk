@@ -21,3 +21,7 @@ sha2 = "0.10"
 # Optional deps — only compiled when `vectors` feature is enabled.
 serde = { version = "1", features = ["derive"], optional = true }
 serde_json = { version = "1", optional = true }
+
+[dev-dependencies]
+bolt-transfer-core = { path = "../bolt-transfer-core" }
+bolt-btr = { path = "../bolt-btr" }
