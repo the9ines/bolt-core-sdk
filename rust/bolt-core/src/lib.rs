@@ -23,9 +23,11 @@
 //!
 //! # Parity Strategy
 //!
-//! TS generates golden test vectors. Rust consumes them. The vector
-//! files in `ts/bolt-core/__tests__/vectors/` are the single source
-//! of truth. See `RUST_CORE_PLAN.md` for the full parity strategy.
+//! Rust is the canonical source of all golden test vectors (AC-RC-08).
+//! Vector files live in `test-vectors/core/` and `test-vectors/btr/`.
+//! Both Rust and TS test suites consume from these locations.
+//! TS vector generation is deprecated (AC-RC-09).
+//! See `VECTOR_AUTHORITY.md` for the migration details.
 
 /// Protocol constants — values shared with TypeScript SDK.
 pub mod constants;

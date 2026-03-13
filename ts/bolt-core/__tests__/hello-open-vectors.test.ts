@@ -5,7 +5,8 @@ import { fileURLToPath } from 'node:url';
 import { openBoxPayload, sealBoxPayload, generateEphemeralKeyPair } from '../src/index.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const vectorPath = join(__dirname, 'vectors', 'web-hello-open.vectors.json');
+// Canonical vectors from Rust generator (AC-RC-08)
+const vectorPath = join(__dirname, '..', '..', '..', 'rust', 'bolt-core', 'test-vectors', 'core', 'web-hello-open.vectors.json');
 const vectors = JSON.parse(readFileSync(vectorPath, 'utf-8'));
 
 function fromHex(hex: string): Uint8Array {

@@ -2,20 +2,14 @@
 //! Vector equivalence gate.
 //!
 //! Regenerates golden vectors from Rust and compares against committed
-//! JSON files. This proves that the Rust crate produces identical
-//! cryptographic output to the TypeScript SDK for the same inputs.
+//! canonical JSON files in `test-vectors/core/`. This proves that the
+//! Rust generator is deterministic and self-consistent.
 
 use std::path::PathBuf;
 
 fn vectors_dir() -> PathBuf {
     let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    manifest
-        .join("..")
-        .join("..")
-        .join("ts")
-        .join("bolt-core")
-        .join("__tests__")
-        .join("vectors")
+    manifest.join("test-vectors").join("core")
 }
 
 /// Compare two JSON strings semantically (parsed serde_json::Value).

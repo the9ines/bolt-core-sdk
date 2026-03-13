@@ -1,12 +1,9 @@
 #![cfg(feature = "vectors")]
 //! Vector compatibility gate.
 //!
-//! Parses the golden test vectors produced by the TypeScript SDK and
+//! Parses the canonical golden test vectors from `test-vectors/core/` and
 //! validates structure, field presence, and counts. This ensures the
-//! Rust crate is anchored to the same canonical test data.
-//!
-//! Does NOT perform cryptographic operations yet — that requires
-//! NaCl/crypto_box implementation. This is a plumbing gate only.
+//! vector files are well-formed and match expected schemas.
 
 #![allow(non_snake_case, dead_code)]
 
@@ -82,13 +79,7 @@ struct FramingVector {
 
 fn vectors_dir() -> PathBuf {
     let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    manifest
-        .join("..")
-        .join("..")
-        .join("ts")
-        .join("bolt-core")
-        .join("__tests__")
-        .join("vectors")
+    manifest.join("test-vectors").join("core")
 }
 
 // ── tests ───────────────────────────────────────────────────────────

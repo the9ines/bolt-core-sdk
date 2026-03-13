@@ -6,7 +6,8 @@ import { openBoxPayload, fromBase64 } from '../src/index.js';
 import { NONCE_LENGTH } from '../src/constants.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const vectorDir = join(__dirname, 'vectors');
+// Canonical vectors from Rust generator (AC-RC-08)
+const vectorDir = join(__dirname, '..', '..', '..', 'rust', 'bolt-core', 'test-vectors', 'core');
 
 const boxPayload = JSON.parse(readFileSync(join(vectorDir, 'box-payload.vectors.json'), 'utf-8'));
 const framing = JSON.parse(readFileSync(join(vectorDir, 'framing.vectors.json'), 'utf-8'));
