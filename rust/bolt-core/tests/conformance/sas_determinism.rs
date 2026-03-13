@@ -7,7 +7,7 @@
 //! - SAS MUST be deterministic (identical inputs → identical output)
 //! - SAS output MUST be exactly 6 uppercase hex characters
 //!
-//! Uses H3 golden vectors from ts/bolt-core/__tests__/vectors/sas.vectors.json.
+//! Uses canonical Rust-generated golden vectors from test-vectors/core/ (AC-RC-08).
 //! Does NOT import bolt-rendezvous-protocol or any cross-repo dependency.
 
 use serde::Deserialize;
@@ -35,13 +35,7 @@ struct SasCase {
 
 fn vectors_dir() -> PathBuf {
     let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    manifest
-        .join("..")
-        .join("..")
-        .join("ts")
-        .join("bolt-core")
-        .join("__tests__")
-        .join("vectors")
+    manifest.join("test-vectors").join("core")
 }
 
 fn hex_to_32(hex: &str) -> [u8; 32] {

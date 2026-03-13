@@ -5,13 +5,13 @@ on:
     branches: [main]
     paths:
       - 'ts/bolt-core/**'
-      - 'rust/bolt-core/test-vectors/btr/**'
+      - 'rust/bolt-core/test-vectors/**'
       - '.github/workflows/ci.yml'
   pull_request:
     branches: [main]
     paths:
       - 'ts/bolt-core/**'
-      - 'rust/bolt-core/test-vectors/btr/**'
+      - 'rust/bolt-core/test-vectors/**'
       - '.github/workflows/ci.yml'
 
 permissions:

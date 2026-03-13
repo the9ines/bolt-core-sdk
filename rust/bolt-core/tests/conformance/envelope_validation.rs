@@ -7,7 +7,7 @@
 //! - SEC-02: Nonce MUST NOT be reused with the same ephemeral keypair
 //! - SEC-06: MAC MUST be verified before any plaintext processing
 //!
-//! Uses H3 golden vectors from ts/bolt-core/__tests__/vectors/.
+//! Uses canonical Rust-generated golden vectors from test-vectors/core/ (AC-RC-08).
 //! Does NOT import bolt-rendezvous-protocol or any cross-repo dependency.
 
 use serde::Deserialize;
@@ -89,13 +89,7 @@ struct EnvelopeFrame {
 
 fn vectors_dir() -> PathBuf {
     let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    manifest
-        .join("..")
-        .join("..")
-        .join("ts")
-        .join("bolt-core")
-        .join("__tests__")
-        .join("vectors")
+    manifest.join("test-vectors").join("core")
 }
 
 fn hex_to_32(hex: &str) -> [u8; 32] {
