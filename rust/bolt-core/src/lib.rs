@@ -17,6 +17,7 @@
 //! | [`identity`] | `identity.ts` | Complete |
 //! | [`sas`] | `sas.ts` | Complete |
 //! | [`peer_code`] | `peer-code.ts` | Complete |
+//! | [`session`] | WebRTCService (TS-owned) | Rust-canonical (AC-RC-07) |
 //! | [`vectors`] | N/A | Complete (test-only) |
 //!
 //! Transfer policy has been moved to `bolt-transfer-core::policy` (S2A).
@@ -52,6 +53,9 @@ pub mod sas;
 
 /// Peer code generation and validation.
 pub mod peer_code;
+
+/// Session authority — transport-agnostic handshake lifecycle primitives.
+pub mod session;
 
 /// Deterministic golden vector generator (test use only).
 /// Requires the `vectors` feature: `cargo test --features vectors`.
