@@ -11,6 +11,9 @@ default = []
 # Enables the vectors module (BTR golden vector generator).
 # Pulls serde + serde_json for JSON serialization. Test-only surface.
 vectors = ["dep:serde", "dep:serde_json"]
+# Exposes BtrTransferContext::new_for_test() — deterministic context
+# creation for integration tests. MUST NOT be used in production code.
+test-support = []
 
 [dependencies]
 bolt-core = { path = "../bolt-core" }

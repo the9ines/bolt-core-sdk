@@ -158,6 +158,31 @@ pub struct BtrTransferContext {
 }
 
 impl BtrTransferContext {
+    /// Create a BtrTransferContext with explicit key material.
+    ///
+    /// **Test-only.** This bypasses the DH ratchet and lets callers inject
+    /// a known chain key for deterministic seal/open parity in integration
+    /// tests. Both sender and receiver must be created with identical
+    /// `chain_key` and `chain_index` values.
+    ///
+    /// # Safety (logical)
+    /// Using this in production would skip the DH ratchet, destroying
+    /// forward secrecy. Gated behind `test-support` feature.
+    #[cfg(feature = "test-support")]
+    pub fn new_for_test(
+        transfer_id: [u8; 16],
+        generation: u32,
+        chain_key: [u8; 32],
+        chain_index: u32,
+    ) -> Self {
+        Self {
+            transfer_id,
+            generation,
+            chain_key: SecretKey32::new(chain_key),
+            chain_index,
+        }
+    }
+
     /// Transfer ID for this context.
     pub fn transfer_id(&self) -> &[u8; 16] {
         &self.transfer_id
