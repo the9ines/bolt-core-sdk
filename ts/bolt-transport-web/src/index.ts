@@ -14,6 +14,10 @@ export { detectDeviceType, getDeviceName } from './services/signaling/device-det
 export { default as WebRTCService } from './services/webrtc/WebRTCService.js';
 export type { TransferProgress, TransferStats, WebRTCServiceOptions, VerificationInfo, VerificationState } from './services/webrtc/WebRTCService.js';
 
+// WS Transport (PM-RC-02) — WebSocket-direct primary + WebRTC fallback
+export { WsDataTransport, BrowserAppTransport } from './services/ws-transport/index.js';
+export type { WsDataTransportOptions, DataTransport, BrowserAppTransportOptions } from './services/ws-transport/index.js';
+
 // Identity & TOFU
 export { IndexedDBIdentityStore, getOrCreateIdentity } from './services/identity/identity-store.js';
 export type { IdentityPersistence } from './services/identity/identity-store.js';

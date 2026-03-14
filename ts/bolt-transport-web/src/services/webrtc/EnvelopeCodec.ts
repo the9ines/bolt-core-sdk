@@ -59,11 +59,21 @@ export function extractBtrEnvelopeFields(msg: any): BtrEnvelopeFields | null {
 }
 
 /**
- * Send a message over the DataChannel, wrapping in profile-envelope when negotiated.
+ * Minimal transport interface satisfied by both RTCDataChannel and WebSocket.
+ * Allows dcSendMessage to work over either transport layer.
+ */
+export interface DataTransport {
+  send(data: string): void;
+  readonly readyState: string;
+}
+
+/**
+ * Send a message over a DataTransport (DataChannel or WebSocket),
+ * wrapping in profile-envelope when negotiated.
  * MUST only be called after helloComplete === true (except for pre-handshake error messages).
  */
 export function dcSendMessage(
-  dc: RTCDataChannel | null,
+  dc: DataTransport | null,
   innerMsg: any,
   negotiatedEnvelope: boolean,
   helloComplete: boolean,
