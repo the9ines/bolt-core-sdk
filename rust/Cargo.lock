@@ -541,6 +541,7 @@ dependencies = [
 name = "bolt-ui"
 version = "0.1.0"
 dependencies = [
+ "bolt-core",
  "eframe",
 ]
 

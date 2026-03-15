@@ -5,8 +5,9 @@ edition = "2021"
 description = "Bolt desktop UI — egui/eframe native application shell"
 
 # EN-G4: bolt-ui must be transport-independent.
-# AC-EN-09: No transport or protocol dependencies.
-# Only UI framework deps allowed here.
+# AC-EN-14: consumes shared Rust core API (bolt-core) for peer code generation,
+#            constants, etc. No direct transport/protocol calls.
 
 [dependencies]
 eframe = "0.33"
+bolt-core = { path = "../bolt-core" }

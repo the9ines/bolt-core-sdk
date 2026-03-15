@@ -1,7 +1,6 @@
-#![allow(dead_code)] // Theme constants reserved for EN3+ screens
-
 mod app;
 mod screens;
+mod state;
 mod theme;
 
 fn main() -> eframe::Result<()> {
