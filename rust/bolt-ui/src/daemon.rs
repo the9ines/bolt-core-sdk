@@ -118,12 +118,15 @@ impl DaemonProcess {
         session: &str,
         socket_path: &str,
         data_dir: &str,
+        rendezvous_url: &str,
     ) -> Result<Self, String> {
+        let ws_url = format!("ws://{rendezvous_url}");
         Self::spawn(
             daemon_bin,
             &[
                 "--role", "answerer",
                 "--signal", "rendezvous",
+                "--rendezvous-url", &ws_url,
                 "--room", room,
                 "--session", session,
                 "--peer-id", peer_id,
@@ -144,12 +147,15 @@ impl DaemonProcess {
         session: &str,
         socket_path: &str,
         data_dir: &str,
+        rendezvous_url: &str,
     ) -> Result<Self, String> {
+        let ws_url = format!("ws://{rendezvous_url}");
         Self::spawn(
             daemon_bin,
             &[
                 "--role", "offerer",
                 "--signal", "rendezvous",
+                "--rendezvous-url", &ws_url,
                 "--room", room,
                 "--session", session,
                 "--peer-id", peer_id,

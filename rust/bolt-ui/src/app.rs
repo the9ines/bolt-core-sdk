@@ -8,6 +8,12 @@ use crate::screens::{self, Screen};
 use crate::state::*;
 use crate::theme;
 
+/// Rendezvous server address. Override with BOLT_RENDEZVOUS_URL env var.
+fn rendezvous_addr() -> String {
+    std::env::var("BOLT_RENDEZVOUS_URL")
+        .unwrap_or_else(|_| "127.0.0.1:3001".to_string())
+}
+
 pub struct BoltApp {
     pub current_screen: Screen,
     pub mode: ConnectMode,
@@ -74,9 +80,9 @@ impl BoltApp {
             }
         };
 
-        if !daemon::probe_rendezvous("127.0.0.1:3001") {
+        if !daemon::probe_rendezvous(&rendezvous_addr()) {
             self.connection = ConnectionState::Error(
-                "Rendezvous server not reachable at ws://127.0.0.1:3001".into(),
+                format!("Rendezvous server not reachable at ws://{}", rendezvous_addr()).into(),
             );
             return;
         }
@@ -129,6 +135,7 @@ impl BoltApp {
             &info.session,
             &self.socket_path,
             &self.data_dir,
+            &rendezvous_addr(),
         ) {
             Ok(proc) => {
                 self.daemon_proc = Some(proc);
@@ -151,9 +158,9 @@ impl BoltApp {
             }
         };
 
-        if !daemon::probe_rendezvous("127.0.0.1:3001") {
+        if !daemon::probe_rendezvous(&rendezvous_addr()) {
             self.connection = ConnectionState::Error(
-                "Rendezvous server not reachable at ws://127.0.0.1:3001".into(),
+                format!("Rendezvous server not reachable at ws://{}", rendezvous_addr()).into(),
             );
             return;
         }
@@ -168,6 +175,7 @@ impl BoltApp {
             &self.join_session,
             &self.socket_path,
             &self.data_dir,
+            &rendezvous_addr(),
         ) {
             Ok(proc) => {
                 self.daemon_proc = Some(proc);
