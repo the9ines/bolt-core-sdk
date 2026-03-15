@@ -13,13 +13,8 @@ fn rendezvous_addr() -> String {
     if let Ok(url) = std::env::var("BOLT_RENDEZVOUS_URL") {
         return url;
     }
-    if crate::daemon::probe_rendezvous("127.0.0.1:3001") {
-        return "127.0.0.1:3001".to_string();
-    }
-    if crate::daemon::probe_rendezvous("192.168.4.210:3001") {
-        return "192.168.4.210:3001".to_string();
-    }
-    "127.0.0.1:3001".to_string()
+    // Always use LAN IP — works from any machine on the network
+    "192.168.4.210:3001".to_string()
 }
 
 pub struct BoltApp {
