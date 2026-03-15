@@ -10,23 +10,15 @@ use crate::theme;
 
 /// Rendezvous server address. Override with BOLT_RENDEZVOUS_URL env var.
 fn rendezvous_addr() -> String {
-    // Check env var first
     if let Ok(url) = std::env::var("BOLT_RENDEZVOUS_URL") {
         return url;
     }
-    // Try localhost first, then discover LAN rendezvous
     if crate::daemon::probe_rendezvous("127.0.0.1:3001") {
         return "127.0.0.1:3001".to_string();
     }
-    // Auto-discover: scan common LAN addresses for rendezvous on port 3001
-    // Check gateway-adjacent IPs (typical home LAN)
-    for ip_suffix in [210, 1, 100, 200, 249, 2, 50] {
-        let addr = format!("192.168.4.{ip_suffix}:3001");
-        if crate::daemon::probe_rendezvous(&addr) {
-            return addr;
-        }
+    if crate::daemon::probe_rendezvous("192.168.4.210:3001") {
+        return "192.168.4.210:3001".to_string();
     }
-    // Fallback
     "127.0.0.1:3001".to_string()
 }
 
