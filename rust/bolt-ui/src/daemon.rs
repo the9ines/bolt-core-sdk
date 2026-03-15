@@ -53,11 +53,16 @@ pub fn find_daemon_binary() -> Result<PathBuf, String> {
         }
     }
 
-    // 4. Check Desktop (common deployment location)
+    // 4. Check Desktop (common deployment location) — arch-specific and generic
     let home = std::env::var("HOME").unwrap_or_default();
-    let desktop_candidate = PathBuf::from(format!("{home}/Desktop/bolt-daemon"));
-    if desktop_candidate.exists() {
-        return Ok(desktop_candidate);
+    let arch = if cfg!(target_arch = "aarch64") { "mac" } else { "intel" };
+    let desktop_arch = PathBuf::from(format!("{home}/Desktop/bolt-daemon-{arch}"));
+    if desktop_arch.exists() {
+        return Ok(desktop_arch);
+    }
+    let desktop_generic = PathBuf::from(format!("{home}/Desktop/bolt-daemon"));
+    if desktop_generic.exists() {
+        return Ok(desktop_generic);
     }
 
     // 5. Check well-known ecosystem paths
