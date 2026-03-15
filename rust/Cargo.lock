@@ -543,6 +543,8 @@ version = "0.1.0"
 dependencies = [
  "bolt-core",
  "eframe",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

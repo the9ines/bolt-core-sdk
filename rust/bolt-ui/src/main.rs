@@ -1,13 +1,14 @@
-mod app;
+pub mod app;
+pub mod daemon;
 mod screens;
-mod state;
+pub mod state;
 mod theme;
 
 fn main() -> eframe::Result<()> {
     let options = eframe::NativeOptions {
         viewport: eframe::egui::ViewportBuilder::default()
-            .with_inner_size([480.0, 640.0])
-            .with_min_inner_size([360.0, 480.0])
+            .with_inner_size([520.0, 700.0])
+            .with_min_inner_size([400.0, 550.0])
             .with_title("LocalBolt"),
         ..Default::default()
     };

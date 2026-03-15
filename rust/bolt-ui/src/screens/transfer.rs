@@ -21,6 +21,7 @@ pub fn show(ui: &mut egui::Ui, transfer: &TransferState) {
         let status_text = transfer.status_text();
         let status_color = match transfer {
             TransferState::Idle => theme::TEXT_MUTED,
+            TransferState::Ready => theme::SUCCESS,
             TransferState::Sending { .. } | TransferState::Receiving { .. } => theme::ACCENT,
             TransferState::Complete { .. } => theme::SUCCESS,
             TransferState::Failed { .. } => theme::ERROR,
@@ -64,6 +65,13 @@ pub fn show(ui: &mut egui::Ui, transfer: &TransferState) {
                             egui::RichText::new("No files queued")
                                 .size(theme::FONT_SIZE_BODY)
                                 .color(theme::TEXT_MUTED),
+                        );
+                    }
+                    TransferState::Ready => {
+                        ui.label(
+                            egui::RichText::new("Connected — ready for transfer")
+                                .size(theme::FONT_SIZE_BODY)
+                                .color(theme::SUCCESS),
                         );
                     }
                     TransferState::Sending { file_name, progress } => {
