@@ -1,0 +1,12 @@
+[package]
+name = "bolt-ui"
+version = "0.1.0"
+edition = "2021"
+description = "Bolt desktop UI — egui/eframe native application shell"
+
+# EN-G4: bolt-ui must be transport-independent.
+# AC-EN-09: No transport or protocol dependencies.
+# Only UI framework deps allowed here.
+
+[dependencies]
+eframe = "0.33"
