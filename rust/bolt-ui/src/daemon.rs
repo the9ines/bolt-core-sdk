@@ -18,7 +18,7 @@ pub struct DaemonProcess {
 
 /// Result of attempting to find the daemon binary.
 pub fn find_daemon_binary() -> Result<PathBuf, String> {
-    // Check workspace build directory first (dev mode)
+    // 1. Check compile-time workspace path (works when running via cargo run)
     let workspace_release = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../bolt-daemon/target/release/bolt-daemon");
     if workspace_release.exists() {
@@ -31,7 +31,48 @@ pub fn find_daemon_binary() -> Result<PathBuf, String> {
         return Ok(workspace_debug);
     }
 
-    // Check PATH
+    // 2. Check current working directory (where user launched from)
+    let cwd_candidate = PathBuf::from("bolt-daemon");
+    if cwd_candidate.exists() {
+        return Ok(std::fs::canonicalize(&cwd_candidate).unwrap_or(cwd_candidate));
+    }
+
+    // 3. Check relative to current executable
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(exe_dir) = exe.parent() {
+            let sibling = exe_dir.join("bolt-daemon");
+            if sibling.exists() {
+                return Ok(sibling);
+            }
+            for ancestor in exe_dir.ancestors().skip(1).take(5) {
+                let candidate = ancestor.join("bolt-daemon/target/release/bolt-daemon");
+                if candidate.exists() {
+                    return Ok(candidate);
+                }
+            }
+        }
+    }
+
+    // 4. Check Desktop (common deployment location)
+    let home = std::env::var("HOME").unwrap_or_default();
+    let desktop_candidate = PathBuf::from(format!("{home}/Desktop/bolt-daemon"));
+    if desktop_candidate.exists() {
+        return Ok(desktop_candidate);
+    }
+
+    // 5. Check well-known ecosystem paths
+    let ecosystem_paths = [
+        format!("{home}/Desktop/the9ines.com/bolt-ecosystem/bolt-daemon/target/release/bolt-daemon"),
+        format!("{home}/Projects/bolt-ecosystem/bolt-daemon/target/release/bolt-daemon"),
+    ];
+    for p in &ecosystem_paths {
+        let path = PathBuf::from(p);
+        if path.exists() {
+            return Ok(path);
+        }
+    }
+
+    // 4. Check PATH
     if let Ok(output) = Command::new("which").arg("bolt-daemon").output() {
         if output.status.success() {
             let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
