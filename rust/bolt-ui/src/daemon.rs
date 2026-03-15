@@ -139,7 +139,7 @@ impl DaemonProcess {
                 "--socket-path", socket_path,
                 "--data-dir", data_dir,
                 "--pairing-policy", "allow",
-                "--phase-timeout", "3600",
+                "--phase-timeout-secs", "3600",
             ],
         )
     }
@@ -169,7 +169,7 @@ impl DaemonProcess {
                 "--socket-path", socket_path,
                 "--data-dir", data_dir,
                 "--pairing-policy", "allow",
-                "--phase-timeout", "3600",
+                "--phase-timeout-secs", "3600",
             ],
         )
     }
