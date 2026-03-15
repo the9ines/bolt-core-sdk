@@ -3,6 +3,7 @@ use std::time::Instant;
 use eframe::egui;
 
 use crate::daemon::{self, DaemonProcess};
+use crate::ipc::IpcClient;
 use crate::screens::{self, Screen};
 use crate::state::*;
 use crate::theme;
@@ -19,6 +20,7 @@ pub struct BoltApp {
     pub transfer: TransferState,
     pub verify: VerifyState,
     pub daemon_proc: Option<DaemonProcess>,
+    pub ipc_client: Option<IpcClient>,
     pub prereq_error: Option<String>,
     daemon_bin: Option<std::path::PathBuf>,
     data_dir: String,
@@ -53,6 +55,7 @@ impl BoltApp {
             transfer: TransferState::Idle,
             verify: VerifyState::NotStarted,
             daemon_proc: None,
+            ipc_client: None,
             prereq_error,
             daemon_bin,
             data_dir,
@@ -182,6 +185,7 @@ impl BoltApp {
         if let Some(mut proc) = self.daemon_proc.take() {
             proc.kill();
         }
+        self.ipc_client = None;
         self.connection = ConnectionState::Idle;
         self.transfer = TransferState::Idle;
         self.verify = VerifyState::NotStarted;
@@ -197,30 +201,111 @@ impl BoltApp {
             if let Some(mut proc) = self.daemon_proc.take() {
                 proc.kill();
             }
+            self.ipc_client = None;
             self.connection = ConnectionState::Error(error_detail);
             return;
         }
 
-        // Poll daemon process for state updates
+        // Poll daemon process
         if let Some(proc) = &mut self.daemon_proc {
             if !proc.is_running() {
                 let error = proc.last_error()
                     .unwrap_or_else(|| "Daemon exited unexpectedly".into());
                 self.connection = ConnectionState::Error(error);
                 self.daemon_proc = None;
+                self.ipc_client = None;
                 return;
             }
 
-            // Check for connection established
-            if matches!(self.connection, ConnectionState::Connecting { .. }) && proc.has_connected() {
-                self.connection = ConnectionState::Connected;
-                self.transfer = TransferState::Ready;
+            // Try to establish IPC connection if not yet connected
+            if self.ipc_client.is_none()
+                && matches!(self.connection, ConnectionState::Connecting { .. })
+            {
+                // Wait a bit for daemon to start IPC server
+                if proc.recent_stderr(20).iter().any(|l| l.contains("[IPC] listening")) {
+                    match IpcClient::connect(&self.socket_path) {
+                        Ok(client) => {
+                            self.ipc_client = Some(client);
+                        }
+                        Err(_) => {
+                            // Will retry on next frame
+                        }
+                    }
+                }
             }
+        }
 
-            // Check for SAS code
-            if self.verify == VerifyState::NotStarted {
-                if let Some(sas) = proc.sas_code() {
-                    self.verify = VerifyState::Pending { sas_code: sas };
+        // Process IPC events (primary data path — not stderr)
+        if let Some(client) = &self.ipc_client {
+            for event in client.drain_events() {
+                match event.msg_type.as_str() {
+                    "daemon.status" => {
+                        // Handshake complete — daemon is responsive
+                    }
+                    "session.connected" => {
+                        let caps = event.payload.get("negotiated_capabilities")
+                            .and_then(|v| v.as_array())
+                            .map(|a| a.len())
+                            .unwrap_or(0);
+                        // Only transition to Connected when capabilities are negotiated (HELLO done)
+                        if caps > 0 {
+                            self.connection = ConnectionState::Connected;
+                            self.transfer = TransferState::Ready;
+                        }
+                    }
+                    "session.sas" => {
+                        if let Some(sas) = event.payload.get("sas").and_then(|v| v.as_str()) {
+                            self.verify = VerifyState::Pending {
+                                sas_code: sas.to_string(),
+                            };
+                        }
+                    }
+                    "session.error" => {
+                        let reason = event.payload.get("reason")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("unknown error")
+                            .to_string();
+                        self.connection = ConnectionState::Error(reason);
+                    }
+                    "session.ended" => {
+                        self.connection = ConnectionState::Idle;
+                        self.transfer = TransferState::Idle;
+                        self.verify = VerifyState::NotStarted;
+                    }
+                    "transfer.started" => {
+                        let file_name = event.payload.get("file_name")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("unknown")
+                            .to_string();
+                        let direction = event.payload.get("direction")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("receive");
+                        if direction == "send" {
+                            self.transfer = TransferState::Sending { file_name, progress: 0.0 };
+                        } else {
+                            self.transfer = TransferState::Receiving { file_name, progress: 0.0 };
+                        }
+                    }
+                    "transfer.progress" => {
+                        let progress = event.payload.get("progress")
+                            .and_then(|v| v.as_f64())
+                            .unwrap_or(0.0) as f32;
+                        match &mut self.transfer {
+                            TransferState::Sending { progress: p, .. }
+                            | TransferState::Receiving { progress: p, .. } => {
+                                *p = progress;
+                            }
+                            _ => {}
+                        }
+                    }
+                    "transfer.complete" => {
+                        let file_name = event.payload.get("file_name")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("unknown")
+                            .to_string();
+                        self.transfer = TransferState::Complete { file_name };
+                    }
+                    _ => {} // Unknown event — ignore
                 }
             }
         }

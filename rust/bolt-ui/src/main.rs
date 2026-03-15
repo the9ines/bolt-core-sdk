@@ -1,5 +1,6 @@
 pub mod app;
 pub mod daemon;
+pub mod ipc;
 mod screens;
 pub mod state;
 mod theme;
