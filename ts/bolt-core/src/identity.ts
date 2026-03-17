@@ -1,6 +1,7 @@
 import tweetnacl from 'tweetnacl';
 const { box } = tweetnacl;
 import { BoltError } from './errors.js';
+import { getWasmCrypto } from './wasm-crypto.js';
 
 /** Long-lived X25519 identity keypair. Persisted by the transport layer. */
 export interface IdentityKeyPair {
@@ -11,11 +12,11 @@ export interface IdentityKeyPair {
 /**
  * Generate a persistent identity keypair (X25519).
  *
- * Identity keys are long-lived and stored by the transport layer.
- * They MUST NOT be sent through the signaling server — identity
- * material travels only inside encrypted DataChannel messages (HELLO).
+ * RB3: Uses Rust/WASM when available, falls back to tweetnacl.
  */
 export function generateIdentityKeyPair(): IdentityKeyPair {
+  const wasm = getWasmCrypto();
+  if (wasm) return wasm.generateIdentityKeyPair();
   return box.keyPair();
 }
 

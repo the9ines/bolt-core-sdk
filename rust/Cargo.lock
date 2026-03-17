@@ -521,6 +521,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "bolt-protocol-wasm"
+version = "0.1.0"
+dependencies = [
+ "bolt-core",
+ "console_error_panic_hook",
+ "getrandom 0.2.17",
+ "js-sys",
+ "wasm-bindgen",
+ "wasm-bindgen-test",
+]
+
+[[package]]
 name = "bolt-transfer-core"
 version = "0.1.0"
 dependencies = [

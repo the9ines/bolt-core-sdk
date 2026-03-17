@@ -1,5 +1,6 @@
 import { sha256, bufferToHex } from './hash.js';
 import { PUBLIC_KEY_LENGTH, SAS_LENGTH } from './constants.js';
+import { getWasmCrypto } from './wasm-crypto.js';
 
 // CANONICAL: computeSas() is the ONLY SAS implementation in the Bolt ecosystem.
 // SAS verification is not yet surfaced in products. No SAS logic may exist in
@@ -38,12 +39,25 @@ function sort32(a: Uint8Array, b: Uint8Array): Uint8Array {
  * @param ephemeralB - Raw 32-byte ephemeral public key of peer B
  * @returns 6-character uppercase hex string (24 bits of entropy)
  */
+/**
+ * Compute a 6-character SAS (Short Authentication String) per PROTOCOL.md.
+ *
+ * RB3: Uses Rust/WASM (sync) when available, falls back to TS Web Crypto (async).
+ * Return type remains Promise<string> for backward compatibility.
+ */
 export async function computeSas(
   identityA: Uint8Array,
   identityB: Uint8Array,
   ephemeralA: Uint8Array,
   ephemeralB: Uint8Array,
 ): Promise<string> {
+  // RB3: WASM path (sync — Rust SHA-256, no Web Crypto)
+  const wasm = getWasmCrypto();
+  if (wasm) {
+    return wasm.computeSas(identityA, identityB, ephemeralA, ephemeralB);
+  }
+
+  // TS fallback (async — Web Crypto digest)
   if (identityA.length !== PUBLIC_KEY_LENGTH || identityB.length !== PUBLIC_KEY_LENGTH) {
     throw new Error(`Identity keys must be ${PUBLIC_KEY_LENGTH} bytes`);
   }
