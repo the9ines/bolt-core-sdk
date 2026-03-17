@@ -16,5 +16,7 @@ export { generateIdentityKeyPair, KeyMismatchError } from './identity.js';
 export { BoltError, EncryptionError, ConnectionError, TransferError, IntegrityError } from './errors.js';
 // Wire error code registry (PROTOCOL.md §10)
 export { WIRE_ERROR_CODES, isValidWireErrorCode } from './errors.js';
+// WASM protocol adapter (RUSTIFY-BROWSER-CORE-1 RB3+RB4)
+export { initWasmCrypto, getWasmCrypto, getWasmModule, createWasmBtrEngine, createWasmSendSession } from './wasm-crypto.js';
 // Bolt Transfer Ratchet (BTR) — §16
 export * from './btr/index.js';

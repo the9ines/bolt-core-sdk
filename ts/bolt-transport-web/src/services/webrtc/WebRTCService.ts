@@ -7,8 +7,8 @@ import type { TransferMetricsCollector } from './transferMetrics.js';
 import { HandshakeManager } from './HandshakeManager.js';
 import { TransferManager } from './TransferManager.js';
 import { encodeProfileEnvelopeV1, dcSendMessage, extractBtrEnvelopeFields } from './EnvelopeCodec.js';
-import { BtrTransferAdapter } from './BtrTransferAdapter.js';
-import type { BtrEnvelopeFields } from './BtrTransferAdapter.js';
+import { createBtrAdapter } from './BtrTransferAdapter.js';
+import type { BtrTransferAdapter, WasmBtrTransferAdapter, BtrEnvelopeFields } from './BtrTransferAdapter.js';
 import type { HandshakeContext } from './context.js';
 import type { TransferContext } from './TransferManager.js';
 
@@ -90,9 +90,9 @@ class WebRTCService {
   private remoteCapabilities: string[] = [];
   private negotiatedCapabilities: string[] = [];
 
-  // BTR state
+  // BTR state — WASM-backed when available, TS fallback otherwise (RB5)
   private btrMode: BtrModeValue | null = null;
-  private btrAdapter: BtrTransferAdapter | null = null;
+  private btrAdapter: BtrTransferAdapter | WasmBtrTransferAdapter | null = null;
 
   // ─── Decomposed managers ────────────────────────────────────────
   private handshake: HandshakeManager;
@@ -163,8 +163,7 @@ class WebRTCService {
         // Initialize BTR adapter when FullBtr negotiated
         if (v === BtrMode.FullBtr && this.keyPair && this.remotePublicKey) {
           const sharedSecret = scalarMult(this.keyPair.secretKey, this.remotePublicKey);
-          this.btrAdapter = new BtrTransferAdapter(sharedSecret);
-          console.log('[BTR_INIT] BTR adapter initialized');
+          this.btrAdapter = createBtrAdapter(sharedSecret);
         }
       },
     };

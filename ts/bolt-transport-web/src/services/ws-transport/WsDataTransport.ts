@@ -18,8 +18,8 @@ import type { WebRTCError } from '../../types/webrtc-errors.js';
 import { HandshakeManager } from '../webrtc/HandshakeManager.js';
 import { TransferManager } from '../webrtc/TransferManager.js';
 import { encodeProfileEnvelopeV1, extractBtrEnvelopeFields } from '../webrtc/EnvelopeCodec.js';
-import { BtrTransferAdapter } from '../webrtc/BtrTransferAdapter.js';
-import type { BtrEnvelopeFields } from '../webrtc/BtrTransferAdapter.js';
+import { createBtrAdapter } from '../webrtc/BtrTransferAdapter.js';
+import type { BtrTransferAdapter, WasmBtrTransferAdapter, BtrEnvelopeFields } from '../webrtc/BtrTransferAdapter.js';
 import type { HandshakeContext } from '../webrtc/context.js';
 import type { TransferContext } from '../webrtc/TransferManager.js';
 import { CANONICAL_CONTROL_TYPES } from '../webrtc/types.js';
@@ -108,7 +108,7 @@ export class WsDataTransport {
 
   // BTR
   private btrMode: BtrModeValue | null = null;
-  private btrAdapter: BtrTransferAdapter | null = null;
+  private btrAdapter: BtrTransferAdapter | WasmBtrTransferAdapter | null = null;
 
   // Managers
   private handshake: HandshakeManager;
@@ -496,8 +496,7 @@ export class WsDataTransport {
         this.btrMode = v as BtrModeValue | null;
         if (v === BtrMode.FullBtr && this.keyPair && this.remotePublicKey) {
           const sharedSecret = scalarMult(this.keyPair.secretKey, this.remotePublicKey);
-          this.btrAdapter = new BtrTransferAdapter(sharedSecret);
-          console.log('[WS_TRANSPORT] BTR adapter initialized');
+          this.btrAdapter = createBtrAdapter(sharedSecret);
         }
       },
     };

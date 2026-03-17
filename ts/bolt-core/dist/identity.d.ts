@@ -7,9 +7,7 @@ export interface IdentityKeyPair {
 /**
  * Generate a persistent identity keypair (X25519).
  *
- * Identity keys are long-lived and stored by the transport layer.
- * They MUST NOT be sent through the signaling server — identity
- * material travels only inside encrypted DataChannel messages (HELLO).
+ * RB3: Uses Rust/WASM when available, falls back to tweetnacl.
  */
 export declare function generateIdentityKeyPair(): IdentityKeyPair;
 /**

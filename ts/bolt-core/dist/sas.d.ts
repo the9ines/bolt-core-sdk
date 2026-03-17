@@ -10,4 +10,10 @@
  * @param ephemeralB - Raw 32-byte ephemeral public key of peer B
  * @returns 6-character uppercase hex string (24 bits of entropy)
  */
+/**
+ * Compute a 6-character SAS (Short Authentication String) per PROTOCOL.md.
+ *
+ * RB3: Uses Rust/WASM (sync) when available, falls back to TS Web Crypto (async).
+ * Return type remains Promise<string> for backward compatibility.
+ */
 export declare function computeSas(identityA: Uint8Array, identityB: Uint8Array, ephemeralA: Uint8Array, ephemeralB: Uint8Array): Promise<string>;
