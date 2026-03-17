@@ -1,17 +1,19 @@
 [package]
 name = "bolt-protocol-wasm"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
-description = "WASM bindings for Bolt protocol crypto/session authority (RUSTIFY-BROWSER-CORE-1 RB3)"
+description = "WASM bindings for Bolt protocol authority (RUSTIFY-BROWSER-CORE-1 RB3+RB4)"
 
-# RB3: crypto + session + SAS + envelope exports only.
-# BTR + transfer state machine deferred to RB4.
+# RB3: crypto + session + SAS + peer-code exports.
+# RB4: BTR state/ratchet/encrypt + transfer state machine.
 
 [lib]
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 bolt-core = { path = "../bolt-core" }
+bolt-btr = { path = "../bolt-btr" }
+bolt-transfer-core = { path = "../bolt-transfer-core" }
 wasm-bindgen = "0.2"
 getrandom = { version = "0.2", features = ["js"] }
 console_error_panic_hook = "0.1"
