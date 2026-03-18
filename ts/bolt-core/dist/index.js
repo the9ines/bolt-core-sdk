@@ -17,6 +17,6 @@ export { BoltError, EncryptionError, ConnectionError, TransferError, IntegrityEr
 // Wire error code registry (PROTOCOL.md §10)
 export { WIRE_ERROR_CODES, isValidWireErrorCode } from './errors.js';
 // WASM protocol adapter (RUSTIFY-BROWSER-CORE-1 RB3+RB4)
-export { initWasmCrypto, initWasmCryptoFromModule, getWasmCrypto, getWasmModule, createWasmBtrEngine, createWasmSendSession } from './wasm-crypto.js';
+export { initWasmCrypto, initWasmCryptoFromModule, getWasmCrypto, getWasmModule, createWasmBtrEngine, createWasmSendSession, getProtocolAuthorityMode } from './wasm-crypto.js';
 // Bolt Transfer Ratchet (BTR) — §16
 export * from './btr/index.js';

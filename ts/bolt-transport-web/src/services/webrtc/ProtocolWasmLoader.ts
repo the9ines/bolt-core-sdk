@@ -11,7 +11,9 @@
  *   await initProtocolWasm();  // call once before any crypto operations
  */
 
-import { initWasmCryptoFromModule } from '@the9ines/bolt-core';
+import { initWasmCryptoFromModule, getProtocolAuthorityMode } from '@the9ines/bolt-core';
+export { getProtocolAuthorityMode } from '@the9ines/bolt-core';
+export type { ProtocolAuthorityMode } from '@the9ines/bolt-core';
 
 let _initAttempted = false;
 let _initResult = false;
@@ -19,8 +21,8 @@ let _initResult = false;
 /**
  * Load and initialize the embedded protocol WASM module.
  *
- * Loads bolt_protocol_wasm from the wasm/ directory embedded in this package,
- * then passes the loaded module to bolt-core's initWasmCryptoFromModule().
+ * BR3: Logs a consolidated summary after every init attempt showing
+ * the resulting authority mode (wasm / ts-fallback).
  *
  * Falls back silently — returns false if WASM is not available.
  * PM-RB-03: TS fallback remains operational if this fails.
@@ -31,17 +33,24 @@ export async function initProtocolWasm(): Promise<boolean> {
 
   try {
     // Relative import — Vite/webpack resolve this from the published package.
-    // Same pattern as PolicyAdapter.ts loading policy WASM.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const wasm = await import('../../../wasm/bolt_protocol_wasm.js' as any);
     await wasm.default();
 
     _initResult = initWasmCryptoFromModule(wasm);
-    return _initResult;
+
+    if (_initResult) {
+      console.log('[BOLT-WASM] Protocol WASM loaded and initialized');
+    }
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    console.warn(`[BOLT-WASM] Protocol WASM load failed (${msg}), using TS fallback`);
+    console.warn(`[BOLT-WASM] Protocol WASM load failed: ${msg}`);
     _initResult = false;
-    return false;
   }
+
+  // BR3: consolidated summary — always emitted after init attempt
+  const mode = getProtocolAuthorityMode();
+  console.log(`[BOLT-WASM] Authority mode: ${mode}`);
+
+  return _initResult;
 }

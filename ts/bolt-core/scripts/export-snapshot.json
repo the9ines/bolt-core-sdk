@@ -51,6 +51,7 @@
     "generateLongPeerCode",
     "generateRatchetKeypair",
     "generateSecurePeerCode",
+    "getProtocolAuthorityMode",
     "getWasmCrypto",
     "getWasmModule",
     "hashFile",

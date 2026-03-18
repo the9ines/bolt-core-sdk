@@ -34,6 +34,23 @@ export function getWasmCrypto(): WasmCryptoAdapter | null {
   return _wasmCrypto;
 }
 
+/** BR3: Protocol authority mode for runtime observability. */
+export type ProtocolAuthorityMode = 'wasm' | 'ts-fallback' | 'not-initialized';
+
+/**
+ * BR3: Query the current protocol authority mode.
+ *
+ * Returns:
+ * - 'wasm': Rust/WASM protocol authority active (all crypto, BTR, transfer SM via Rust)
+ * - 'ts-fallback': WASM init was attempted but failed; TS tweetnacl/BTR is authoritative
+ * - 'not-initialized': initProtocolWasm() has not been called yet
+ */
+export function getProtocolAuthorityMode(): ProtocolAuthorityMode {
+  if (_wasmCrypto) return 'wasm';
+  if (_initAttempted) return 'ts-fallback';
+  return 'not-initialized';
+}
+
 /**
  * Initialize WASM crypto from a pre-loaded WASM module.
  *
