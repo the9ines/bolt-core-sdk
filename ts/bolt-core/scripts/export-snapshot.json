@@ -55,6 +55,7 @@
     "getWasmModule",
     "hashFile",
     "initWasmCrypto",
+    "initWasmCryptoFromModule",
     "isValidPeerCode",
     "isValidWireErrorCode",
     "negotiateBtr",

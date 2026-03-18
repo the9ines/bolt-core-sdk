@@ -29,11 +29,22 @@ export interface WasmCryptoAdapter {
  */
 export declare function getWasmCrypto(): WasmCryptoAdapter | null;
 /**
- * Initialize WASM crypto. Call once at app startup.
- * Fails silently — returns false if WASM is not available.
- * PM-RB-03: TS fallback remains operational if this fails.
+ * Initialize WASM crypto from a pre-loaded WASM module.
+ *
+ * BR2: Accepts an already-loaded+initialized WASM module (provided by
+ * transport-web's initProtocolWasm()). This avoids bare module specifier
+ * issues — the loader lives in transport-web where the artifact is embedded.
+ *
+ * PM-RB-03: TS fallback remains operational if this is never called.
+ *
+ * @param wasmModule - The loaded bolt-protocol-wasm module (with exported functions)
  */
-export declare function initWasmCrypto(wasmUrl?: string): Promise<boolean>;
+export declare function initWasmCryptoFromModule(wasmModule: any): boolean;
+/**
+ * Initialize WASM crypto. Legacy entry point — attempts dynamic import.
+ * Prefer initProtocolWasm() from @the9ines/bolt-transport-web instead.
+ */
+export declare function initWasmCrypto(): Promise<boolean>;
 /**
  * Get the raw WASM module for constructing BTR/transfer handles.
  * Returns null if WASM not initialized.

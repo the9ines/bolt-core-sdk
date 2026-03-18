@@ -52,6 +52,9 @@ export {
   isLocalCandidate,
 } from './lib/platform-utils.js';
 
+// ── Protocol WASM (BR2) ─────────────────────────────────────────────────────
+export { initProtocolWasm } from './services/webrtc/ProtocolWasmLoader.js';
+
 // ── Policy ──────────────────────────────────────────────────────────────────
 export { initPolicyAdapter, getPolicyAdapter } from './services/webrtc/PolicyAdapter.js';
 export type { PolicyAdapter, ScheduleDecision, StallResult, ProgressResult } from './services/webrtc/PolicyAdapter.js';

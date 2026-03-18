@@ -35,36 +35,57 @@ export function getWasmCrypto(): WasmCryptoAdapter | null {
 }
 
 /**
- * Initialize WASM crypto. Call once at app startup.
- * Fails silently — returns false if WASM is not available.
- * PM-RB-03: TS fallback remains operational if this fails.
+ * Initialize WASM crypto from a pre-loaded WASM module.
+ *
+ * BR2: Accepts an already-loaded+initialized WASM module (provided by
+ * transport-web's initProtocolWasm()). This avoids bare module specifier
+ * issues — the loader lives in transport-web where the artifact is embedded.
+ *
+ * PM-RB-03: TS fallback remains operational if this is never called.
+ *
+ * @param wasmModule - The loaded bolt-protocol-wasm module (with exported functions)
  */
-export async function initWasmCrypto(wasmUrl?: string): Promise<boolean> {
-  if (_initAttempted) return _wasmCrypto !== null;
-  _initAttempted = true;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function initWasmCryptoFromModule(wasmModule: any): boolean {
+  if (_wasmCrypto) return true;
 
   try {
-    // Dynamic import — the WASM module is loaded at runtime, not bundle time.
-    // The consuming app must make the bolt-protocol-wasm package or .wasm file available.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const wasm: any = await (Function('return import("bolt-protocol-wasm")')());
-    await wasm.default(wasmUrl);
-
-    _wasmModule = wasm;  // RB4: store for BTR/transfer handle construction
+    _wasmModule = wasmModule;
 
     _wasmCrypto = {
-      generateEphemeralKeyPair: () => wasm.generateEphemeralKeyPair(),
-      generateIdentityKeyPair: () => wasm.generateIdentityKeyPair(),
-      sealBoxPayload: (p, rpk, sk) => wasm.sealBoxPayload(p, rpk, sk),
-      openBoxPayload: (s, spk, rsk) => wasm.openBoxPayload(s, spk, rsk),
-      computeSas: (ia, ib, ea, eb) => wasm.computeSas(ia, ib, ea, eb),
-      generateSecurePeerCode: () => wasm.generateSecurePeerCode(),
-      isValidPeerCode: (c) => wasm.isValidPeerCode(c),
-      sha256Hex: (d) => wasm.sha256Hex(d),
+      generateEphemeralKeyPair: () => wasmModule.generateEphemeralKeyPair(),
+      generateIdentityKeyPair: () => wasmModule.generateIdentityKeyPair(),
+      sealBoxPayload: (p: Uint8Array, rpk: Uint8Array, sk: Uint8Array) => wasmModule.sealBoxPayload(p, rpk, sk),
+      openBoxPayload: (s: string, spk: Uint8Array, rsk: Uint8Array) => wasmModule.openBoxPayload(s, spk, rsk),
+      computeSas: (ia: Uint8Array, ib: Uint8Array, ea: Uint8Array, eb: Uint8Array) => wasmModule.computeSas(ia, ib, ea, eb),
+      generateSecurePeerCode: () => wasmModule.generateSecurePeerCode(),
+      isValidPeerCode: (c: string) => wasmModule.isValidPeerCode(c),
+      sha256Hex: (d: Uint8Array) => wasmModule.sha256Hex(d),
     };
 
     console.log('[BOLT-WASM] Protocol authority initialized (Rust/WASM: crypto + BTR + transfer)');
     return true;
+  } catch (e) {
+    console.warn('[BOLT-WASM] Failed to initialize from module:', e);
+    _wasmCrypto = null;
+    _wasmModule = null;
+    return false;
+  }
+}
+
+/**
+ * Initialize WASM crypto. Legacy entry point — attempts dynamic import.
+ * Prefer initProtocolWasm() from @the9ines/bolt-transport-web instead.
+ */
+export async function initWasmCrypto(): Promise<boolean> {
+  if (_initAttempted) return _wasmCrypto !== null;
+  _initAttempted = true;
+
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const wasm: any = await (Function('return import("bolt-protocol-wasm")')());
+    await wasm.default();
+    return initWasmCryptoFromModule(wasm);
   } catch (e) {
     console.warn('[BOLT-WASM] Failed to initialize — falling back to TS protocol:', e);
     _wasmCrypto = null;

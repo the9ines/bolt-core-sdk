@@ -47,7 +47,7 @@ export { WIRE_ERROR_CODES, isValidWireErrorCode } from './errors.js';
 export type { WireErrorCode } from './errors.js';
 
 // WASM protocol adapter (RUSTIFY-BROWSER-CORE-1 RB3+RB4)
-export { initWasmCrypto, getWasmCrypto, getWasmModule, createWasmBtrEngine, createWasmSendSession } from './wasm-crypto.js';
+export { initWasmCrypto, initWasmCryptoFromModule, getWasmCrypto, getWasmModule, createWasmBtrEngine, createWasmSendSession } from './wasm-crypto.js';
 export type { WasmCryptoAdapter, WasmBtrEngineHandle, WasmBtrTransferCtxHandle, WasmSendSessionHandle } from './wasm-crypto.js';
 
 // Bolt Transfer Ratchet (BTR) — §16
