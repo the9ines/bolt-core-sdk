@@ -93,7 +93,7 @@ export function createTransferProgress(
         <div>Avg: ${formatSpeed(progress.stats.averageSpeed)}</div>
         <div>${formatSize(progress.loaded)} / ${formatSize(progress.total)}</div>
         <div>${progress.stats.estimatedTimeRemaining > 0 ? `~${formatTime(progress.stats.estimatedTimeRemaining)} remaining` : 'Calculating...'}</div>
-        ${progress.stats.retryCount > 0 ? `<div class="col-span-2 text-yellow-500">Retries: ${progress.stats.retryCount}/${progress.stats.maxRetries}</div>` : ''}
+        ${progress.stats.retryCount > 0 ? `<div class="col-span-2 text-yellow-500">Auto-retrying (${progress.stats.retryCount}/${progress.stats.maxRetries}) — normal on slower connections</div>` : ''}
       </div>
     ` : ''}
   `;

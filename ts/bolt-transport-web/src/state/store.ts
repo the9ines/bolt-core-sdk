@@ -13,8 +13,8 @@ export interface AppState {
   isConnected: boolean;
   signalingConnected: boolean;
   connectingTo: string | null;
-  /** RU2: distinguishes "waiting for peer" from "establishing secure connection" */
-  connectingPhase: 'requesting' | 'establishing' | null;
+  /** RU2+RU3: connection phase for UI messaging */
+  connectingPhase: 'requesting' | 'establishing' | 'slow' | null;
   connectedDevice: DiscoveredDevice | null;
   transferProgress: TransferProgress | null;
   files: File[];

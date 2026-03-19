@@ -24,6 +24,8 @@ export interface TransferProgress {
   total: number;
   status?: 'transferring' | 'paused' | 'canceled_by_sender' | 'canceled_by_receiver' | 'error' | 'completed';
   stats?: TransferStats;
+  /** RU3: user-meaningful reason when status is 'error' */
+  errorDetail?: string;
 }
 
 export interface FileChunkMessage {

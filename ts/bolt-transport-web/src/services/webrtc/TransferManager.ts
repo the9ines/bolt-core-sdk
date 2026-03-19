@@ -18,6 +18,24 @@ import { WebRTCError, TransferError } from '../../types/webrtc-errors.js';
 import { ENABLE_TRANSFER_METRICS, TransferMetricsCollector, summarizeTransfer } from './transferMetrics.js';
 import { dcSendMessage } from './EnvelopeCodec.js';
 import type { FileChunkMessage, ActiveTransfer, TransferProgress, DcControlMessage } from './types.js';
+
+/** RU3: classify errors into user-meaningful reasons for toast display. */
+function classifyTransferError(error: Error): string {
+  const msg = error.message.toLowerCase();
+  if (error instanceof EncryptionError || msg.includes('encrypt') || msg.includes('decrypt')) {
+    return 'Encryption error — please reconnect and try again';
+  }
+  if (error instanceof IntegrityError || msg.includes('integrity') || msg.includes('hash')) {
+    return 'File verification failed — data may be corrupted';
+  }
+  if (msg.includes('timeout') || msg.includes('timed out')) {
+    return 'Transfer timed out — connection may be too slow';
+  }
+  if (msg.includes('disconnect') || msg.includes('closed') || msg.includes('connection')) {
+    return 'Connection lost during transfer';
+  }
+  return 'Transfer failed — please try again';
+}
 import { CANONICAL_CONTROL_TYPES } from './types.js';
 import { getPolicyAdapter } from './PolicyAdapter.js';
 import type { PolicyAdapter, PolicyDecideInput } from './PolicyAdapter.js';
@@ -356,7 +374,9 @@ export class TransferManager {
       }
 
       if (!(error instanceof TransferError && error.message.includes('cancelled'))) {
-        this.emitProgress(file.name, 0, totalChunks, 0, file.size, 'error');
+        // RU3: classify error for user-meaningful toast
+        const detail = error instanceof Error ? classifyTransferError(error) : 'Transfer failed';
+        this.emitProgress(file.name, 0, totalChunks, 0, file.size, 'error', detail);
       }
       throw error;
     }
@@ -635,7 +655,7 @@ export class TransferManager {
               console.error(`[INTEGRITY_MISMATCH] expected=${transfer.expectedHash} actual=${actual} (tid=${transferId})`);
               guardedTransfers.delete(transferId!);
               this.ctx.getRecvTransferIds().delete(filename);
-              this.emitProgress(filename, 0, totalChunks!, 0, fileSize!, 'error');
+              this.emitProgress(filename, 0, totalChunks!, 0, fileSize!, 'error', 'File verification failed — data may be corrupted');
               this.ctx.onError(new IntegrityError('File integrity check failed: hash mismatch'));
               this.ctx.sendMessage({
                 type: 'error',
@@ -651,7 +671,7 @@ export class TransferManager {
             // Fail-closed: treat hash computation failure as integrity failure
             guardedTransfers.delete(transferId!);
             this.ctx.getRecvTransferIds().delete(filename);
-            this.emitProgress(filename, 0, totalChunks!, 0, fileSize!, 'error');
+            this.emitProgress(filename, 0, totalChunks!, 0, fileSize!, 'error', 'File verification failed');
             this.ctx.onError(new IntegrityError('File integrity check failed: hash computation error'));
             this.ctx.disconnect();
             return;
@@ -677,7 +697,8 @@ export class TransferManager {
       if (isBtrMode && btrAdapter) {
         btrAdapter.cancelTransfer();
       }
-      this.emitProgress(filename, 0, totalChunks!, 0, fileSize!, 'error');
+      const detail = error instanceof Error ? classifyTransferError(error) : 'Transfer failed';
+      this.emitProgress(filename, 0, totalChunks!, 0, fileSize!, 'error', detail);
       this.ctx.onError(error instanceof WebRTCError ? error : new TransferError('Chunk processing failed', error));
     }
   }
@@ -715,7 +736,8 @@ export class TransferManager {
     } catch (error) {
       console.error(`[TRANSFER] Error processing chunk ${chunkIndex} of ${filename}:`, error);
       receiveBuffers.delete(filename);
-      this.emitProgress(filename, 0, totalChunks!, 0, fileSize!, 'error');
+      const detail = error instanceof Error ? classifyTransferError(error) : 'Transfer failed';
+      this.emitProgress(filename, 0, totalChunks!, 0, fileSize!, 'error', detail);
       this.ctx.onError(error instanceof WebRTCError ? error : new TransferError('Chunk processing failed', error));
     }
   }
@@ -798,7 +820,8 @@ export class TransferManager {
     totalChunks: number,
     loaded: number,
     total: number,
-    status: TransferProgress['status']
+    status: TransferProgress['status'],
+    errorDetail?: string,
   ): void {
     const collector = this.ctx.getMetricsCollector();
     if (collector && !this.ctx.getMetricsFirstProgressRecorded()) {
@@ -820,6 +843,7 @@ export class TransferManager {
       loaded,
       total,
       status,
+      errorDetail,
       stats: {
         speed,
         averageSpeed: speed,

@@ -98,16 +98,27 @@ function renderDeviceList(
 
 // ── State C: Awaiting approval ───────────────────────────────────────────
 
-function renderAwaitingApproval(deviceName: string, onCancel: () => void, isEstablishing: boolean): HTMLElement {
+function renderAwaitingApproval(deviceName: string, onCancel: () => void, phase: 'requesting' | 'establishing' | 'slow'): HTMLElement {
   const wrap = document.createElement('div');
   wrap.className = 'flex flex-col items-center gap-3 py-4 animate-fade-in';
 
-  const statusText = isEstablishing
-    ? `Establishing secure connection with <span class="text-neon">${escapeHTML(deviceName)}</span>...`
-    : `Waiting for <span class="text-neon">${escapeHTML(deviceName)}</span> to accept...`;
-  const helpText = isEstablishing
-    ? 'Setting up encrypted channel'
-    : 'The other device will be asked to confirm';
+  let statusText: string;
+  let helpText: string;
+
+  switch (phase) {
+    case 'establishing':
+      statusText = `Establishing secure connection with <span class="text-neon">${escapeHTML(deviceName)}</span>...`;
+      helpText = 'Setting up encrypted channel';
+      break;
+    case 'slow':
+      // RU3: intermediate timeout feedback — still trying, not failed yet
+      statusText = `Still connecting to <span class="text-neon">${escapeHTML(deviceName)}</span>...`;
+      helpText = 'This is taking longer than usual — the other device may be slow to respond';
+      break;
+    default:
+      statusText = `Waiting for <span class="text-neon">${escapeHTML(deviceName)}</span> to accept...`;
+      helpText = 'The other device will be asked to confirm';
+  }
 
   wrap.innerHTML = `
     <div class="relative flex items-center justify-center w-10 h-10">
@@ -227,7 +238,7 @@ export function createDeviceDiscovery(
       const peer = peers.find(p => p.peerCode === connectingTo);
       const name = peer?.deviceName || 'device';
       const { connectingPhase } = store.getState();
-      container.appendChild(renderAwaitingApproval(name, onCancelRequest, connectingPhase === 'establishing'));
+      container.appendChild(renderAwaitingApproval(name, onCancelRequest, connectingPhase ?? 'requesting'));
     } else if (showDeviceList) {
       container.appendChild(renderDeviceList(
         peers,
