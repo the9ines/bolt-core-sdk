@@ -37,11 +37,26 @@ export function createTransferProgress(
 ): HTMLElement {
   const isPaused = progress.status === 'paused';
   const isComplete = progress.status === 'completed';
+  const isReceiving = progress.status === 'receiving';
   const isActive = progress.status === 'transferring' || progress.status === 'paused';
   const pct = progress.total > 0 ? Math.round((progress.loaded / progress.total) * 100) : 0;
 
   const wrap = document.createElement('div');
   wrap.className = 'space-y-2 w-full';
+
+  // RU4: incoming transfer state — receiver sees file arriving before progress starts
+  if (isReceiving) {
+    wrap.innerHTML = `
+      <div class="flex items-center gap-2 w-full bg-dark-accent rounded-lg p-3 border border-neon/20 animate-pulse">
+        ${icons.file('w-5 h-5 shrink-0 text-neon/60')}
+        <div class="flex flex-col flex-1 min-w-0">
+          <span class="truncate text-sm">${escapeHTML(progress.filename)}</span>
+          <span class="text-xs text-neon/60">Incoming file — ${formatSize(progress.total)}</span>
+        </div>
+      </div>
+    `;
+    return wrap;
+  }
 
   // RU2: Distinct completion state — green checkmark + filename confirmation
   if (isComplete) {

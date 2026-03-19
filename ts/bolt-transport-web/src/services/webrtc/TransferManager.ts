@@ -599,6 +599,9 @@ export class TransferManager {
       this.ctx.setTransferStartTime(Date.now());
       this.ctx.setPauseDuration(0);
 
+      // RU4: emit "receiving" state so receiver UI shows incoming transfer before progress starts
+      this.emitProgress(filename, 0, totalChunks!, 0, fileSize!, 'receiving');
+
       // BTR: initialize receive-side transfer context on first chunk
       if (isBtrMode && btrEnvelopeFields?.ratchet_public_key) {
         const keyPair = this.ctx.getKeyPair();

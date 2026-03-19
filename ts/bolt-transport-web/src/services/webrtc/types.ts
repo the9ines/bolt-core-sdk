@@ -22,7 +22,7 @@ export interface TransferProgress {
   totalChunks: number;
   loaded: number;
   total: number;
-  status?: 'transferring' | 'paused' | 'canceled_by_sender' | 'canceled_by_receiver' | 'error' | 'completed';
+  status?: 'receiving' | 'transferring' | 'paused' | 'canceled_by_sender' | 'canceled_by_receiver' | 'error' | 'completed';
   stats?: TransferStats;
   /** RU3: user-meaningful reason when status is 'error' */
   errorDetail?: string;
