@@ -36,24 +36,44 @@ export function createTransferProgress(
   onResume: () => void,
 ): HTMLElement {
   const isPaused = progress.status === 'paused';
+  const isComplete = progress.status === 'completed';
   const isActive = progress.status === 'transferring' || progress.status === 'paused';
   const pct = progress.total > 0 ? Math.round((progress.loaded / progress.total) * 100) : 0;
 
   const wrap = document.createElement('div');
   wrap.className = 'space-y-2 w-full';
 
+  // RU2: Distinct completion state — green checkmark + filename confirmation
+  if (isComplete) {
+    wrap.innerHTML = `
+      <div class="flex items-center gap-2 w-full bg-dark-accent rounded-lg p-3 border border-green-500/30">
+        <span class="text-green-400 text-lg">\u2713</span>
+        <div class="flex flex-col flex-1 min-w-0">
+          <span class="truncate text-sm text-green-400">${escapeHTML(progress.filename)}</span>
+          <span class="text-xs text-green-400/70">Transfer complete</span>
+        </div>
+      </div>
+    `;
+    return wrap;
+  }
+
+  // RU2: Paused badge — explicit text label, not just icon swap
+  const pausedBadge = isPaused
+    ? '<span class="ml-2 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider rounded bg-yellow-500/20 text-yellow-400 border border-yellow-500/30">Paused</span>'
+    : '';
+
   wrap.innerHTML = `
     <div class="flex items-center gap-2 w-full bg-dark-accent rounded-lg p-3">
       ${icons.file('w-5 h-5 shrink-0 text-white/50')}
       <div class="flex flex-col flex-1 min-w-0">
-        <span class="truncate text-sm">${escapeHTML(progress.filename)}</span>
+        <span class="truncate text-sm">${escapeHTML(progress.filename)}${pausedBadge}</span>
         <span class="text-xs text-white/50">${formatSize(progress.loaded)} of ${formatSize(progress.total)} (${pct}%)</span>
       </div>
     </div>
 
     <div class="flex items-center gap-2 w-full">
-      <div class="h-2 flex-1 bg-neon/20 rounded-full overflow-hidden">
-        <div class="h-full bg-neon rounded-full transition-all duration-300" style="width: ${pct}%"></div>
+      <div class="h-2 flex-1 ${isPaused ? 'bg-yellow-500/20' : 'bg-neon/20'} rounded-full overflow-hidden">
+        <div class="h-full ${isPaused ? 'bg-yellow-500' : 'bg-neon'} rounded-full transition-all duration-300" style="width: ${pct}%"></div>
       </div>
       ${isActive ? `
         <div class="flex items-center gap-1">

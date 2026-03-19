@@ -36,9 +36,19 @@ export function createVerificationStatus(
       case 'unverified': {
         dot.classList.add('bg-yellow-400');
 
+        const sasWrap = document.createElement('div');
+        sasWrap.className = 'flex flex-col';
+
         const sasLabel = document.createElement('span');
         sasLabel.className = 'text-yellow-400 font-mono tracking-wider';
         sasLabel.textContent = info.sasCode ? escapeHTML(info.sasCode) : '';
+
+        // RU2: concise guidance text (PM-RU-01 approved)
+        const guidance = document.createElement('span');
+        guidance.className = 'text-[10px] text-yellow-400/60';
+        guidance.textContent = 'Compare this code with the other device.';
+
+        sasWrap.append(sasLabel, guidance);
 
         const btn = document.createElement('button');
         btn.className =
@@ -47,7 +57,7 @@ export function createVerificationStatus(
         btn.textContent = 'Mark Verified';
         btn.addEventListener('click', options.onMarkVerified);
 
-        container.append(dot, sasLabel, btn);
+        container.append(dot, sasWrap, btn);
         break;
       }
 

@@ -396,13 +396,15 @@ describe('createVerificationStatus component', () => {
 
     update({ state: 'unverified', sasCode: 'AABB11' });
 
-    // Should have dot + sasLabel + button
+    // Should have dot + sasWrap (label + guidance) + button
     expect(element.children.length).toBe(3);
     const dot = element.children[0];
-    const sasLabel = element.children[1];
+    const sasWrap = element.children[1];
     const btn = element.children[2];
     expect(dot.classList.contains('bg-yellow-400')).toBe(true);
-    expect(sasLabel.textContent).toBe('AABB11');
+    // RU2: SAS code is inside a wrapper that also contains guidance text
+    expect(sasWrap.children[0].textContent).toBe('AABB11');
+    expect(sasWrap.children[1].textContent).toBe('Compare this code with the other device.');
     expect(btn.textContent).toBe('Mark Verified');
     expect(btn.addEventListener).toHaveBeenCalledWith('click', onMarkVerified);
   });

@@ -98,9 +98,17 @@ function renderDeviceList(
 
 // ── State C: Awaiting approval ───────────────────────────────────────────
 
-function renderAwaitingApproval(deviceName: string, onCancel: () => void): HTMLElement {
+function renderAwaitingApproval(deviceName: string, onCancel: () => void, isEstablishing: boolean): HTMLElement {
   const wrap = document.createElement('div');
   wrap.className = 'flex flex-col items-center gap-3 py-4 animate-fade-in';
+
+  const statusText = isEstablishing
+    ? `Establishing secure connection with <span class="text-neon">${escapeHTML(deviceName)}</span>...`
+    : `Waiting for <span class="text-neon">${escapeHTML(deviceName)}</span> to accept...`;
+  const helpText = isEstablishing
+    ? 'Setting up encrypted channel'
+    : 'The other device will be asked to confirm';
+
   wrap.innerHTML = `
     <div class="relative flex items-center justify-center w-10 h-10">
       <div class="absolute w-10 h-10 rounded-full bg-neon/5 animate-ping"></div>
@@ -108,8 +116,8 @@ function renderAwaitingApproval(deviceName: string, onCancel: () => void): HTMLE
       <div class="w-3 h-3 rounded-full bg-neon/40"></div>
     </div>
     <div class="text-center space-y-1">
-      <p class="text-sm text-white/80">Waiting for <span class="text-neon">${escapeHTML(deviceName)}</span> to accept...</p>
-      <p class="text-xs text-gray-500">The other device will be asked to confirm</p>
+      <p class="text-sm text-white/80">${statusText}</p>
+      <p class="text-xs text-gray-500">${helpText}</p>
     </div>
   `;
   const cancelBtn = document.createElement('button');
@@ -218,7 +226,8 @@ export function createDeviceDiscovery(
     } else if (connectingTo) {
       const peer = peers.find(p => p.peerCode === connectingTo);
       const name = peer?.deviceName || 'device';
-      container.appendChild(renderAwaitingApproval(name, onCancelRequest));
+      const { connectingPhase } = store.getState();
+      container.appendChild(renderAwaitingApproval(name, onCancelRequest, connectingPhase === 'establishing'));
     } else if (showDeviceList) {
       container.appendChild(renderDeviceList(
         peers,
