@@ -120,6 +120,51 @@ impl BtrEngine {
         self.begin_transfer_send(transfer_id, remote_ratchet_pub)
     }
 
+    /// Accept a transfer using the receiver's existing ephemeral secret key
+    /// for the DH step (instead of generating a fresh ratchet keypair).
+    ///
+    /// This matches the TS BtrTransferAdapter.beginReceive() behavior where
+    /// the receiver uses scalarMult(localSecretKey, senderRatchetPub) — the
+    /// receiver's HELLO ephemeral key, not a fresh ratchet key.
+    ///
+    /// Returns a `BtrTransferContext` for decrypting chunks.
+    pub fn begin_transfer_receive_with_key(
+        &mut self,
+        transfer_id: &[u8; 16],
+        remote_ratchet_pub: &[u8; 32],
+        local_secret_key: &[u8; 32],
+    ) -> Result<BtrTransferContext, BtrError> {
+        use x25519_dalek::{PublicKey, StaticSecret};
+
+        // DH with existing key (matches TS scalarMult behavior)
+        let secret = StaticSecret::from(*local_secret_key);
+        let remote_pk = PublicKey::from(*remote_ratchet_pub);
+        let shared = secret.diffie_hellman(&remote_pk);
+        let dh_output = *shared.as_bytes();
+
+        let new_srk = derive_ratcheted_session_root(self.session_root_key.as_bytes(), &dh_output);
+
+        // Update session state
+        self.session_root_key = SecretKey32::new(new_srk);
+        self.ratchet_generation += 1;
+
+        // Derive transfer root
+        let transfer_root = derive_transfer_root(self.session_root_key.as_bytes(), transfer_id);
+
+        // Set up replay guard for this transfer
+        self.replay_guard
+            .begin_transfer(*transfer_id, self.ratchet_generation);
+
+        let ctx = BtrTransferContext {
+            transfer_id: *transfer_id,
+            generation: self.ratchet_generation,
+            chain_key: SecretKey32::new(transfer_root),
+            chain_index: 0,
+        };
+
+        Ok(ctx)
+    }
+
     /// Check a received chunk's replay/ordering status.
     pub fn check_replay(
         &mut self,

@@ -73,7 +73,7 @@ export declare function getWasmModule(): any;
  */
 export interface WasmBtrEngineHandle {
     beginTransferSend(transferId: Uint8Array, remoteRatchetPub: Uint8Array): WasmBtrTransferCtxHandle;
-    beginTransferReceive(transferId: Uint8Array, remoteRatchetPub: Uint8Array): WasmBtrTransferCtxHandle;
+    beginTransferReceive(transferId: Uint8Array, remoteRatchetPub: Uint8Array, localSecretKey: Uint8Array): WasmBtrTransferCtxHandle;
     ratchetGeneration(): number;
     endTransfer(): void;
     cleanupDisconnect(): void;

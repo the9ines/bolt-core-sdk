@@ -9,9 +9,11 @@ export class WasmBtrEngine {
     free(): void;
     [Symbol.dispose](): void;
     /**
-     * Begin a receive-side transfer. Returns a WasmBtrTransferCtx handle.
+     * Begin a receive-side transfer using existing ephemeral secret key.
+     * Matches TS BtrTransferAdapter.beginReceive() which uses
+     * scalarMult(localSecretKey, senderRatchetPub) for the DH step.
      */
-    beginTransferReceive(transfer_id: Uint8Array, remote_ratchet_pub: Uint8Array): WasmBtrTransferCtx;
+    beginTransferReceive(transfer_id: Uint8Array, remote_ratchet_pub: Uint8Array, local_secret_key: Uint8Array): WasmBtrTransferCtx;
     /**
      * Begin a send-side transfer. Returns a WasmBtrTransferCtx handle.
      */
@@ -216,7 +218,7 @@ export interface InitOutput {
     readonly openBoxPayload: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number, number];
     readonly sealBoxPayload: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number, number];
     readonly sha256Hex: (a: number, b: number) => [number, number];
-    readonly wasmbtrengine_beginTransferReceive: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
+    readonly wasmbtrengine_beginTransferReceive: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number];
     readonly wasmbtrengine_beginTransferSend: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
     readonly wasmbtrengine_cleanupDisconnect: (a: number) => void;
     readonly wasmbtrengine_endTransfer: (a: number) => void;

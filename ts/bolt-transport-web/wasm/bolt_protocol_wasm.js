@@ -16,17 +16,22 @@ export class WasmBtrEngine {
         wasm.__wbg_wasmbtrengine_free(ptr, 0);
     }
     /**
-     * Begin a receive-side transfer. Returns a WasmBtrTransferCtx handle.
+     * Begin a receive-side transfer using existing ephemeral secret key.
+     * Matches TS BtrTransferAdapter.beginReceive() which uses
+     * scalarMult(localSecretKey, senderRatchetPub) for the DH step.
      * @param {Uint8Array} transfer_id
      * @param {Uint8Array} remote_ratchet_pub
+     * @param {Uint8Array} local_secret_key
      * @returns {WasmBtrTransferCtx}
      */
-    beginTransferReceive(transfer_id, remote_ratchet_pub) {
+    beginTransferReceive(transfer_id, remote_ratchet_pub, local_secret_key) {
         const ptr0 = passArray8ToWasm0(transfer_id, wasm.__wbindgen_malloc);
         const len0 = WASM_VECTOR_LEN;
         const ptr1 = passArray8ToWasm0(remote_ratchet_pub, wasm.__wbindgen_malloc);
         const len1 = WASM_VECTOR_LEN;
-        const ret = wasm.wasmbtrengine_beginTransferReceive(this.__wbg_ptr, ptr0, len0, ptr1, len1);
+        const ptr2 = passArray8ToWasm0(local_secret_key, wasm.__wbindgen_malloc);
+        const len2 = WASM_VECTOR_LEN;
+        const ret = wasm.wasmbtrengine_beginTransferReceive(this.__wbg_ptr, ptr0, len0, ptr1, len1, ptr2, len2);
         if (ret[2]) {
             throw takeFromExternrefTable0(ret[1]);
         }

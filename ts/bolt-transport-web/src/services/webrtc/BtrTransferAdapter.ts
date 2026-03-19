@@ -218,9 +218,11 @@ export class WasmBtrTransferAdapter {
   beginReceive(
     transferId: Uint8Array,
     senderRatchetPub: Uint8Array,
-    _localSecretKey: Uint8Array,
+    localSecretKey: Uint8Array,
   ): WasmBtrTransferCtxBridge {
-    const ctx = this.engine.beginTransferReceive(transferId, senderRatchetPub);
+    // Pass localSecretKey to Rust so it does scalarMult(localSk, senderPub)
+    // matching the TS BtrTransferAdapter.beginReceive() DH behavior exactly.
+    const ctx = this.engine.beginTransferReceive(transferId, senderRatchetPub, localSecretKey);
     this.activeCtx = new WasmBtrTransferCtxBridge(ctx);
     return this.activeCtx;
   }

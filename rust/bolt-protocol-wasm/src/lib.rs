@@ -204,12 +204,15 @@ impl WasmBtrEngine {
         })
     }
 
-    /// Begin a receive-side transfer. Returns a WasmBtrTransferCtx handle.
+    /// Begin a receive-side transfer using existing ephemeral secret key.
+    /// Matches TS BtrTransferAdapter.beginReceive() which uses
+    /// scalarMult(localSecretKey, senderRatchetPub) for the DH step.
     #[wasm_bindgen(js_name = "beginTransferReceive")]
     pub fn begin_transfer_receive(
         &mut self,
         transfer_id: &[u8],
         remote_ratchet_pub: &[u8],
+        local_secret_key: &[u8],
     ) -> Result<WasmBtrTransferCtx, JsValue> {
         let tid: [u8; 16] = transfer_id
             .try_into()
@@ -217,15 +220,18 @@ impl WasmBtrEngine {
         let rpub: [u8; 32] = remote_ratchet_pub
             .try_into()
             .map_err(|_| JsValue::from_str("remote_ratchet_pub must be 32 bytes"))?;
+        let lsk: [u8; 32] = local_secret_key
+            .try_into()
+            .map_err(|_| JsValue::from_str("local_secret_key must be 32 bytes"))?;
 
-        let (ctx, local_pub) = self
+        let ctx = self
             .inner
-            .begin_transfer_receive(&tid, &rpub)
+            .begin_transfer_receive_with_key(&tid, &rpub, &lsk)
             .map_err(|e| JsValue::from_str(&format!("{:?}", e)))?;
 
         Ok(WasmBtrTransferCtx {
             inner: ctx,
-            local_ratchet_pub: local_pub,
+            local_ratchet_pub: [0u8; 32], // receiver doesn't send a ratchet pub
         })
     }
 
