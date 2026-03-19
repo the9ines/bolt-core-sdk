@@ -38,6 +38,7 @@ export function createTransferProgress(
   const isPaused = progress.status === 'paused';
   const isComplete = progress.status === 'completed';
   const isReceiving = progress.status === 'receiving';
+  const isCancelled = progress.status === 'canceled_by_sender' || progress.status === 'canceled_by_receiver';
   const isActive = progress.status === 'transferring' || progress.status === 'paused';
   const pct = progress.total > 0 ? Math.round((progress.loaded / progress.total) * 100) : 0;
 
@@ -52,6 +53,20 @@ export function createTransferProgress(
         <div class="flex flex-col flex-1 min-w-0">
           <span class="truncate text-sm">${escapeHTML(progress.filename)}</span>
           <span class="text-xs text-neon/60">Incoming file — ${formatSize(progress.total)}</span>
+        </div>
+      </div>
+    `;
+    return wrap;
+  }
+
+  // RU5: Cancelled state — brief visible confirmation before UI clears
+  if (isCancelled) {
+    wrap.innerHTML = `
+      <div class="flex items-center gap-2 w-full bg-dark-accent rounded-lg p-3 border border-gray-500/30">
+        ${icons.x('w-5 h-5 shrink-0 text-gray-400')}
+        <div class="flex flex-col flex-1 min-w-0">
+          <span class="truncate text-sm text-gray-400">${escapeHTML(progress.filename)}</span>
+          <span class="text-xs text-gray-500">Transfer cancelled</span>
         </div>
       </div>
     `;
