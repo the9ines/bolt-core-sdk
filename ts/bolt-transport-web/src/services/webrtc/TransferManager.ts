@@ -234,11 +234,11 @@ export class TransferManager {
           lossPpm: 0,       // Default; future: measure from DC stats
           deviceClass: 3,   // Unknown; future: detect from navigator
           maxParallelChunks: 4,
-          maxInFlightBytes: 65536,
+          maxInFlightBytes: 262144,
           priority: 128,
           fairnessMode: 0,  // Balanced
           configuredChunkSize: DEFAULT_CHUNK_SIZE,
-          transportMaxMessageSize: 65536,
+          transportMaxMessageSize: 262144,
           pressure,
         });
 

@@ -28,8 +28,8 @@ describe('§14 Protocol Constants', () => {
     expect(SECRET_KEY_LENGTH).toBe(32);
   });
 
-  it('DEFAULT_CHUNK_SIZE = 16384', () => {
-    expect(DEFAULT_CHUNK_SIZE).toBe(16384);
+  it('DEFAULT_CHUNK_SIZE = 65536', () => {
+    expect(DEFAULT_CHUNK_SIZE).toBe(65536);
   });
 
   it('TRANSFER_ID_LENGTH = 16', () => {
