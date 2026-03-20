@@ -56,6 +56,9 @@ export {
 export { initProtocolWasm, getProtocolAuthorityMode } from './services/webrtc/ProtocolWasmLoader.js';
 export type { ProtocolAuthorityMode } from './services/webrtc/ProtocolWasmLoader.js';
 
+// ── Transfer Metrics (PF2) ──────────────────────────────────────────────────
+export { setTransferMetricsEnabled } from './services/webrtc/transferMetrics.js';
+
 // ── Policy ──────────────────────────────────────────────────────────────────
 export { initPolicyAdapter, getPolicyAdapter } from './services/webrtc/PolicyAdapter.js';
 export type { PolicyAdapter, ScheduleDecision, StallResult, ProgressResult } from './services/webrtc/PolicyAdapter.js';
