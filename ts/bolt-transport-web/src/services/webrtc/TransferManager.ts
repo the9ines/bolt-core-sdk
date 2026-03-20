@@ -347,6 +347,7 @@ export class TransferManager {
       }
 
       const collector = this.ctx.getMetricsCollector();
+      console.log('[TRANSFER_DONE] collector:', !!collector);
       if (collector) {
         const metrics = collector.finish();
         this.ctx.setMetricsCollector(null);
