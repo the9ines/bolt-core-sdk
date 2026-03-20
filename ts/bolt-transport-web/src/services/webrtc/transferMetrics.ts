@@ -6,7 +6,8 @@
 
 // ─── Feature Flag ────────────────────────────────────────────────────────────
 
-export let ENABLE_TRANSFER_METRICS = false;
+// PF2: default ON for baseline collection. Revert to false after PF2.
+export let ENABLE_TRANSFER_METRICS = true;
 
 export function setTransferMetricsEnabled(enabled: boolean): void {
   ENABLE_TRANSFER_METRICS = enabled;
