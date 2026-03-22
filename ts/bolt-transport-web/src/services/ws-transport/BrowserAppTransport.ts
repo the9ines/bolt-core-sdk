@@ -1,17 +1,20 @@
 /**
  * BrowserAppTransport -- orchestrator for browser-to-daemon transport.
  *
- * Strategy: WS primary -> WebRTC fallback.
+ * Strategy: WebTransport primary -> WS fallback -> WebRTC fallback.
  *
- * 1. Attempts direct WebSocket connection to the daemon.
- * 2. On WS failure (refused, timeout, TLS error), falls back to WebRTC
- *    via existing DualSignaling + WebRTCService path.
+ * 1. If WebTransport URL configured and browser supports it, attempts WT.
+ * 2. On WT failure (or not configured), falls back to WebSocket.
+ * 3. On WS failure, falls back to WebRTC via existing DualSignaling +
+ *    WebRTCService path.
  *
  * The active transport is transparent to the caller after connect().
  */
 
 import { WsDataTransport } from './WsDataTransport.js';
+import { WtDataTransport } from './WtDataTransport.js';
 import type { WsDataTransportOptions } from './WsDataTransport.js';
+import type { WtDataTransportOptions } from './WtDataTransport.js';
 import type WebRTCService from '../webrtc/WebRTCService.js';
 import type { TransferProgress, VerificationInfo } from '../webrtc/types.js';
 
@@ -22,6 +25,12 @@ export interface BrowserAppTransportOptions {
   daemonUrl: string;
   /** WS connection timeout in ms. Default: 5000 */
   wsConnectTimeout?: number;
+
+  // ── WebTransport options ──
+  /** Daemon WebTransport URL, e.g. "https://localhost:4433". If set, WT is attempted first. */
+  webTransportUrl?: string;
+  /** WT connection timeout in ms. Default: 5000 */
+  wtConnectTimeout?: number;
 
   // ── WebRTC fallback options ──
   /** Signaling server URL for WebRTC fallback. */
@@ -40,18 +49,21 @@ export interface BrowserAppTransportOptions {
   onReceiveFile?: (file: Blob, metadata: { filename: string }) => void;
   /** Transfer progress callback. */
   onProgress?: (progress: TransferProgress) => void;
-  /** Fired with the active transport mode ('ws' | 'webrtc'). */
-  onTransportMode?: (mode: 'ws' | 'webrtc') => void;
+  /** Fired with the active transport mode ('webtransport' | 'ws' | 'webrtc'). */
+  onTransportMode?: (mode: 'webtransport' | 'ws' | 'webrtc') => void;
   /** Error callback. */
   onError?: (error: Error) => void;
   /** Enable BTR capability. Default: false. */
   btrEnabled?: boolean;
+  /** Force-disable WebTransport even if webTransportUrl is set and browser supports it (WTI4 kill-switch).
+   *  Default: true when webTransportUrl is provided. Set to false to force WS-only. */
+  webTransportEnabled?: boolean;
 
   /**
    * Factory for creating a WebRTC fallback service.
    * Injected to avoid hard dependency on signaling setup.
    * If not provided, WebRTC fallback is unavailable and connect()
-   * will throw when WS fails.
+   * will throw when both WT and WS fail.
    */
   createWebRTCFallback?: () => Promise<WebRTCService>;
 }
@@ -59,9 +71,10 @@ export interface BrowserAppTransportOptions {
 // ─── BrowserAppTransport ────────────────────────────────────────────────────
 
 export class BrowserAppTransport {
+  private wtTransport: WtDataTransport | null = null;
   private wsTransport: WsDataTransport | null = null;
   private webrtcService: WebRTCService | null = null;
-  private transportMode: 'ws' | 'webrtc' | null = null;
+  private transportMode: 'webtransport' | 'ws' | 'webrtc' | null = null;
   private readonly options: BrowserAppTransportOptions;
 
   constructor(options: BrowserAppTransportOptions) {
@@ -69,16 +82,33 @@ export class BrowserAppTransport {
   }
 
   /** Current transport mode, or null if not connected. */
-  get mode(): 'ws' | 'webrtc' | null {
+  get mode(): 'webtransport' | 'ws' | 'webrtc' | null {
     return this.transportMode;
   }
 
   /**
-   * Connect using WS primary with WebRTC fallback.
-   * Throws if both transports fail.
+   * Connect using WT primary -> WS fallback -> WebRTC fallback.
+   * Throws if all transports fail.
    */
   async connect(): Promise<void> {
-    // 1. Try WS primary
+    // Derive WT enablement: configured URL + not force-disabled + browser API exists
+    const wtEnabled = !!this.options.webTransportUrl
+      && this.options.webTransportEnabled !== false
+      && typeof globalThis.WebTransport !== 'undefined';
+
+    // 1. Try WebTransport primary (if enabled)
+    if (wtEnabled) {
+      const wtOk = await this.tryWtConnect();
+      if (wtOk) {
+        this.transportMode = 'webtransport';
+        this.options.onTransportMode?.('webtransport');
+        console.log('[WT_TRANSPORT] Using WebTransport transport');
+        return;
+      }
+      console.log('[TRANSPORT_FALLBACK] WebTransport failed, falling back to WebSocket');
+    }
+
+    // 2. Try WS
     const wsOk = await this.tryWsConnect();
     if (wsOk) {
       this.transportMode = 'ws';
@@ -87,12 +117,46 @@ export class BrowserAppTransport {
       return;
     }
 
-    // 2. WS failed -> automatic WebRTC fallback
+    // 3. WS failed -> automatic WebRTC fallback
     console.log('[TRANSPORT_FALLBACK] WS failed, falling back to WebRTC');
     await this.connectWebRTC();
     this.transportMode = 'webrtc';
     this.options.onTransportMode?.('webrtc');
     console.log('[TRANSPORT_FALLBACK] Using WebRTC transport');
+  }
+
+  /**
+   * Attempt WebTransport connection with timeout.
+   * Returns true on success, false on failure.
+   */
+  private async tryWtConnect(): Promise<boolean> {
+    try {
+      this.wtTransport = new WtDataTransport({
+        daemonUrl: this.options.webTransportUrl!,
+        connectTimeout: this.options.wtConnectTimeout ?? 5000,
+        identity: this.options.identity,
+        identityPublicKey: this.options.identityPublicKey,
+        onVerification: this.options.onVerification,
+        onReceiveFile: this.options.onReceiveFile,
+        onProgress: this.options.onProgress,
+        onTransportMode: this.options.onTransportMode,
+        onError: this.options.onError,
+        btrEnabled: this.options.btrEnabled,
+        onDisconnect: () => {
+          console.log('[WT_TRANSPORT] Disconnected from daemon');
+        },
+      });
+
+      const ok = await this.wtTransport.connect();
+      if (!ok) {
+        this.wtTransport = null;
+        return false;
+      }
+      return true;
+    } catch {
+      this.wtTransport = null;
+      return false;
+    }
   }
 
   /**
@@ -112,6 +176,7 @@ export class BrowserAppTransport {
         onTransportMode: this.options.onTransportMode,
         onError: this.options.onError,
         btrEnabled: this.options.btrEnabled,
+        webTransportEnabled: !!this.options.webTransportUrl && this.options.webTransportEnabled !== false,
         onDisconnect: () => {
           console.log('[WS_TRANSPORT] Disconnected from daemon');
         },
@@ -147,6 +212,9 @@ export class BrowserAppTransport {
 
   /** Send a file via the active transport. */
   async sendFile(file: File): Promise<void> {
+    if (this.transportMode === 'webtransport' && this.wtTransport) {
+      return this.wtTransport.sendFile(file);
+    }
     if (this.transportMode === 'ws' && this.wsTransport) {
       return this.wsTransport.sendFile(file);
     }
@@ -158,6 +226,10 @@ export class BrowserAppTransport {
 
   /** Disconnect the active transport. */
   disconnect(): void {
+    if (this.wtTransport) {
+      this.wtTransport.disconnect();
+      this.wtTransport = null;
+    }
     if (this.wsTransport) {
       this.wsTransport.disconnect();
       this.wsTransport = null;

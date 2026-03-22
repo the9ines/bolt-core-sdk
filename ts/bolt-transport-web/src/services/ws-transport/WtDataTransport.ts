@@ -1,14 +1,19 @@
 /**
- * WsDataTransport -- WebSocket client for direct data transport to the
- * bolt-daemon WS endpoint (PM-RC-02).
+ * WtDataTransport -- WebTransport client for direct data transport to the
+ * bolt-daemon HTTP/3 WebTransport endpoint (WTI2/WTI3).
  *
  * Uses the SAME wire format (ProfileEnvelopeV1 JSON text), EnvelopeCodec,
- * HandshakeManager, and TransferManager as the WebRTC path. Only the
- * underlying transport differs (WebSocket instead of RTCDataChannel).
+ * HandshakeManager, and TransferManager as the WebSocket and WebRTC paths.
+ * Only the underlying transport differs: WebTransport bidirectional streams
+ * with 4-byte big-endian length-prefixed framing.
  *
  * IMPORTANT: This is browser-to-daemon transport. All protocol/session
- * authority stays in the daemon/Rust core. The browser WS client just
+ * authority stays in the daemon/Rust core. The browser WT client just
  * sends and receives frames.
+ *
+ * Log tokens:
+ *   [WT_TRANSPORT]  — connection lifecycle
+ *   [WT_FRAMING]    — frame-level events
  */
 
 import { generateEphemeralKeyPair, toBase64, fromBase64, openBoxPayload, isValidWireErrorCode, scalarMult, BtrMode } from '@the9ines/bolt-core';
@@ -31,20 +36,12 @@ import type {
   ActiveTransfer,
 } from '../webrtc/types.js';
 import type { TransferMetricsCollector } from '../webrtc/transferMetrics.js';
-
-// ─── DataTransport abstraction ─────────────────────────────────────────────
-// Minimal interface satisfied by both WebSocket and RTCDataChannel.
-// Used to abstract the send target in dcSendMessage.
-
-export interface DataTransport {
-  send(data: string): void;
-  readonly readyState: string;
-}
+import type { DataTransport } from './WsDataTransport.js';
 
 // ─── Options ────────────────────────────────────────────────────────────────
 
-export interface WsDataTransportOptions {
-  /** Daemon WebSocket URL, e.g. "ws://localhost:9100" */
+export interface WtDataTransportOptions {
+  /** Daemon WebTransport URL, e.g. "https://localhost:4433" */
   daemonUrl: string;
   /** Connection timeout in ms. Default: 5000 */
   connectTimeout?: number;
@@ -61,21 +58,134 @@ export interface WsDataTransportOptions {
   /** Fired on disconnect. */
   onDisconnect?: () => void;
   /** Fired with the active transport mode. */
-  onTransportMode?: (mode: 'ws' | 'webrtc') => void;
+  onTransportMode?: (mode: 'webtransport' | 'ws' | 'webrtc') => void;
   /** Error callback. */
   onError?: (error: Error) => void;
   /** Enable BTR capability. Default: false. */
   btrEnabled?: boolean;
-  /** Advertise WebTransport capability in HELLO (WTI4). Default: false.
-   *  Set to true when the browser is configured to use WebTransport,
-   *  so the daemon knows this client supports WT even on a WS connection. */
-  webTransportEnabled?: boolean;
 }
 
-// ─── WsDataTransport ────────────────────────────────────────────────────────
+// ─── Framing Helpers ────────────────────────────────────────────────────────
+// 4-byte big-endian length prefix + UTF-8 payload, matching daemon wt_endpoint.
 
-export class WsDataTransport {
-  private ws: WebSocket | null = null;
+const MAX_FRAME_SIZE = 1_048_576; // 1 MiB
+
+/** Encode a string message into a length-prefixed frame. */
+export function encodeFrame(message: string): Uint8Array {
+  const payload = new TextEncoder().encode(message);
+  const frame = new Uint8Array(4 + payload.length);
+  const view = new DataView(frame.buffer);
+  view.setUint32(0, payload.length, false); // big-endian
+  frame.set(payload, 4);
+  return frame;
+}
+
+/**
+ * Deframer: accumulates byte chunks and yields complete frames.
+ * Each frame is 4-byte BE length + payload bytes.
+ */
+export class FrameDeframer {
+  private buffer = new Uint8Array(0);
+
+  /** Push new bytes and return any complete frames as strings. */
+  push(chunk: Uint8Array): string[] {
+    // Append chunk to buffer
+    const merged = new Uint8Array(this.buffer.length + chunk.length);
+    merged.set(this.buffer);
+    merged.set(chunk, this.buffer.length);
+    this.buffer = merged;
+
+    const frames: string[] = [];
+    while (this.buffer.length >= 4) {
+      const view = new DataView(this.buffer.buffer, this.buffer.byteOffset, 4);
+      const len = view.getUint32(0, false); // big-endian
+
+      if (len > MAX_FRAME_SIZE) {
+        throw new Error(`[WT_FRAMING] Frame too large: ${len} bytes (max ${MAX_FRAME_SIZE})`);
+      }
+
+      if (this.buffer.length < 4 + len) {
+        break; // incomplete frame
+      }
+
+      const payload = this.buffer.slice(4, 4 + len);
+      frames.push(new TextDecoder().decode(payload));
+      this.buffer = this.buffer.slice(4 + len);
+    }
+
+    return frames;
+  }
+
+  /** Reset internal buffer. */
+  reset(): void {
+    this.buffer = new Uint8Array(0);
+  }
+}
+
+// ─── DataTransport adapter ──────────────────────────────────────────────────
+// Wraps the async WebTransport write into a sync send() + readyState shape
+// that HandshakeManager and EnvelopeCodec expect.
+
+class WtDataTransportBridge implements DataTransport {
+  private _readyState: string = 'connecting';
+  private _writer: WritableStreamDefaultWriter<Uint8Array> | null = null;
+  private _sendQueue: Uint8Array[] = [];
+  private _flushing = false;
+
+  get readyState(): string {
+    return this._readyState;
+  }
+
+  setReadyState(state: string): void {
+    this._readyState = state;
+  }
+
+  setWriter(writer: WritableStreamDefaultWriter<Uint8Array>): void {
+    this._writer = writer;
+  }
+
+  /** Synchronous send — queues internally, flushes async. */
+  send(data: string): void {
+    if (this._readyState !== 'open') return;
+    this._sendQueue.push(encodeFrame(data));
+    this.flush();
+  }
+
+  /** Flush queued frames to the writer. */
+  private async flush(): Promise<void> {
+    if (this._flushing || !this._writer) return;
+    this._flushing = true;
+    try {
+      while (this._sendQueue.length > 0) {
+        const frame = this._sendQueue.shift()!;
+        await this._writer.write(frame);
+      }
+    } catch (e) {
+      console.warn('[WT_TRANSPORT] Write error during flush:', e);
+    } finally {
+      this._flushing = false;
+    }
+  }
+
+  /** Close the writer and mark closed. */
+  async close(): Promise<void> {
+    this._readyState = 'closed';
+    this._sendQueue = [];
+    if (this._writer) {
+      try { await this._writer.close(); } catch { /* ignore */ }
+      this._writer = null;
+    }
+  }
+}
+
+// ─── WtDataTransport ────────────────────────────────────────────────────────
+
+export class WtDataTransport {
+  private transport: any | null = null; // WebTransport instance
+  private bridge: WtDataTransportBridge;
+  private deframer = new FrameDeframer();
+  private readLoopAbort: AbortController | null = null;
+
   private keyPair: { publicKey: Uint8Array; secretKey: Uint8Array } | null = null;
   private remotePublicKey: Uint8Array | null = null;
   private remoteIdentityKey: Uint8Array | null = null;
@@ -119,10 +229,10 @@ export class WsDataTransport {
   private transfer: TransferManager;
 
   // Options
-  private readonly opts: WsDataTransportOptions;
+  private readonly opts: WtDataTransportOptions;
   private readonly wsOptions: WebRTCServiceOptions;
 
-  constructor(options: WsDataTransportOptions) {
+  constructor(options: WtDataTransportOptions) {
     this.opts = options;
     this.wsOptions = {
       identityPublicKey: options.identityPublicKey,
@@ -130,14 +240,12 @@ export class WsDataTransport {
       btrEnabled: options.btrEnabled,
     };
 
-    this.localCapabilities = ['bolt.file-hash', 'bolt.profile-envelope-v1'];
+    this.localCapabilities = ['bolt.file-hash', 'bolt.profile-envelope-v1', 'bolt.transport-webtransport-v1'];
     if (options.btrEnabled) {
       this.localCapabilities.push('bolt.transfer-ratchet-v1');
     }
-    if (options.webTransportEnabled) {
-      this.localCapabilities.push('bolt.transport-webtransport-v1');
-    }
 
+    this.bridge = new WtDataTransportBridge();
     this.handshake = new HandshakeManager(this.buildHandshakeContext());
     this.transfer = new TransferManager(this.buildTransferContext());
   }
@@ -145,7 +253,7 @@ export class WsDataTransport {
   // ─── Public API ─────────────────────────────────────────────────────────
 
   /**
-   * Connect to the daemon's WS endpoint.
+   * Connect to the daemon's WebTransport endpoint.
    * Returns true on success (HELLO complete), false on failure.
    */
   async connect(): Promise<boolean> {
@@ -153,74 +261,93 @@ export class WsDataTransport {
     this.sessionGeneration++;
     this.sessionState = 'connecting';
     this.keyPair = generateEphemeralKeyPair();
+    this.bridge = new WtDataTransportBridge();
 
-    return new Promise<boolean>((resolve) => {
+    return new Promise<boolean>(async (resolve) => {
       const timer = setTimeout(() => {
-        console.log('[WS_TRANSPORT] Connect timeout');
-        this.cleanupWs();
+        console.log('[WT_TRANSPORT] Connect timeout');
+        this.cleanupTransport();
         resolve(false);
       }, timeout);
 
       try {
-        this.ws = new WebSocket(this.opts.daemonUrl);
-      } catch {
-        clearTimeout(timer);
-        console.log('[WS_TRANSPORT] WebSocket constructor threw');
-        resolve(false);
-        return;
-      }
+        // Feature detection
+        if (typeof globalThis.WebTransport === 'undefined') {
+          clearTimeout(timer);
+          console.log('[WT_TRANSPORT] WebTransport not available in this browser');
+          resolve(false);
+          return;
+        }
 
-      this.ws.onopen = () => {
-        console.log('[WS_TRANSPORT] Connected to daemon');
+        this.transport = new globalThis.WebTransport(this.opts.daemonUrl);
+
+        // Wait for transport to be ready
+        await this.transport.ready;
+        console.log('[WT_TRANSPORT] Connected to daemon');
+
+        // Open one bidirectional stream
+        const stream = await this.transport.createBidirectionalStream();
+        const writer = stream.writable.getWriter();
+        const reader = stream.readable;
+
+        this.bridge.setWriter(writer);
+        this.bridge.setReadyState('open');
         this.sessionState = 'pre_hello';
+
+        // Start read loop
+        this.readLoopAbort = new AbortController();
+        this.startReadLoop(reader, this.readLoopAbort.signal);
+
+        // Set helloResolve BEFORE initiateHello so legacy mode can resolve
+        this.helloResolve = () => {
+          clearTimeout(timer);
+          console.log('[WT_TRANSPORT] HELLO complete');
+          resolve(true);
+        };
+
+        // Initiate HELLO
         this.handshake.initiateHello();
         // Legacy mode: initiateHello completes synchronously when no identity
-        // is configured, setting helloComplete=true but not calling helloResolve.
+        // is configured, setting helloComplete=true.
         if (this.helloComplete && this.helloResolve) {
           this.helloResolve();
           this.helloResolve = null;
         }
-      };
 
-      this.ws.onmessage = (event: MessageEvent) => {
-        this.handleMessage(event);
-      };
-
-      this.ws.onerror = () => {
-        console.log('[WS_TRANSPORT] Connection error');
+        // Listen for transport closure
+        this.transport.closed.then(() => {
+          console.log('[WT_TRANSPORT] Transport closed');
+          if (this.sessionState !== 'post_hello') {
+            clearTimeout(timer);
+            this.cleanupTransport();
+            resolve(false);
+          } else {
+            this.opts.onDisconnect?.();
+          }
+        }).catch(() => {
+          if (this.sessionState !== 'post_hello') {
+            clearTimeout(timer);
+            this.cleanupTransport();
+            resolve(false);
+          }
+        });
+      } catch (e) {
         clearTimeout(timer);
-        this.cleanupWs();
+        console.log('[WT_TRANSPORT] Connection failed:', e);
+        this.cleanupTransport();
         resolve(false);
-      };
-
-      this.ws.onclose = () => {
-        console.log('[WS_TRANSPORT] Connection closed');
-        if (this.sessionState !== 'post_hello') {
-          clearTimeout(timer);
-          this.cleanupWs();
-          resolve(false);
-        } else {
-          this.opts.onDisconnect?.();
-        }
-      };
-
-      // Resolve when HELLO completes
-      this.helloResolve = () => {
-        clearTimeout(timer);
-        console.log('[WS_TRANSPORT] HELLO complete');
-        resolve(true);
-      };
+      }
     });
   }
 
-  /** Send a file over the WS transport. */
+  /** Send a file over the WT transport. */
   async sendFile(file: File): Promise<void> {
     return this.transfer.sendFile(file);
   }
 
   /** Disconnect and clean up. */
   disconnect(): void {
-    console.log('[WS_TRANSPORT] Disconnecting');
+    console.log('[WT_TRANSPORT] Disconnecting');
     this.sessionGeneration++;
 
     if (this.keyPair) {
@@ -238,7 +365,7 @@ export class WsDataTransport {
       this.completionTimeout = null;
     }
 
-    this.cleanupWs();
+    this.cleanupTransport();
 
     if (this.remotePublicKey instanceof Uint8Array) this.remotePublicKey.fill(0);
     this.remotePublicKey = null;
@@ -276,24 +403,55 @@ export class WsDataTransport {
 
   /** Whether the transport is connected and HELLO-complete. */
   get connected(): boolean {
-    return this.sessionState === 'post_hello' && this.ws !== null && this.ws.readyState === WebSocket.OPEN;
+    return this.sessionState === 'post_hello' && this.bridge.readyState === 'open';
+  }
+
+  // ─── Read Loop ────────────────────────────────────────────────────────────
+
+  private async startReadLoop(readable: ReadableStream<Uint8Array>, signal: AbortSignal): Promise<void> {
+    try {
+      const reader = readable.getReader();
+      while (!signal.aborted) {
+        const { done, value } = await reader.read();
+        if (done || signal.aborted) break;
+
+        let frames: string[];
+        try {
+          frames = this.deframer.push(value);
+        } catch (e) {
+          console.warn('[WT_FRAMING] Deframing error:', e);
+          this.sendErrorAndDisconnect('PROTOCOL_VIOLATION', 'Frame decode error');
+          break;
+        }
+
+        for (const frame of frames) {
+          if (signal.aborted) break;
+          this.handleMessage(frame);
+        }
+      }
+      reader.releaseLock();
+    } catch (e) {
+      if (!signal.aborted) {
+        console.warn('[WT_TRANSPORT] Read loop error:', e);
+      }
+    }
   }
 
   // ─── Message Handling ───────────────────────────────────────────────────
 
-  private handleMessage(event: MessageEvent): void {
+  private handleMessage(data: string): void {
     try {
-      const msg = JSON.parse(event.data);
+      const msg = JSON.parse(data);
 
       // HELLO routing
       if (msg.type === 'hello' && msg.payload) {
         if (this.sessionState !== 'pre_hello') {
-          console.warn('[WS_TRANSPORT] Duplicate HELLO — disconnecting');
+          console.warn('[WT_TRANSPORT] Duplicate HELLO — disconnecting');
           this.sendErrorAndDisconnect('DUPLICATE_HELLO', 'Duplicate HELLO');
           return;
         }
         this.handshake.processHello(msg).catch((error) => {
-          console.error('[WS_TRANSPORT] HELLO error:', error);
+          console.error('[WT_TRANSPORT] HELLO error:', error);
           this.sendErrorAndDisconnect('PROTOCOL_VIOLATION', 'Unexpected HELLO processing error');
         });
         return;
@@ -301,7 +459,7 @@ export class WsDataTransport {
 
       // Pre-handshake gate
       if (this.sessionState === 'pre_hello') {
-        console.warn('[WS_TRANSPORT] Non-HELLO message before handshake — disconnecting');
+        console.warn('[WT_TRANSPORT] Non-HELLO message before handshake — disconnecting');
         this.sendErrorAndDisconnect('INVALID_STATE', 'Handshake not complete');
         return;
       }
@@ -309,12 +467,12 @@ export class WsDataTransport {
       // Profile Envelope v1 unwrap
       if (msg.type === 'profile-envelope') {
         if (!this.negotiatedEnvelopeV1()) {
-          console.warn('[WS_TRANSPORT] Envelope received but not negotiated — disconnecting');
+          console.warn('[WT_TRANSPORT] Envelope received but not negotiated — disconnecting');
           this.sendErrorAndDisconnect('ENVELOPE_UNNEGOTIATED', 'Profile envelope not negotiated');
           return;
         }
         if (msg.version !== 1 || msg.encoding !== 'base64' || typeof msg.payload !== 'string') {
-          console.warn('[WS_TRANSPORT] Invalid envelope format — disconnecting');
+          console.warn('[WT_TRANSPORT] Invalid envelope format — disconnecting');
           this.sendErrorAndDisconnect('ENVELOPE_INVALID', 'Invalid profile envelope format');
           return;
         }
@@ -322,7 +480,7 @@ export class WsDataTransport {
         try {
           innerBytes = openBoxPayload(msg.payload, this.remotePublicKey!, this.keyPair!.secretKey);
         } catch {
-          console.warn('[WS_TRANSPORT] Envelope decrypt failed — disconnecting');
+          console.warn('[WT_TRANSPORT] Envelope decrypt failed — disconnecting');
           this.sendErrorAndDisconnect('ENVELOPE_DECRYPT_FAIL', 'Failed to decrypt profile envelope');
           return;
         }
@@ -330,7 +488,7 @@ export class WsDataTransport {
         try {
           inner = JSON.parse(new TextDecoder().decode(innerBytes));
         } catch {
-          console.warn('[WS_TRANSPORT] Invalid inner JSON — disconnecting');
+          console.warn('[WT_TRANSPORT] Invalid inner JSON — disconnecting');
           this.sendErrorAndDisconnect('INVALID_MESSAGE', 'Invalid inner message');
           return;
         }
@@ -339,7 +497,7 @@ export class WsDataTransport {
             this.sendErrorAndDisconnect('PROTOCOL_VIOLATION', 'Invalid inbound error code');
             return;
           }
-          console.warn(`[WS_TRANSPORT] Remote error: code=${inner.code}`);
+          console.warn(`[WT_TRANSPORT] Remote error: code=${inner.code}`);
           this.opts.onError?.(new Error(inner.message || 'Remote error'));
           this.disconnect();
           return;
@@ -370,7 +528,7 @@ export class WsDataTransport {
 
       // Envelope-required enforcement
       if (this.negotiatedEnvelopeV1()) {
-        console.warn('[WS_TRANSPORT] Plaintext in envelope-required session — disconnecting');
+        console.warn('[WT_TRANSPORT] Plaintext in envelope-required session — disconnecting');
         this.sendErrorAndDisconnect('ENVELOPE_REQUIRED', 'Envelope required');
         return;
       }
@@ -381,7 +539,7 @@ export class WsDataTransport {
           this.sendErrorAndDisconnect('PROTOCOL_VIOLATION', 'Invalid inbound error code');
           return;
         }
-        console.warn(`[WS_TRANSPORT] Remote error: code=${msg.code}`);
+        console.warn(`[WT_TRANSPORT] Remote error: code=${msg.code}`);
         this.opts.onError?.(new Error(msg.message || 'Remote error'));
         this.disconnect();
         return;
@@ -405,21 +563,23 @@ export class WsDataTransport {
       }
       this.transfer.routeInnerMessage(msg);
     } catch (error) {
-      console.error('[WS_TRANSPORT] Protocol violation:', error);
+      console.error('[WT_TRANSPORT] Protocol violation:', error);
       this.sendErrorAndDisconnect('PROTOCOL_VIOLATION', 'Protocol violation');
     }
   }
 
   // ─── Internal Helpers ───────────────────────────────────────────────────
 
-  private cleanupWs(): void {
-    if (this.ws) {
-      this.ws.onopen = null;
-      this.ws.onmessage = null;
-      this.ws.onerror = null;
-      this.ws.onclose = null;
-      try { this.ws.close(); } catch { /* ignore */ }
-      this.ws = null;
+  private cleanupTransport(): void {
+    if (this.readLoopAbort) {
+      this.readLoopAbort.abort();
+      this.readLoopAbort = null;
+    }
+    this.bridge.close();
+    this.deframer.reset();
+    if (this.transport) {
+      try { this.transport.close(); } catch { /* ignore */ }
+      this.transport = null;
     }
     this.sessionState = 'closed';
   }
@@ -434,23 +594,23 @@ export class WsDataTransport {
       this.disconnect();
       return;
     }
-    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+    if (this.bridge.readyState === 'open') {
       const errorMsg = { type: 'error', code, message };
       if (this.negotiatedEnvelopeV1() && this.helloComplete && this.keyPair && this.remotePublicKey) {
-        this.ws.send(JSON.stringify(encodeProfileEnvelopeV1(errorMsg, this.remotePublicKey, this.keyPair.secretKey)));
+        this.bridge.send(JSON.stringify(encodeProfileEnvelopeV1(errorMsg, this.remotePublicKey, this.keyPair.secretKey)));
       } else {
-        this.ws.send(JSON.stringify(errorMsg));
+        this.bridge.send(JSON.stringify(errorMsg));
       }
     }
     this.disconnect();
   }
 
-  private wsSendMessage(innerMsg: any, btrFields?: BtrEnvelopeFields): void {
-    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+  private wtSendMessage(innerMsg: any, btrFields?: BtrEnvelopeFields): void {
+    if (this.bridge.readyState !== 'open') return;
     if (this.negotiatedEnvelopeV1() && this.helloComplete && this.keyPair && this.remotePublicKey) {
-      this.ws.send(JSON.stringify(encodeProfileEnvelopeV1(innerMsg, this.remotePublicKey, this.keyPair.secretKey, btrFields)));
+      this.bridge.send(JSON.stringify(encodeProfileEnvelopeV1(innerMsg, this.remotePublicKey, this.keyPair.secretKey, btrFields)));
     } else {
-      this.ws.send(JSON.stringify(innerMsg));
+      this.bridge.send(JSON.stringify(innerMsg));
     }
   }
 
@@ -467,9 +627,9 @@ export class WsDataTransport {
     return {
       getKeyPair: () => this.keyPair,
       getRemotePublicKey: () => this.remotePublicKey,
-      getDc: () => this.ws as any,  // WS satisfies the send/readyState interface
-      getLocalPeerCode: () => 'ws-client',
-      getRemotePeerCode: () => 'ws-daemon',
+      getDc: () => this.bridge as any,
+      getLocalPeerCode: () => 'wt-client',
+      getRemotePeerCode: () => 'wt-daemon',
       getOptions: () => this.wsOptions,
       onFatalError: (code, message) => this.sendErrorAndDisconnect(code, message),
       onError: (error) => this.opts.onError?.(error),
@@ -513,7 +673,7 @@ export class WsDataTransport {
     return {
       getKeyPair: () => this.keyPair,
       getRemotePublicKey: () => this.remotePublicKey,
-      getDc: () => this.ws as any,  // WS satisfies send/readyState for TransferManager
+      getDc: () => this.bridge as any,
       isHelloComplete: () => this.helloComplete,
       getSessionGeneration: () => this.sessionGeneration,
       hasCapability: (name) => this.negotiatedCapabilities.includes(name),
@@ -545,7 +705,7 @@ export class WsDataTransport {
       onReceiveFile: (file, filename) => this.opts.onReceiveFile?.(file, { filename }),
       onError: (error) => this.opts.onError?.(error),
       disconnect: () => this.disconnect(),
-      sendMessage: (innerMsg, btrFields?) => this.wsSendMessage(innerMsg, btrFields),
+      sendMessage: (innerMsg, btrFields?) => this.wtSendMessage(innerMsg, btrFields),
       waitForHello: () => this.waitForHello(),
       getBtrMode: () => this.btrMode,
       getBtrAdapter: () => this.btrAdapter,
