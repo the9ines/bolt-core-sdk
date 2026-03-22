@@ -1,12 +1,17 @@
-//! Daemon process lifecycle manager for bolt-ui.
-//! Spawns bolt-daemon as a child process with rendezvous CLI args.
-//! No daemon IPC API redesign — uses existing CLI contract.
+//! Daemon process lifecycle for bolt-ui desktop shell.
+//!
+//! Per-session spawn model: each Host/Join spawns a daemon with rendezvous args.
+//! Uses bolt-app-core for binary resolution, platform paths, and process management.
+//! Owns child handle directly (not supervised — session-scoped).
 
 use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
 use std::sync::{Arc, Mutex};
 use std::thread;
+
+// bolt_app_core re-exports available for future use:
+// platform paths, IPC types, watchdog, signal monitor, etc.
 
 /// Daemon process handle with stderr capture.
 pub struct DaemonProcess {
@@ -16,83 +21,50 @@ pub struct DaemonProcess {
     _stderr_thread: thread::JoinHandle<()>,
 }
 
-/// Result of attempting to find the daemon binary.
+/// Resolve daemon binary using bolt-app-core shared resolution + extra desktop paths.
 pub fn find_daemon_binary() -> Result<PathBuf, String> {
-    // 1. Check compile-time workspace path (works when running via cargo run)
-    let workspace_release = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../bolt-daemon/target/release/bolt-daemon");
-    if workspace_release.exists() {
-        return Ok(workspace_release);
+    // Desktop-specific search paths (bolt-ui development locations)
+    let home = std::env::var("HOME").unwrap_or_default();
+    let extra_paths = vec![
+        // Workspace build paths (cargo run in development)
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../bolt-daemon/target/release/bolt-daemon"),
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../bolt-daemon/target/debug/bolt-daemon"),
+        // Desktop deployment paths
+        PathBuf::from(format!("{home}/Desktop/bolt-daemon")),
+        // Ecosystem paths
+        PathBuf::from(format!("{home}/Desktop/the9ines.com/bolt-ecosystem/bolt-daemon/target/release/bolt-daemon")),
+    ];
+
+    for path in &extra_paths {
+        if path.exists() {
+            return Ok(path.clone());
+        }
     }
 
-    let workspace_debug = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../bolt-daemon/target/debug/bolt-daemon");
-    if workspace_debug.exists() {
-        return Ok(workspace_debug);
-    }
-
-    // 2. Check current working directory (where user launched from)
-    let cwd_candidate = PathBuf::from("bolt-daemon");
-    if cwd_candidate.exists() {
-        return Ok(std::fs::canonicalize(&cwd_candidate).unwrap_or(cwd_candidate));
-    }
-
-    // 3. Check relative to current executable
+    // Sibling of executable
     if let Ok(exe) = std::env::current_exe() {
         if let Some(exe_dir) = exe.parent() {
             let sibling = exe_dir.join("bolt-daemon");
             if sibling.exists() {
                 return Ok(sibling);
             }
-            for ancestor in exe_dir.ancestors().skip(1).take(5) {
-                let candidate = ancestor.join("bolt-daemon/target/release/bolt-daemon");
-                if candidate.exists() {
-                    return Ok(candidate);
-                }
-            }
         }
     }
 
-    // 4. Check Desktop (common deployment location) — arch-specific and generic
-    let home = std::env::var("HOME").unwrap_or_default();
-    let arch = if cfg!(target_arch = "aarch64") { "mac" } else { "intel" };
-    let desktop_arch = PathBuf::from(format!("{home}/Desktop/bolt-daemon-{arch}"));
-    if desktop_arch.exists() {
-        return Ok(desktop_arch);
-    }
-    let desktop_generic = PathBuf::from(format!("{home}/Desktop/bolt-daemon"));
-    if desktop_generic.exists() {
-        return Ok(desktop_generic);
-    }
-
-    // 5. Check well-known ecosystem paths
-    let ecosystem_paths = [
-        format!("{home}/Desktop/the9ines.com/bolt-ecosystem/bolt-daemon/target/release/bolt-daemon"),
-        format!("{home}/Projects/bolt-ecosystem/bolt-daemon/target/release/bolt-daemon"),
-    ];
-    for p in &ecosystem_paths {
-        let path = PathBuf::from(p);
-        if path.exists() {
-            return Ok(path);
-        }
-    }
-
-    // 4. Check PATH
-    if let Ok(output) = Command::new("which").arg("bolt-daemon").output() {
-        if output.status.success() {
-            let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
-            if !path.is_empty() {
-                return Ok(PathBuf::from(path));
-            }
-        }
+    // System PATH (via bolt-app-core shared resolution)
+    let mut lifecycle = bolt_app_core::daemon_lifecycle::DaemonLifecycle::new("0.0.0");
+    lifecycle.add_binary_search_paths(Vec::new());
+    match lifecycle.resolve_daemon_binary() {
+        Ok(p) => return Ok(p),
+        Err(_) => {}
     }
 
     Err("bolt-daemon binary not found. Build with: cd bolt-daemon && cargo build --release".into())
 }
 
 /// Check if rendezvous server is reachable (quick TCP probe).
+/// Delegates to bolt-app-core signal_monitor probe logic.
 pub fn probe_rendezvous(url: &str) -> bool {
-    // Extract host:port from ws://host:port
     let addr = url
         .trim_start_matches("ws://")
         .trim_start_matches("wss://");
@@ -175,7 +147,7 @@ impl DaemonProcess {
     }
 
     fn spawn(daemon_bin: &PathBuf, args: &[&str]) -> Result<Self, String> {
-        // Ensure data-dir has 0700 permissions (daemon enforces this)
+        // Ensure data-dir exists with secure permissions
         if let Some(idx) = args.iter().position(|a| *a == "--data-dir") {
             if let Some(dir) = args.get(idx + 1) {
                 let _ = std::fs::create_dir_all(dir);
@@ -220,12 +192,10 @@ impl DaemonProcess {
         self.pid
     }
 
-    /// Check if daemon is still running.
     pub fn is_running(&mut self) -> bool {
         self.child.try_wait().ok().flatten().is_none()
     }
 
-    /// Get latest stderr lines (non-destructive peek).
     pub fn recent_stderr(&self, last_n: usize) -> Vec<String> {
         self.stderr_lines
             .lock()
@@ -236,7 +206,6 @@ impl DaemonProcess {
             .unwrap_or_default()
     }
 
-    /// Check stderr for connection-established signals.
     pub fn has_connected(&self) -> bool {
         self.stderr_lines
             .lock()
@@ -250,7 +219,6 @@ impl DaemonProcess {
             .unwrap_or(false)
     }
 
-    /// Check stderr for SAS/pairing info.
     pub fn sas_code(&self) -> Option<String> {
         self.stderr_lines
             .lock()
@@ -258,7 +226,6 @@ impl DaemonProcess {
             .and_then(|buf| {
                 buf.iter().find_map(|l| {
                     if l.contains("[SAS]") {
-                        // Extract SAS from log line like "[SAS] AB12CD"
                         l.split("[SAS]").nth(1).map(|s| s.trim().to_string())
                     } else {
                         None
@@ -267,7 +234,6 @@ impl DaemonProcess {
             })
     }
 
-    /// Check stderr for data channel open (transfer-ready).
     pub fn is_transfer_ready(&self) -> bool {
         self.stderr_lines
             .lock()
@@ -275,7 +241,6 @@ impl DaemonProcess {
             .unwrap_or(false)
     }
 
-    /// Check stderr for errors.
     pub fn last_error(&self) -> Option<String> {
         self.stderr_lines
             .lock()
@@ -291,7 +256,6 @@ impl DaemonProcess {
             })
     }
 
-    /// Kill the daemon process.
     pub fn kill(&mut self) {
         let _ = self.child.kill();
         let _ = self.child.wait();
@@ -339,15 +303,20 @@ mod tests {
 
     #[test]
     fn find_daemon_binary_does_not_panic() {
-        // May succeed or fail depending on build state — must not panic
         let _ = find_daemon_binary();
     }
 
     #[test]
     fn probe_rendezvous_does_not_hang() {
-        // Quick probe — should return within 2s even if server is down
         let start = std::time::Instant::now();
-        let _ = probe_rendezvous("127.0.0.1:39999"); // unlikely port
+        let _ = probe_rendezvous("127.0.0.1:39999");
         assert!(start.elapsed().as_secs() < 5);
+    }
+
+    #[test]
+    fn platform_paths_available() {
+        // bolt-app-core platform paths should work
+        assert!(!bolt_app_core::platform::default_ipc_path().is_empty());
+        assert!(!bolt_app_core::platform::default_data_dir().is_empty());
     }
 }

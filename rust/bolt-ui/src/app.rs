@@ -9,12 +9,12 @@ use crate::state::*;
 use crate::theme;
 
 /// Rendezvous server address. Override with BOLT_RENDEZVOUS_URL env var.
+/// Default: 127.0.0.1:3001 (embedded signal server started by app).
 fn rendezvous_addr() -> String {
     if let Ok(url) = std::env::var("BOLT_RENDEZVOUS_URL") {
         return url;
     }
-    // Always use LAN IP — works from any machine on the network
-    "192.168.4.210:3001".to_string()
+    "127.0.0.1:3001".to_string()
 }
 
 pub struct BoltApp {
@@ -31,6 +31,7 @@ pub struct BoltApp {
     pub daemon_proc: Option<DaemonProcess>,
     pub ipc_client: Option<IpcClient>,
     pub prereq_error: Option<String>,
+    pub signal_healthy: bool,
     daemon_bin: Option<std::path::PathBuf>,
     data_dir: String,
     socket_path: String,
@@ -52,6 +53,9 @@ impl BoltApp {
             Err(e) => (None, Some(e)),
         };
 
+        // Check embedded signal server health
+        let signal_healthy = bolt_app_core::signal_monitor::probe_signal_health();
+
         Self {
             current_screen: Screen::Connect,
             mode: ConnectMode::Host,
@@ -66,6 +70,7 @@ impl BoltApp {
             daemon_proc: None,
             ipc_client: None,
             prereq_error,
+            signal_healthy,
             daemon_bin,
             data_dir,
             socket_path,
@@ -331,6 +336,12 @@ impl eframe::App for BoltApp {
             ctx.request_repaint();
         }
 
+        // Periodic signal health re-check
+        // (probe_signal_health is a quick TCP connect, safe to call occasionally)
+        if !self.signal_healthy {
+            self.signal_healthy = bolt_app_core::signal_monitor::probe_signal_health();
+        }
+
         egui::TopBottomPanel::top("header")
             .frame(
                 egui::Frame::NONE
@@ -347,6 +358,13 @@ impl eframe::App for BoltApp {
                             .size(theme::FONT_SIZE_HEADING)
                             .color(theme::ACCENT),
                     );
+                    // Signal server health indicator
+                    let (dot, tip) = if self.signal_healthy {
+                        (egui::RichText::new("\u{25CF}").color(egui::Color32::from_rgb(0, 200, 0)), "Signal server: active")
+                    } else {
+                        (egui::RichText::new("\u{25CF}").color(egui::Color32::from_rgb(200, 0, 0)), "Signal server: offline")
+                    };
+                    ui.label(dot).on_hover_text(tip);
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         for (screen, label) in [
                             (Screen::Verify, "Verify"),

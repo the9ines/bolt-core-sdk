@@ -7,5 +7,6 @@ members = [
     "bolt-ui",
     "bolt-ui-wasm",
     "bolt-protocol-wasm",
+    "bolt-app-core",
 ]
 resolver = "2"

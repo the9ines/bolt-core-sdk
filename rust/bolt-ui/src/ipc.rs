@@ -1,38 +1,34 @@
 //! IPC client for bolt-ui → daemon communication.
-//! Connects to daemon Unix socket, performs NDJSON handshake, receives events.
+//!
+//! Uses bolt-app-core IPC types and transport for cross-platform socket
+//! communication. Performs NDJSON handshake, receives daemon events.
 
 use std::io::{BufRead, BufReader, Write};
-use std::os::unix::net::UnixStream;
 use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
 
-use serde::{Deserialize, Serialize};
+use bolt_app_core::ipc_transport::IpcStream;
+use bolt_app_core::ipc_types::{IpcMessage, VersionHandshakePayload, VersionStatusPayload};
 
 const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(5);
 const APP_VERSION: &str = "0.0.1";
 
-/// IPC event received from daemon.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct IpcEvent {
-    pub id: String,
-    pub kind: String,
-    #[serde(rename = "type")]
-    pub msg_type: String,
-    pub ts_ms: u64,
-    pub payload: serde_json::Value,
-}
+/// IPC event received from daemon (re-export shared type shape).
+pub use bolt_app_core::ipc_types::IpcMessage as IpcEvent;
 
 /// IPC client handle.
 pub struct IpcClient {
-    event_rx: mpsc::Receiver<IpcEvent>,
+    event_rx: mpsc::Receiver<IpcMessage>,
     _reader_thread: thread::JoinHandle<()>,
 }
 
 impl IpcClient {
     /// Connect to daemon IPC socket and perform version handshake.
+    /// Uses bolt-app-core cross-platform IPC transport (Unix socket / Windows pipe).
     pub fn connect(socket_path: &str) -> Result<Self, String> {
-        let stream = UnixStream::connect(socket_path)
+        let path = std::path::Path::new(socket_path);
+        let stream = IpcStream::connect(path)
             .map_err(|e| format!("IPC connect failed: {e}"))?;
 
         stream
@@ -41,16 +37,14 @@ impl IpcClient {
 
         let mut writer = stream.try_clone().map_err(|e| format!("clone: {e}"))?;
 
-        // Send version.handshake
-        let handshake = serde_json::json!({
-            "id": "app-0",
-            "kind": "decision",
-            "type": "version.handshake",
-            "ts_ms": now_ms(),
-            "payload": {"app_version": APP_VERSION}
-        });
-        let mut line = serde_json::to_string(&handshake).map_err(|e| format!("serialize: {e}"))?;
-        line.push('\n');
+        // Send version.handshake using shared IPC types
+        let handshake = IpcMessage::new_decision(
+            "version.handshake",
+            serde_json::to_value(VersionHandshakePayload {
+                app_version: APP_VERSION.to_string(),
+            }).unwrap(),
+        );
+        let line = handshake.to_ndjson().map_err(|e| format!("serialize: {e}"))?;
         writer
             .write_all(line.as_bytes())
             .map_err(|e| format!("write handshake: {e}"))?;
@@ -63,15 +57,16 @@ impl IpcClient {
             .read_line(&mut buf)
             .map_err(|e| format!("read version.status: {e}"))?;
 
-        let status: IpcEvent =
+        let status: IpcMessage =
             serde_json::from_str(buf.trim()).map_err(|e| format!("parse version.status: {e}"))?;
 
         if status.msg_type != "version.status" {
             return Err(format!("expected version.status, got {}", status.msg_type));
         }
 
-        let compatible = status.payload.get("compatible").and_then(|v| v.as_bool()).unwrap_or(false);
-        if !compatible {
+        let vs: VersionStatusPayload = serde_json::from_value(status.payload)
+            .map_err(|e| format!("parse payload: {e}"))?;
+        if !vs.compatible {
             return Err("daemon version incompatible".into());
         }
 
@@ -87,9 +82,9 @@ impl IpcClient {
             loop {
                 let mut line = String::new();
                 match reader.read_line(&mut line) {
-                    Ok(0) => break, // EOF
+                    Ok(0) => break,
                     Ok(_) => {
-                        if let Ok(event) = serde_json::from_str::<IpcEvent>(line.trim()) {
+                        if let Ok(event) = serde_json::from_str::<IpcMessage>(line.trim()) {
                             if tx.send(event).is_err() {
                                 break;
                             }
@@ -107,12 +102,12 @@ impl IpcClient {
     }
 
     /// Try to receive the next event (non-blocking).
-    pub fn try_recv(&self) -> Option<IpcEvent> {
+    pub fn try_recv(&self) -> Option<IpcMessage> {
         self.event_rx.try_recv().ok()
     }
 
     /// Receive all pending events.
-    pub fn drain_events(&self) -> Vec<IpcEvent> {
+    pub fn drain_events(&self) -> Vec<IpcMessage> {
         let mut events = Vec::new();
         while let Some(e) = self.try_recv() {
             events.push(e);
@@ -121,21 +116,14 @@ impl IpcClient {
     }
 }
 
-fn now_ms() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_millis() as u64
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn ipc_event_deserialize() {
+    fn ipc_message_deserialize() {
         let json = r#"{"id":"evt-0","kind":"event","type":"session.sas","ts_ms":123,"payload":{"sas":"123456","remote_identity_pk_b64":"abc"}}"#;
-        let event: IpcEvent = serde_json::from_str(json).unwrap();
+        let event: IpcMessage = serde_json::from_str(json).unwrap();
         assert_eq!(event.msg_type, "session.sas");
         assert_eq!(event.payload["sas"], "123456");
     }
