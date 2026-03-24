@@ -36,10 +36,14 @@ export function sealBoxPayload(
 
   const nonce = randomBytes(box.nonceLength);
   const encrypted = box(plaintext, nonce, remotePublicKey, senderSecretKey);
-  if (!encrypted) throw new EncryptionError('Encryption returned null');
+  if (!encrypted) {
+    nonce.fill(0); // Zeroize on error path too
+    throw new EncryptionError('Encryption returned null');
+  }
   const combined = new Uint8Array(nonce.length + encrypted.length);
   combined.set(nonce);
   combined.set(encrypted, nonce.length);
+  nonce.fill(0); // Best-effort nonce zeroization (ENDPOINT-SECURITY-1, F-MED-01)
   return toBase64(combined);
 }
 
@@ -65,6 +69,7 @@ export function openBoxPayload(
   const nonce = data.slice(0, box.nonceLength);
   const ciphertext = data.slice(box.nonceLength);
   const decrypted = box.open(ciphertext, nonce, senderPublicKey, receiverSecretKey);
+  nonce.fill(0); // Best-effort nonce zeroization (ENDPOINT-SECURITY-1, F-MED-01)
   if (!decrypted) throw new EncryptionError('Decryption failed');
   return decrypted;
 }

@@ -65,6 +65,24 @@ export class IndexedDBIdentityStore implements IdentityPersistence {
   }
 }
 
+// ─── Key Zeroization ─────────────────────────────────────────────────────────
+
+/**
+ * Best-effort zeroization of an identity keypair's secret key.
+ *
+ * Fills the secretKey Uint8Array with zeros. This does not guarantee the
+ * original bytes are erased from all memory (JavaScript GC may retain copies),
+ * but it zeroes the active buffer so the key is not trivially extractable
+ * from a heap dump after cleanup.
+ *
+ * Call this when the identity is no longer needed (disconnect, page unload).
+ */
+export function zeroizeIdentityKey(pair: IdentityKeyPair): void {
+  if (pair.secretKey instanceof Uint8Array) {
+    pair.secretKey.fill(0);
+  }
+}
+
 // ─── In-Memory Implementation (for tests) ───────────────────────────────────
 
 /** In-memory identity persistence for testing. */

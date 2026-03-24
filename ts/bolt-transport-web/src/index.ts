@@ -19,7 +19,7 @@ export { WsDataTransport, BrowserAppTransport } from './services/ws-transport/in
 export type { WsDataTransportOptions, DataTransport, BrowserAppTransportOptions } from './services/ws-transport/index.js';
 
 // Identity & TOFU
-export { IndexedDBIdentityStore, getOrCreateIdentity } from './services/identity/identity-store.js';
+export { IndexedDBIdentityStore, getOrCreateIdentity, zeroizeIdentityKey } from './services/identity/identity-store.js';
 export type { IdentityPersistence } from './services/identity/identity-store.js';
 export { IndexedDBPinStore } from './services/identity/pin-store.js';
 export type { PinPersistence, PinRecord, PinVerifyResult } from './services/identity/pin-store.js';
