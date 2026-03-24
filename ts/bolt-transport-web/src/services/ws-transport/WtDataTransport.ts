@@ -24,7 +24,7 @@ import { HandshakeManager } from '../webrtc/HandshakeManager.js';
 import { TransferManager } from '../webrtc/TransferManager.js';
 import { encodeProfileEnvelopeV1, extractBtrEnvelopeFields } from '../webrtc/EnvelopeCodec.js';
 import { createBtrAdapter } from '../webrtc/BtrTransferAdapter.js';
-import type { BtrTransferAdapter, WasmBtrTransferAdapter, BtrEnvelopeFields } from '../webrtc/BtrTransferAdapter.js';
+import type { WasmBtrTransferAdapter, BtrEnvelopeFields } from '../webrtc/BtrTransferAdapter.js';
 import type { HandshakeContext } from '../webrtc/context.js';
 import type { TransferContext } from '../webrtc/TransferManager.js';
 import { CANONICAL_CONTROL_TYPES } from '../webrtc/types.js';
@@ -222,7 +222,7 @@ export class WtDataTransport {
 
   // BTR
   private btrMode: BtrModeValue | null = null;
-  private btrAdapter: BtrTransferAdapter | WasmBtrTransferAdapter | null = null;
+  private btrAdapter: WasmBtrTransferAdapter | null = null;
 
   // Managers
   private handshake: HandshakeManager;

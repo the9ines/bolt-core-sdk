@@ -8,7 +8,7 @@ import { HandshakeManager } from './HandshakeManager.js';
 import { TransferManager } from './TransferManager.js';
 import { encodeProfileEnvelopeV1, dcSendMessage, extractBtrEnvelopeFields } from './EnvelopeCodec.js';
 import { createBtrAdapter } from './BtrTransferAdapter.js';
-import type { BtrTransferAdapter, WasmBtrTransferAdapter, BtrEnvelopeFields } from './BtrTransferAdapter.js';
+import type { WasmBtrTransferAdapter, BtrEnvelopeFields } from './BtrTransferAdapter.js';
 import type { HandshakeContext } from './context.js';
 import type { TransferContext } from './TransferManager.js';
 
@@ -92,7 +92,7 @@ class WebRTCService {
 
   // BTR state — WASM-backed when available, TS fallback otherwise (RB5)
   private btrMode: BtrModeValue | null = null;
-  private btrAdapter: BtrTransferAdapter | WasmBtrTransferAdapter | null = null;
+  private btrAdapter: WasmBtrTransferAdapter | null = null;
 
   // ─── Decomposed managers ────────────────────────────────────────
   private handshake: HandshakeManager;

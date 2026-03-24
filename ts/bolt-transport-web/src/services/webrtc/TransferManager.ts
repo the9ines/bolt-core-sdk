@@ -39,7 +39,7 @@ function classifyTransferError(error: Error): string {
 import { CANONICAL_CONTROL_TYPES } from './types.js';
 import { getPolicyAdapter } from './PolicyAdapter.js';
 import type { PolicyAdapter, PolicyDecideInput } from './PolicyAdapter.js';
-import type { BtrTransferAdapter, WasmBtrTransferAdapter, BtrEnvelopeFields } from './BtrTransferAdapter.js';
+import type { WasmBtrTransferAdapter, BtrEnvelopeFields } from './BtrTransferAdapter.js';
 
 /** Generate a spec-compliant transfer_id (bytes16 → hex, 32 chars). */
 function generateTransferId(): string {
@@ -116,7 +116,7 @@ export interface TransferContext {
 
   // BTR state
   getBtrMode(): BtrModeValue | null;
-  getBtrAdapter(): BtrTransferAdapter | WasmBtrTransferAdapter | null;
+  getBtrAdapter(): WasmBtrTransferAdapter | null;
 }
 
 /** DP-9: Max time (ms) to wait for onbufferedamountlow before polling fallback. */

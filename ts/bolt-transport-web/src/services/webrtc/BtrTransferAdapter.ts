@@ -261,12 +261,20 @@ export class WasmBtrTransferAdapter {
  * Returns WasmBtrTransferAdapter (Rust authority) if WASM is initialized,
  * otherwise falls back to BtrTransferAdapter (TS authority).
  */
-export function createBtrAdapter(sharedSecret: Uint8Array): BtrTransferAdapter | WasmBtrTransferAdapter {
+/**
+ * Create a BTR adapter backed by Rust/WASM authority.
+ *
+ * Returns null if WASM BTR is unavailable. In that case, BTR capability
+ * should not be advertised and transfers use static NaCl box encryption.
+ * The TS BTR fallback has been removed (RUST-AUTHORITY-MIGRATION-2) —
+ * Rust/WASM is the only BTR authority.
+ */
+export function createBtrAdapter(sharedSecret: Uint8Array): WasmBtrTransferAdapter | null {
   const engine = createWasmBtrEngine(sharedSecret);
   if (engine) {
     console.log('[BTR_INIT] WASM-backed BTR adapter (Rust authority)');
     return new WasmBtrTransferAdapter(engine);
   }
-  console.log('[BTR_INIT] TS BTR adapter (fallback)');
-  return new BtrTransferAdapter(sharedSecret);
+  console.warn('[BTR_INIT] WASM BTR unavailable — BTR disabled (Rust authority required)');
+  return null;
 }
