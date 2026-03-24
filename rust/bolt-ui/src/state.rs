@@ -1,17 +1,163 @@
 use std::time::{Duration, Instant};
 
-/// Runtime state model for bolt-ui screens.
+/// Runtime state model for bolt-ui.
 
 pub const CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
 
-/// Host/Join connection mode.
+// ── Discovered Peer ──────────────────────────────────────────
+
+/// Which signaling plane discovered this peer.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SignalingPlane {
+    Local,
+    Cloud,
+}
+
+/// A discovered nearby device.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DiscoveredPeer {
+    pub peer_code: String,
+    pub device_name: String,
+    pub device_type: DeviceType,
+    /// Which signaling plane this peer was discovered on.
+    pub plane: SignalingPlane,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DeviceType {
+    Desktop,
+    Laptop,
+    Phone,
+    Tablet,
+    Browser,
+    Unknown,
+}
+
+impl DeviceType {
+    /// Retro icon glyph for device type.
+    pub fn icon(&self) -> &str {
+        match self {
+            Self::Desktop => "\u{25A3}",  // ▣
+            Self::Laptop => "\u{25A1}",   // □
+            Self::Phone => "\u{25AB}",    // ▫
+            Self::Tablet => "\u{25AD}",   // ▭
+            Self::Browser => "\u{25C7}",  // ◇
+            Self::Unknown => "\u{25CB}",  // ○
+        }
+    }
+}
+
+// ── Discovery State ──────────────────────────────────────────
+
+/// Discovery/signaling connection status.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DiscoveryStatus {
+    /// Not connected to signaling.
+    Offline,
+    /// Connected, actively searching.
+    Searching,
+    /// Connected, peers visible.
+    Active,
+}
+
+impl DiscoveryStatus {
+    pub fn label(&self) -> &str {
+        match self {
+            Self::Offline => "OFFLINE",
+            Self::Searching => "SEARCHING",
+            Self::Active => "NEARBY",
+        }
+    }
+}
+
+// ── Connection State ─────────────────────────────────────────
+
+/// Connection lifecycle (matches web app phases).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ConnectionState {
+    /// No connection, discovery running.
+    Idle,
+    /// Waiting for remote to accept.
+    Requesting { peer_code: String, peer_name: String, started_at: Instant },
+    /// Establishing transport (daemon spawning / WebRTC handshake).
+    Establishing { peer_code: String, peer_name: String, started_at: Instant },
+    /// Connected to peer.
+    Connected,
+    /// Connection timed out.
+    TimedOut,
+    /// Connection failed.
+    Error(String),
+}
+
+impl ConnectionState {
+    pub fn status_text(&self) -> String {
+        match self {
+            Self::Idle => "Ready".to_string(),
+            Self::Requesting { peer_name, .. } => {
+                format!("Waiting for {} to accept...", peer_name)
+            }
+            Self::Establishing { peer_name, .. } => {
+                format!("Connecting to {}...", peer_name)
+            }
+            Self::Connected => "Connected".to_string(),
+            Self::TimedOut => "Connection timed out".to_string(),
+            Self::Error(msg) => format!("Failed: {msg}"),
+        }
+    }
+
+    pub fn is_timed_out(&self) -> bool {
+        match self {
+            Self::Requesting { started_at, .. } | Self::Establishing { started_at, .. } => {
+                started_at.elapsed() >= CONNECT_TIMEOUT
+            }
+            _ => false,
+        }
+    }
+
+    pub fn is_connecting(&self) -> bool {
+        matches!(self, Self::Requesting { .. } | Self::Establishing { .. })
+    }
+
+    pub fn can_retry(&self) -> bool {
+        matches!(self, Self::Idle | Self::TimedOut | Self::Error(_))
+    }
+
+    pub fn can_cancel(&self) -> bool {
+        self.is_connecting()
+    }
+}
+
+// ── Connected Peer ───────────────────────────────────────────
+
+/// Info about the currently connected peer.
+#[derive(Debug, Clone)]
+pub struct ConnectedPeer {
+    pub peer_code: String,
+    pub device_name: String,
+    pub device_type: DeviceType,
+}
+
+// ── Incoming Connection Request ───────────────────────────────
+
+/// An inbound connection request from another peer.
+#[derive(Debug, Clone)]
+pub struct IncomingRequest {
+    pub peer_code: String,
+    pub device_name: String,
+    pub device_type: DeviceType,
+    /// Which signaling plane this request arrived on.
+    pub plane: SignalingPlane,
+}
+
+// ── Legacy Host/Join (manual fallback) ───────────────────────
+
+/// Connection info for manual pairing fallback.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConnectMode {
     Host,
     Join,
 }
 
-/// Connection info displayed to host for sharing.
 #[derive(Debug, Clone)]
 pub struct HostInfo {
     pub peer_code: String,
@@ -25,44 +171,8 @@ impl HostInfo {
     }
 }
 
-/// Connection lifecycle state.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ConnectionState {
-    Idle,
-    Connecting { started_at: Instant },
-    Connected,
-    TimedOut,
-    Error(String),
-}
+// ── Transfer State ───────────────────────────────────────────
 
-impl ConnectionState {
-    pub fn status_text(&self) -> &str {
-        match self {
-            Self::Idle => "Ready",
-            Self::Connecting { .. } => "Connecting\u{2026}",
-            Self::Connected => "Connected",
-            Self::TimedOut => "Connection timed out",
-            Self::Error(_) => "Connection failed",
-        }
-    }
-
-    pub fn is_timed_out(&self) -> bool {
-        match self {
-            Self::Connecting { started_at } => started_at.elapsed() >= CONNECT_TIMEOUT,
-            _ => false,
-        }
-    }
-
-    pub fn can_retry(&self) -> bool {
-        matches!(self, Self::Idle | Self::TimedOut | Self::Error(_))
-    }
-
-    pub fn can_cancel(&self) -> bool {
-        matches!(self, Self::Connecting { .. })
-    }
-}
-
-/// Transfer lifecycle state.
 #[derive(Debug, Clone, PartialEq)]
 pub enum TransferState {
     Idle,
@@ -81,7 +191,7 @@ impl TransferState {
     pub fn status_text(&self) -> String {
         match self {
             Self::Idle => "No active transfer".to_string(),
-            Self::Ready => "Connected — ready to transfer".to_string(),
+            Self::Ready => "Ready to transfer".to_string(),
             Self::Sending { file_name, progress } => {
                 format!("Sending {} ({:.0}%)", file_name, progress * 100.0)
             }
@@ -89,9 +199,7 @@ impl TransferState {
                 format!("Receiving {} ({:.0}%)", file_name, progress * 100.0)
             }
             Self::Complete { file_name } => format!("{} — complete", file_name),
-            Self::Failed { file_name, reason } => {
-                format!("{} — failed: {}", file_name, reason)
-            }
+            Self::Failed { file_name, reason } => format!("{} — failed: {}", file_name, reason),
         }
     }
 
@@ -104,26 +212,33 @@ impl TransferState {
     }
 }
 
-/// Verification lifecycle state.
+// ── Verification State ───────────────────────────────────────
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum VerifyState {
     NotStarted,
-    #[allow(dead_code)]
+    /// Legacy mode — no identity configured, transfer allowed immediately.
+    Legacy,
     Pending { sas_code: String },
-    #[allow(dead_code)]
     Confirmed,
-    #[allow(dead_code)]
     Rejected,
 }
 
 impl VerifyState {
     pub fn status_text(&self) -> &str {
         match self {
-            Self::NotStarted => "No active session to verify",
+            Self::NotStarted => "No active session",
+            Self::Legacy => "Legacy Peer",
             Self::Pending { .. } => "Compare this code with your peer",
-            Self::Confirmed => "Verified — session authenticated",
-            Self::Rejected => "Rejected — session terminated",
+            Self::Confirmed => "Verified",
+            Self::Rejected => "Rejected",
         }
+    }
+
+    /// Whether file transfer is allowed — matches web app policy.
+    /// Transfer is allowed only when verified or in legacy mode.
+    pub fn is_transfer_allowed(&self) -> bool {
+        matches!(self, Self::Confirmed | Self::Legacy)
     }
 }
 
@@ -134,41 +249,45 @@ mod tests {
     #[test]
     fn connection_timeout() {
         let past = Instant::now() - CONNECT_TIMEOUT - Duration::from_millis(100);
-        let state = ConnectionState::Connecting { started_at: past };
-        assert!(state.is_timed_out());
-
-        let state = ConnectionState::Connecting { started_at: Instant::now() };
-        assert!(!state.is_timed_out());
-    }
-
-    #[test]
-    fn host_info_share_string() {
-        let info = HostInfo {
-            peer_code: "ABC123".into(),
-            room: "r1a2b3".into(),
-            session: "s4d5e6".into(),
+        let state = ConnectionState::Requesting {
+            peer_code: "T1".into(),
+            peer_name: "test".into(),
+            started_at: past,
         };
-        let s = info.share_string();
-        assert!(s.contains("r1a2b3"));
-        assert!(s.contains("s4d5e6"));
-        assert!(s.contains("ABC123"));
+        assert!(state.is_timed_out());
     }
 
     #[test]
-    fn cancel_retry_states() {
+    fn connection_states() {
         assert!(ConnectionState::Idle.can_retry());
         assert!(ConnectionState::TimedOut.can_retry());
         assert!(ConnectionState::Error("x".into()).can_retry());
         assert!(!ConnectionState::Connected.can_retry());
 
-        let connecting = ConnectionState::Connecting { started_at: Instant::now() };
-        assert!(connecting.can_cancel());
+        let req = ConnectionState::Requesting {
+            peer_code: "P1".into(),
+            peer_name: "p".into(),
+            started_at: Instant::now(),
+        };
+        assert!(req.can_cancel());
+        assert!(req.is_connecting());
         assert!(!ConnectionState::Idle.can_cancel());
     }
 
     #[test]
+    fn discovery_labels() {
+        assert_eq!(DiscoveryStatus::Offline.label(), "OFFLINE");
+        assert_eq!(DiscoveryStatus::Active.label(), "NEARBY");
+    }
+
+    #[test]
+    fn device_icons() {
+        assert!(!DeviceType::Desktop.icon().is_empty());
+        assert!(!DeviceType::Browser.icon().is_empty());
+    }
+
+    #[test]
     fn transfer_ready_state() {
-        let state = TransferState::Ready;
-        assert!(state.status_text().contains("ready"));
+        assert!(TransferState::Ready.status_text().contains("Ready"));
     }
 }

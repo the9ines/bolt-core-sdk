@@ -54,8 +54,8 @@ export interface WsDataTransportOptions {
   identityPublicKey?: Uint8Array;
   /** Verification state callback. */
   onVerification?: (info: VerificationInfo) => void;
-  /** Fired when a complete file is received. */
-  onReceiveFile?: (file: Blob, metadata: { filename: string }) => void;
+  /** Fired when a complete file is received. Matches WebRTCService convention. */
+  onReceiveFile?: (file: Blob, filename: string) => void;
   /** Transfer progress callback. */
   onProgress?: (progress: TransferProgress) => void;
   /** Fired on disconnect. */
@@ -163,9 +163,9 @@ export class WsDataTransport {
 
       try {
         this.ws = new WebSocket(this.opts.daemonUrl);
-      } catch {
+      } catch (e) {
         clearTimeout(timer);
-        console.log('[WS_TRANSPORT] WebSocket constructor threw');
+        console.log('[WS_TRANSPORT] WebSocket constructor threw:', e);
         resolve(false);
         return;
       }
@@ -173,12 +173,23 @@ export class WsDataTransport {
       this.ws.onopen = () => {
         console.log('[WS_TRANSPORT] Connected to daemon');
         this.sessionState = 'pre_hello';
-        this.handshake.initiateHello();
-        // Legacy mode: initiateHello completes synchronously when no identity
-        // is configured, setting helloComplete=true but not calling helloResolve.
-        if (this.helloComplete && this.helloResolve) {
-          this.helloResolve();
-          this.helloResolve = null;
+
+        // WS protocol: send our session-key first, then wait for daemon's
+        // session-key response (handled in handleMessage). Once we have
+        // the daemon's session key, initiateHello() is called from there.
+        if (this.keyPair && this.ws) {
+          const sessionKeyMsg = JSON.stringify({
+            type: 'session-key',
+            publicKey: toBase64(this.keyPair.publicKey),
+          });
+          try {
+            this.ws.send(sessionKeyMsg);
+            console.log('[WS_TRANSPORT] Sent session-key');
+          } catch (e) {
+            console.error('[WS_TRANSPORT] Failed to send session-key:', e);
+          }
+        } else {
+          console.error('[WS_TRANSPORT] onopen but keyPair or ws missing!', { hasKeyPair: !!this.keyPair, hasWs: !!this.ws });
         }
       };
 
@@ -216,6 +227,13 @@ export class WsDataTransport {
   /** Send a file over the WS transport. */
   async sendFile(file: File): Promise<void> {
     return this.transfer.sendFile(file);
+  }
+
+  /** Mark the connected peer as verified (TOFU). */
+  async markPeerVerified(): Promise<void> {
+    this.verificationInfo = { ...this.verificationInfo, state: 'verified' };
+    this.opts.onVerification?.(this.verificationInfo);
+    console.log('[WS_TRANSPORT] Peer marked as verified');
   }
 
   /** Disconnect and clean up. */
@@ -284,6 +302,42 @@ export class WsDataTransport {
   private handleMessage(event: MessageEvent): void {
     try {
       const msg = JSON.parse(event.data);
+
+      // Session-key exchange (WS transport protocol — before HELLO)
+      if (msg.type === 'session-key' && msg.publicKey) {
+        const remoteSessionPk = fromBase64(msg.publicKey);
+        this.remotePublicKey = remoteSessionPk;
+        console.log('[WS_TRANSPORT] Received daemon session-key');
+
+        // Now that we have the remote key, initiate HELLO if we have identity
+        if (!this.helloComplete) {
+          this.handshake.initiateHello();
+          // If legacy mode (no identity), HandshakeManager set helloComplete=true
+          // but never sent a HELLO frame. The daemon WS protocol requires a HELLO
+          // frame to proceed, so send a plaintext legacy HELLO.
+          if (this.helloComplete && this.sessionLegacy && this.ws) {
+            const legacyHello = JSON.stringify({
+              type: 'hello',
+              version: 1,
+              legacy: true,
+              capabilities: this.localCapabilities,
+            });
+            this.ws.send(legacyHello);
+            console.log('[WS_TRANSPORT] Sent legacy HELLO (no identity)');
+          }
+          if (this.helloComplete && this.helloResolve) {
+            this.helloResolve();
+            this.helloResolve = null;
+          }
+        }
+        return;
+      }
+
+      // Legacy HELLO response from daemon (no payload, just ack)
+      if (msg.type === 'hello' && msg.legacy) {
+        console.log('[WS_TRANSPORT] Received daemon legacy HELLO response');
+        return;
+      }
 
       // HELLO routing
       if (msg.type === 'hello' && msg.payload) {
@@ -542,7 +596,7 @@ export class WsDataTransport {
       setCompletionTimeout: (v) => { this.completionTimeout = v; },
       getOnProgressCallback: () => this.opts.onProgress,
       getRemoteIdentityKey: () => this.remoteIdentityKey,
-      onReceiveFile: (file, filename) => this.opts.onReceiveFile?.(file, { filename }),
+      onReceiveFile: (file, filename) => this.opts.onReceiveFile?.(file, filename),
       onError: (error) => this.opts.onError?.(error),
       disconnect: () => this.disconnect(),
       sendMessage: (innerMsg, btrFields?) => this.wsSendMessage(innerMsg, btrFields),

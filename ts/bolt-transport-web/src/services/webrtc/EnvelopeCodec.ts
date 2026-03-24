@@ -81,7 +81,7 @@ export function dcSendMessage(
   remotePublicKey: Uint8Array | null,
   btrFields?: BtrEnvelopeFields,
 ): void {
-  if (!dc || dc.readyState !== 'open') return;
+  if (!dc || (dc.readyState !== 'open' && (dc.readyState as unknown) !== 1)) return;
   if (negotiatedEnvelope && helloComplete && keyPair && remotePublicKey) {
     dc.send(JSON.stringify(encodeProfileEnvelopeV1(innerMsg, remotePublicKey, keyPair.secretKey, btrFields)));
   } else {

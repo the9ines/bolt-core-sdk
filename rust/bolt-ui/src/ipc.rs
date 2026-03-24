@@ -17,9 +17,10 @@ const APP_VERSION: &str = "0.0.1";
 /// IPC event received from daemon (re-export shared type shape).
 pub use bolt_app_core::ipc_types::IpcMessage as IpcEvent;
 
-/// IPC client handle.
+/// IPC client handle with bidirectional communication.
 pub struct IpcClient {
     event_rx: mpsc::Receiver<IpcMessage>,
+    writer: std::sync::Mutex<Box<dyn Write + Send>>,
     _reader_thread: thread::JoinHandle<()>,
 }
 
@@ -97,6 +98,7 @@ impl IpcClient {
 
         Ok(Self {
             event_rx: rx,
+            writer: std::sync::Mutex::new(Box::new(writer)),
             _reader_thread: reader_thread,
         })
     }
@@ -104,6 +106,17 @@ impl IpcClient {
     /// Try to receive the next event (non-blocking).
     pub fn try_recv(&self) -> Option<IpcMessage> {
         self.event_rx.try_recv().ok()
+    }
+
+    /// Send a command to the daemon via IPC.
+    pub fn send_command(&self, msg_type: &str, payload: serde_json::Value) -> Result<(), String> {
+        let msg = IpcMessage::new_decision(msg_type, payload);
+        let line = msg.to_ndjson().map_err(|e| format!("serialize: {e}"))?;
+        let mut w = self.writer.lock().map_err(|e| format!("lock: {e}"))?;
+        w.write_all(line.as_bytes())
+            .map_err(|e| format!("write: {e}"))?;
+        w.flush().map_err(|e| format!("flush: {e}"))?;
+        Ok(())
     }
 
     /// Receive all pending events.

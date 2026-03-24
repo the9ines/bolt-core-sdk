@@ -22,4 +22,5 @@ pub mod ipc_transport;
 pub mod ipc_types;
 pub mod platform;
 pub mod signal_monitor;
+pub mod signaling_client;
 pub mod watchdog;

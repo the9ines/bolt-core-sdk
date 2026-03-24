@@ -52,7 +52,7 @@ export interface WtDataTransportOptions {
   /** Verification state callback. */
   onVerification?: (info: VerificationInfo) => void;
   /** Fired when a complete file is received. */
-  onReceiveFile?: (file: Blob, metadata: { filename: string }) => void;
+  onReceiveFile?: (file: Blob, filename: string) => void;
   /** Transfer progress callback. */
   onProgress?: (progress: TransferProgress) => void;
   /** Fired on disconnect. */
@@ -702,7 +702,7 @@ export class WtDataTransport {
       setCompletionTimeout: (v) => { this.completionTimeout = v; },
       getOnProgressCallback: () => this.opts.onProgress,
       getRemoteIdentityKey: () => this.remoteIdentityKey,
-      onReceiveFile: (file, filename) => this.opts.onReceiveFile?.(file, { filename }),
+      onReceiveFile: (file, filename) => this.opts.onReceiveFile?.(file, filename),
       onError: (error) => this.opts.onError?.(error),
       disconnect: () => this.disconnect(),
       sendMessage: (innerMsg, btrFields?) => this.wtSendMessage(innerMsg, btrFields),

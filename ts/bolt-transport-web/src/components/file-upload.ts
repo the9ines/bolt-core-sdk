@@ -5,11 +5,18 @@ import { escapeHTML } from '../lib/sanitize.js';
 import { createTransferProgress } from './transfer-progress.js';
 import type WebRTCService from '../services/webrtc/WebRTCService.js';
 import type { TransferProgress } from '../services/webrtc/WebRTCService.js';
+import type { BrowserAppTransport } from '../services/ws-transport/BrowserAppTransport.js';
 
 let webrtcRef: WebRTCService | null = null;
+let directRef: BrowserAppTransport | null = null;
 
 export function setWebrtcRef(service: WebRTCService | null) {
   webrtcRef = service;
+}
+
+/** Set the direct transport reference for browser↔desktop file transfer. */
+export function setDirectTransportRef(transport: BrowserAppTransport | null) {
+  directRef = transport;
 }
 
 export function createFileUpload(): HTMLElement {
@@ -142,12 +149,15 @@ export function createFileUpload(): HTMLElement {
   }
 
   async function startTransfer() {
-    if (!webrtcRef || files.length === 0) return;
+    const transport = directRef || webrtcRef;
+    if (!transport || files.length === 0) return;
     const file = files[0];
     console.log('Starting transfer for:', file.name);
-    webrtcRef.setProgressCallback(handleProgress);
+    if ('setProgressCallback' in transport) {
+      (transport as WebRTCService).setProgressCallback(handleProgress);
+    }
     try {
-      await webrtcRef.sendFile(file);
+      await transport.sendFile(file);
       showToast('Transfer complete', `${file.name} has been sent successfully`);
       files = files.slice(1);
       progress = null;

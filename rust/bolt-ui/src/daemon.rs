@@ -26,12 +26,13 @@ pub fn find_daemon_binary() -> Result<PathBuf, String> {
     // Desktop-specific search paths (bolt-ui development locations)
     let home = std::env::var("HOME").unwrap_or_default();
     let extra_paths = vec![
-        // Workspace build paths (cargo run in development)
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../bolt-daemon/target/release/bolt-daemon"),
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../bolt-daemon/target/debug/bolt-daemon"),
+        // Ecosystem workspace paths (bolt-ui is at bolt-core-sdk/rust/bolt-ui,
+        // daemon is at bolt-ecosystem/bolt-daemon — 3 levels up from CARGO_MANIFEST_DIR)
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../bolt-daemon/target/release/bolt-daemon"),
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../bolt-daemon/target/debug/bolt-daemon"),
         // Desktop deployment paths
         PathBuf::from(format!("{home}/Desktop/bolt-daemon")),
-        // Ecosystem paths
+        // Explicit ecosystem paths
         PathBuf::from(format!("{home}/Desktop/the9ines.com/bolt-ecosystem/bolt-daemon/target/release/bolt-daemon")),
     ];
 
@@ -97,7 +98,12 @@ impl DaemonProcess {
         data_dir: &str,
         rendezvous_url: &str,
     ) -> Result<Self, String> {
-        let ws_url = format!("ws://{rendezvous_url}");
+        // Respect the URL as given — may be ws:// or wss://
+        let ws_url = if rendezvous_url.starts_with("ws://") || rendezvous_url.starts_with("wss://") {
+            rendezvous_url.to_string()
+        } else {
+            format!("ws://{rendezvous_url}")
+        };
         Self::spawn(
             daemon_bin,
             &[
@@ -127,7 +133,12 @@ impl DaemonProcess {
         data_dir: &str,
         rendezvous_url: &str,
     ) -> Result<Self, String> {
-        let ws_url = format!("ws://{rendezvous_url}");
+        // Respect the URL as given — may be ws:// or wss://
+        let ws_url = if rendezvous_url.starts_with("ws://") || rendezvous_url.starts_with("wss://") {
+            rendezvous_url.to_string()
+        } else {
+            format!("ws://{rendezvous_url}")
+        };
         Self::spawn(
             daemon_bin,
             &[
@@ -142,6 +153,26 @@ impl DaemonProcess {
                 "--data-dir", data_dir,
                 "--pairing-policy", "allow",
                 "--phase-timeout-secs", "3600",
+            ],
+        )
+    }
+
+    /// Spawn daemon as a direct WS endpoint server for browser connections.
+    /// Uses ws-endpoint mode — no WebRTC/file-signal path, just WS serving.
+    pub fn spawn_ws_server(
+        daemon_bin: &PathBuf,
+        ws_listen: &str,
+        socket_path: &str,
+        data_dir: &str,
+    ) -> Result<Self, String> {
+        Self::spawn(
+            daemon_bin,
+            &[
+                "--mode", "ws-endpoint",
+                "--ws-listen", ws_listen,
+                "--socket-path", socket_path,
+                "--data-dir", data_dir,
+                "--pairing-policy", "allow",
             ],
         )
     }

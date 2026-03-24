@@ -26,7 +26,7 @@ export type { PinPersistence, PinRecord, PinVerifyResult } from './services/iden
 
 // ── Components ───────────────────────────────────────────────────────────────
 export { createDeviceDiscovery } from './components/device-discovery.js';
-export { createFileUpload, setWebrtcRef } from './components/file-upload.js';
+export { createFileUpload, setWebrtcRef, setDirectTransportRef } from './components/file-upload.js';
 export { createConnectionStatus } from './components/connection-status.js';
 export { createVerificationStatus } from './components/verification-status.js';
 export type { VerificationStatusOptions } from './components/verification-status.js';

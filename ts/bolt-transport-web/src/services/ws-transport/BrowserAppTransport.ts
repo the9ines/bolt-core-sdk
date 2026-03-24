@@ -46,7 +46,7 @@ export interface BrowserAppTransportOptions {
   /** Verification state callback. */
   onVerification?: (info: VerificationInfo) => void;
   /** Fired when a complete file is received. */
-  onReceiveFile?: (file: Blob, metadata: { filename: string }) => void;
+  onReceiveFile?: (file: Blob, filename: string) => void;
   /** Transfer progress callback. */
   onProgress?: (progress: TransferProgress) => void;
   /** Fired with the active transport mode ('webtransport' | 'ws' | 'webrtc'). */
@@ -222,6 +222,16 @@ export class BrowserAppTransport {
       return this.webrtcService.sendFile(file);
     }
     throw new Error('No active transport — call connect() first');
+  }
+
+  /** Mark the connected peer as verified (TOFU). */
+  async markPeerVerified(): Promise<void> {
+    if (this.webrtcService) {
+      return this.webrtcService.markPeerVerified();
+    }
+    if (this.wsTransport) {
+      return this.wsTransport.markPeerVerified();
+    }
   }
 
   /** Disconnect the active transport. */

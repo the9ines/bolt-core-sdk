@@ -144,7 +144,8 @@ export class TransferManager {
     }
 
     const dc = this.ctx.getDc();
-    if (!dc || dc.readyState !== 'open') {
+    // readyState is 'open' for RTCDataChannel, 1 (WebSocket.OPEN) for WebSocket
+    if (!dc || (dc.readyState !== 'open' && (dc.readyState as unknown) !== 1)) {
       this.sendInProgress = false;
       throw new TransferError('Data channel not open');
     }
@@ -392,7 +393,10 @@ export class TransferManager {
    */
   private async awaitBackpressureDrain(): Promise<void> {
     const currentDc = this.ctx.getDc();
-    if (!currentDc || currentDc.bufferedAmount <= currentDc.bufferedAmountLowThreshold) {
+    if (!currentDc) return;
+    // WebSocket: bufferedAmountLowThreshold is undefined (RTCDataChannel-only).
+    // WS bufferedAmount drains to kernel instantly — skip backpressure wait entirely.
+    if (currentDc.bufferedAmountLowThreshold === undefined || currentDc.bufferedAmount <= currentDc.bufferedAmountLowThreshold) {
       return;
     }
 
@@ -419,7 +423,7 @@ export class TransferManager {
       setTimeout(() => {
         if (settled) return;
         const dcCheck = this.ctx.getDc();
-        if (!dcCheck || dcCheck.readyState !== 'open') {
+        if (!dcCheck || (dcCheck.readyState !== 'open' && (dcCheck.readyState as unknown) !== 1)) {
           settled = true;
           this.ctx.setBackpressureReject(undefined);
           reject(new TransferError('Data channel closed during backpressure wait'));
@@ -812,7 +816,8 @@ export class TransferManager {
 
   /** UI-XFER-1: Emit a canonical DC control message (no legacy file-chunk shape). */
   private sendCanonicalControl(msg: DcControlMessage): void {
-    if (!this.ctx.getDc() || this.ctx.getDc()!.readyState !== 'open') return;
+    const dcState = this.ctx.getDc()?.readyState;
+    if (!dcState || (dcState !== 'open' && (dcState as unknown) !== 1)) return;
     this.ctx.sendMessage(msg);
   }
 
