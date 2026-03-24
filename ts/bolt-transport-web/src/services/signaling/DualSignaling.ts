@@ -43,33 +43,39 @@ export class DualSignaling implements SignalingProvider {
     deviceName: string,
     deviceType: DiscoveredDevice['deviceType']
   ): Promise<void> {
-    // Create both instances
-    this.local = new WebSocketSignaling(this.localUrl);
-    this.cloud = new WebSocketSignaling(this.cloudUrl);
+    // Create signaling instances — skip local if URL is empty (HTTPS origin).
+    const connectPromises: Promise<void>[] = [];
 
-    // Wire up local
-    this.local.onPeerDiscovered((peer) => this.handlePeerDiscovered(peer, 'local'));
-    this.local.onPeerLost((code) => this.handlePeerLost(code, 'local'));
-    this.local.onSignal((signal) => this.handleSignal(signal));
+    if (this.localUrl) {
+      this.local = new WebSocketSignaling(this.localUrl);
+      this.local.onPeerDiscovered((peer) => this.handlePeerDiscovered(peer, 'local'));
+      this.local.onPeerLost((code) => this.handlePeerLost(code, 'local'));
+      this.local.onSignal((signal) => this.handleSignal(signal));
+      connectPromises.push(
+        this.local.connect(localPeerCode, deviceName, deviceType).then(() => {
+          this.localConnected = true;
+          console.log('[DUAL] Local signal server connected');
+          this.onConnectionStateChange?.();
+        }),
+      );
+    }
 
-    // Wire up cloud
-    this.cloud.onPeerDiscovered((peer) => this.handlePeerDiscovered(peer, 'cloud'));
-    this.cloud.onPeerLost((code) => this.handlePeerLost(code, 'cloud'));
-    this.cloud.onSignal((signal) => this.handleSignal(signal));
+    if (this.cloudUrl) {
+      this.cloud = new WebSocketSignaling(this.cloudUrl);
+      this.cloud.onPeerDiscovered((peer) => this.handlePeerDiscovered(peer, 'cloud'));
+      this.cloud.onPeerLost((code) => this.handlePeerLost(code, 'cloud'));
+      this.cloud.onSignal((signal) => this.handleSignal(signal));
+      connectPromises.push(
+        this.cloud.connect(localPeerCode, deviceName, deviceType).then(() => {
+          this.cloudConnected = true;
+          console.log('[DUAL] Cloud signal server connected');
+          this.onConnectionStateChange?.();
+        }),
+      );
+    }
 
-    // Connect both — don't fail if one fails
-    const results = await Promise.allSettled([
-      this.local.connect(localPeerCode, deviceName, deviceType).then(() => {
-        this.localConnected = true;
-        console.log('[DUAL] Local signal server connected');
-        this.onConnectionStateChange?.();
-      }),
-      this.cloud.connect(localPeerCode, deviceName, deviceType).then(() => {
-        this.cloudConnected = true;
-        console.log('[DUAL] Cloud signal server connected');
-        this.onConnectionStateChange?.();
-      }),
-    ]);
+    // Connect configured endpoints — don't fail if one fails
+    const results = await Promise.allSettled(connectPromises);
 
     // At least one must succeed
     const anyConnected = results.some((r) => r.status === 'fulfilled');
