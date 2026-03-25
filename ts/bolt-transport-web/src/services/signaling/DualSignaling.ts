@@ -83,12 +83,11 @@ export class DualSignaling implements SignalingProvider {
       throw new Error('Failed to connect to any signal server');
     }
 
-    // Log what connected
-    if (results[0].status === 'rejected') {
-      console.warn('[DUAL] Local signal server failed:', (results[0] as PromiseRejectedResult).reason);
-    }
-    if (results[1].status === 'rejected') {
-      console.warn('[DUAL] Cloud signal server failed:', (results[1] as PromiseRejectedResult).reason);
+    // Log what failed
+    for (const result of results) {
+      if (result.status === 'rejected') {
+        console.warn('[DUAL] Signal server failed:', result.reason);
+      }
     }
   }
 
