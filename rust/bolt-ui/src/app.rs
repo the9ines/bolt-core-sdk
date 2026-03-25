@@ -75,6 +75,9 @@ pub struct BoltApp {
     pub ipc_client: Option<IpcClient>,
     pub prereq_error: Option<String>,
     pub signal_healthy: bool,
+    /// Track which signaling planes are currently connected.
+    local_plane_connected: bool,
+    cloud_plane_connected: bool,
     daemon_bin: Option<std::path::PathBuf>,
     data_dir: String,
     socket_path: String,
@@ -156,6 +159,8 @@ impl BoltApp {
             ipc_client: None,
             prereq_error,
             signal_healthy,
+            local_plane_connected: false,
+            cloud_plane_connected: false,
             daemon_bin,
             data_dir,
             socket_path,
@@ -818,6 +823,10 @@ impl eframe::App for BoltApp {
             match event {
                 DiscoveryEvent::Connected(plane) => {
                     self.signal_healthy = true;
+                    match plane {
+                        Plane::Local => self.local_plane_connected = true,
+                        Plane::Cloud => self.cloud_plane_connected = true,
+                    }
                     self.discovery = DiscoveryStatus::Searching;
                     tracing::info!("[UI] signaling connected ({plane:?})");
                 }
@@ -826,13 +835,24 @@ impl eframe::App for BoltApp {
                         Plane::Local => SignalingPlane::Local,
                         Plane::Cloud => SignalingPlane::Cloud,
                     };
-                    // Remove only peers from the disconnected plane
-                    self.discovered_peers.retain(|p| p.plane != ui_plane);
-                    // Stay healthy if we still have the other plane
-                    if self.discovered_peers.is_empty() {
-                        self.discovery = DiscoveryStatus::Searching;
+                    match plane {
+                        Plane::Local => self.local_plane_connected = false,
+                        Plane::Cloud => self.cloud_plane_connected = false,
                     }
-                    tracing::warn!("[UI] signaling disconnected ({plane:?}), retained {} peers", self.discovered_peers.len());
+                    // Remove peers from the disconnected plane
+                    self.discovered_peers.retain(|p| p.plane != ui_plane);
+                    // Set truthful discovery status based on remaining connectivity
+                    let any_plane = self.local_plane_connected || self.cloud_plane_connected;
+                    if self.discovered_peers.is_empty() {
+                        self.discovery = if any_plane {
+                            DiscoveryStatus::Searching
+                        } else {
+                            self.signal_healthy = false;
+                            DiscoveryStatus::Offline
+                        };
+                    }
+                    tracing::warn!("[UI] signaling disconnected ({plane:?}), retained {} peers, planes: local={} cloud={}",
+                        self.discovered_peers.len(), self.local_plane_connected, self.cloud_plane_connected);
                 }
                 DiscoveryEvent::PeerList(peers, plane) => {
                     let ui_plane = match plane {
@@ -958,10 +978,12 @@ impl eframe::App for BoltApp {
             }
         }
 
-        // Request repaint when signaling events may arrive
-        if self.signal_healthy {
-            ctx.request_repaint_after(std::time::Duration::from_millis(500));
-        }
+        // Always poll for signaling events. Without this, if the initial
+        // probe_signal_health() fails (embedded server not yet bound),
+        // signal_healthy stays false and Connected events sit unprocessed
+        // in signaling_rx — the UI shows OFFLINE despite cloud signaling
+        // being active with visible peers.
+        ctx.request_repaint_after(std::time::Duration::from_millis(500));
 
         // ── Header strip (matches website: logo + NEARBY indicator) ──
         egui::TopBottomPanel::top("header")
