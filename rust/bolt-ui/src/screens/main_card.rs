@@ -364,12 +364,30 @@ fn show_connected(ui: &mut egui::Ui, app: &mut BoltApp) {
                         .desired_width(320.0),
                 );
             }
-            TransferState::Complete { file_name } => {
+            TransferState::Complete { file_name, save_path } => {
                 ui.label(
                     egui::RichText::new(format!("\u{2713} {} — complete", file_name))
                         .size(theme::FONT_SIZE_BODY)
                         .color(theme::SUCCESS),
                 );
+                if let Some(path) = save_path {
+                    ui.label(
+                        egui::RichText::new(path)
+                            .size(theme::FONT_SIZE_SMALL)
+                            .color(theme::TEXT_SECONDARY),
+                    );
+                    ui.add_space(theme::SPACING_SM);
+                    #[cfg(target_os = "macos")]
+                    {
+                        let path_clone = path.clone();
+                        if ui.add(theme::primary_button("SHOW IN FINDER")).clicked() {
+                            let _ = std::process::Command::new("open")
+                                .arg("-R")
+                                .arg(&path_clone)
+                                .spawn();
+                        }
+                    }
+                }
                 ui.add_space(theme::SPACING_SM);
                 if ui.add(theme::primary_button("SEND ANOTHER")).clicked() {
                     app.transfer = TransferState::Ready;

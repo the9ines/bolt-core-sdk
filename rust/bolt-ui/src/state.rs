@@ -182,7 +182,7 @@ pub enum TransferState {
     #[allow(dead_code)]
     Receiving { file_name: String, progress: f32 },
     #[allow(dead_code)]
-    Complete { file_name: String },
+    Complete { file_name: String, save_path: Option<String> },
     #[allow(dead_code)]
     Failed { file_name: String, reason: String },
 }
@@ -198,7 +198,13 @@ impl TransferState {
             Self::Receiving { file_name, progress } => {
                 format!("Receiving {} ({:.0}%)", file_name, progress * 100.0)
             }
-            Self::Complete { file_name } => format!("{} — complete", file_name),
+            Self::Complete { file_name, save_path } => {
+                if let Some(path) = save_path {
+                    format!("{} — saved to {}", file_name, path)
+                } else {
+                    format!("{} — complete", file_name)
+                }
+            }
             Self::Failed { file_name, reason } => format!("{} — failed: {}", file_name, reason),
         }
     }

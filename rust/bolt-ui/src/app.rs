@@ -650,19 +650,51 @@ impl BoltApp {
                             };
                         }
                     }
+                    // Update transfer progress
+                    // Daemon format: "[WS_TRANSFER] ... progress: {done}/{total} chunks ({name})"
+                    if line.contains("[WS_TRANSFER]") && line.contains("progress:") {
+                        if let Some(frac) = line.split("progress:").nth(1) {
+                            let parts: Vec<&str> = frac.trim().splitn(2, '/').collect();
+                            if parts.len() == 2 {
+                                let done: f32 = parts[0].trim().parse().unwrap_or(0.0);
+                                let total: f32 = parts[1].trim().split_whitespace().next()
+                                    .and_then(|s| s.parse().ok()).unwrap_or(1.0);
+                                let pct = if total > 0.0 { done / total } else { 0.0 };
+                                match &mut self.transfer {
+                                    TransferState::Sending { progress, .. } => *progress = pct,
+                                    TransferState::Receiving { progress, .. } => *progress = pct,
+                                    _ => {}
+                                }
+                            }
+                        }
+                    }
                     // Detect file saved (receive complete)
+                    // Daemon format: "[WS_TRANSFER] {peer} saved: {name} ({bytes} bytes) → {path}"
                     if line.contains("[WS_TRANSFER]") && line.contains("saved:") {
-                        let fname = line.split("saved:").nth(1)
-                            .and_then(|s| s.trim().split('(').next())
+                        let after_saved = line.split("saved:").nth(1).unwrap_or("");
+                        let fname = after_saved.trim().split('(').next()
                             .map(|s| s.trim().to_string())
                             .unwrap_or_else(|| "file".into());
-                        self.transfer = TransferState::Complete { file_name: fname };
+                        let save_path = after_saved.split('\u{2192}').nth(1) // → arrow
+                            .map(|s| s.trim().to_string());
+                        // Reveal in Finder on macOS
+                        if let Some(ref path) = save_path {
+                            #[cfg(target_os = "macos")]
+                            {
+                                let _ = std::process::Command::new("open")
+                                    .arg("-R")
+                                    .arg(path)
+                                    .spawn();
+                            }
+                        }
+                        self.transfer = TransferState::Complete { file_name: fname, save_path };
                     }
                     // Detect send complete
-                    if line.contains("[WS_TRANSFER]") && line.contains("send complete") {
+                    // Daemon format: "[WS_TRANSFER] all {N} chunks queued for {name}"
+                    if line.contains("[WS_TRANSFER]") && line.contains("chunks queued") {
                         if let TransferState::Sending { ref file_name, .. } = self.transfer {
                             let name = file_name.clone();
-                            self.transfer = TransferState::Complete { file_name: name };
+                            self.transfer = TransferState::Complete { file_name: name, save_path: None };
                         }
                     }
                 }
@@ -765,7 +797,7 @@ impl BoltApp {
                             .and_then(|v| v.as_str())
                             .unwrap_or("unknown")
                             .to_string();
-                        self.transfer = TransferState::Complete { file_name };
+                        self.transfer = TransferState::Complete { file_name, save_path: None };
                     }
                     _ => {}
                 }
