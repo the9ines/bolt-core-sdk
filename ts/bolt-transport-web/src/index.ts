@@ -4,30 +4,16 @@
 
 // ── Services ─────────────────────────────────────────────────────────────────
 
-// Signaling
-export type { SignalMessage, DiscoveredDevice, SignalingProvider } from './services/signaling/SignalingProvider.js';
-export { WebSocketSignaling } from './services/signaling/WebSocketSignaling.js';
-export { DualSignaling } from './services/signaling/DualSignaling.js';
-export { detectDeviceType, getDeviceName } from './services/signaling/device-detect.js';
+// Signaling, Identity, Components, State, UI — EXTRACTED to @the9ines/localbolt-browser.
+// Import signaling, persistence, UI from @the9ines/localbolt-browser instead.
 
-// WebRTC
+// WebRTC (legacy tribute — will move in Phase 3)
 export { default as WebRTCService } from './services/webrtc/WebRTCService.js';
 export type { TransferProgress, TransferStats, WebRTCServiceOptions, VerificationInfo, VerificationState } from './services/webrtc/WebRTCService.js';
 
-// WS Transport (PM-RC-02) — WebSocket-direct primary + WebRTC fallback
+// WS/WT Transport (forward-path browser↔app adapters)
 export { WsDataTransport, WtDataTransport, BrowserAppTransport } from './services/ws-transport/index.js';
 export type { WsDataTransportOptions, WtDataTransportOptions, DataTransport, BrowserAppTransportOptions } from './services/ws-transport/index.js';
-
-// Identity & TOFU
-export { IndexedDBIdentityStore, getOrCreateIdentity, zeroizeIdentityKey } from './services/identity/identity-store.js';
-export type { IdentityPersistence } from './services/identity/identity-store.js';
-export { IndexedDBPinStore } from './services/identity/pin-store.js';
-export type { PinPersistence, PinRecord, PinVerifyResult } from './services/identity/pin-store.js';
-
-// ── Components, State, UI ────────────────────────────────────────────────────
-// EXTRACTED to @the9ines/localbolt-browser (TS-EXTRACTION Phase 1).
-// Product UI components, store, icons, toast, and sanitize no longer
-// live in bolt-core-sdk. Import from @the9ines/localbolt-browser instead.
 
 // ── Lib ──────────────────────────────────────────────────────────────────────
 export {

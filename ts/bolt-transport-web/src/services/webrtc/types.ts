@@ -109,7 +109,7 @@ export interface WebRTCServiceOptions {
   /** Local identity public key to send in encrypted HELLO. */
   identityPublicKey?: Uint8Array;
   /** Pin store for TOFU peer identity verification. */
-  pinStore?: import('../identity/pin-store.js').PinPersistence;
+  pinStore?: import('./pin-verify.js').PinPersistence;
   /** Callback fired when verification state changes (after HELLO or on legacy timeout). */
   onVerificationState?: (info: VerificationInfo) => void;
   /** Enable BTR (Bolt Transfer Ratchet) capability advertisement. Default: false (dark launch). */

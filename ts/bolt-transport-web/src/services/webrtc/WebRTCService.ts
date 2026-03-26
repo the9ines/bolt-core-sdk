@@ -2,7 +2,19 @@ import { generateEphemeralKeyPair, toBase64, fromBase64, openBoxPayload, isValid
 import type { BtrModeValue } from '@the9ines/bolt-core';
 import { WebRTCError, ConnectionError, TransferError } from '../../types/webrtc-errors.js';
 import { getLocalOnlyRTCConfig } from '../../lib/platform-utils.js';
-import type { SignalingProvider, SignalMessage } from '../signaling/index.js';
+// SignalingProvider/SignalMessage types — extracted to @the9ines/localbolt-browser.
+// Inline the minimal type shapes needed here to avoid circular dependency.
+interface SignalingProvider {
+  connect(localPeerCode: string, deviceName: string, deviceType: any): Promise<void>;
+  disconnect(): void;
+  onSignal(callback: (signal: any) => void): (() => void);
+  onPeerDiscovered(callback: (peer: any) => void): void;
+  onPeerLost(callback: (peerCode: string) => void): void;
+  sendSignal(type: string, data: any, to: string): Promise<void>;
+  isConnected(): boolean;
+  setConnectionStateHandler?(handler: () => void): void;
+}
+interface SignalMessage { from: string; type: string; data: any; to: string; }
 import type { TransferMetricsCollector } from './transferMetrics.js';
 import { HandshakeManager } from './HandshakeManager.js';
 import { TransferManager } from './TransferManager.js';

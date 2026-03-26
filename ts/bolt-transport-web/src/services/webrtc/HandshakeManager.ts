@@ -11,7 +11,7 @@
  */
 import { openBoxPayload, sealBoxPayload, toBase64, fromBase64, KeyMismatchError, computeSas, negotiateBtr, btrLogToken, BtrMode } from '@the9ines/bolt-core';
 import { ConnectionError } from '../../types/webrtc-errors.js';
-import { verifyPinnedIdentity } from '../identity/pin-store.js';
+import { verifyPinnedIdentity } from './pin-verify.js';
 import type { HandshakeContext } from './context.js';
 import type { VerificationState, VerificationInfo } from './types.js';
 
