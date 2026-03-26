@@ -87,6 +87,8 @@ pub struct BoltApp {
     daemon_ws_port: u16,
     /// WT endpoint cert hash (captured from daemon stderr, SECURE-DIRECT-1).
     wt_cert_hash: Option<String>,
+    /// Whether the WT endpoint has confirmed it is listening.
+    wt_endpoint_ready: bool,
     /// Signal waiting to be sent once daemon WS endpoint is ready.
     pending_ws_signal: Option<PendingWsSignal>,
 
@@ -169,6 +171,7 @@ impl BoltApp {
             cloud_signal_url: cloud_url_for_storage,
             daemon_ws_port,
             wt_cert_hash: None,
+            wt_endpoint_ready: false,
             pending_ws_signal: None,
             signaling_rx: rx,
             signaling_handle,
@@ -222,12 +225,20 @@ impl BoltApp {
         false
     }
 
-    /// Spawn daemon as a direct WS endpoint server (for browser connections).
-    fn spawn_daemon_ws_server(&mut self) {
-        // Kill any existing daemon first
+    /// Kill the current daemon and reset WT cert state so the next daemon's
+    /// cert hash will be captured fresh (SECURE-DIRECT-1 cert lifecycle fix).
+    fn kill_daemon(&mut self) {
         if let Some(mut proc) = self.daemon_proc.take() {
             proc.kill();
         }
+        self.wt_cert_hash = None;
+        self.wt_endpoint_ready = false;
+    }
+
+    /// Spawn daemon as a direct WS endpoint server (for browser connections).
+    fn spawn_daemon_ws_server(&mut self) {
+        // Kill any existing daemon first
+        self.kill_daemon();
 
         let daemon_bin = match &self.daemon_bin {
             Some(b) => b.clone(),
@@ -406,9 +417,7 @@ impl BoltApp {
                 &self.local_peer_code,
             );
         }
-        if let Some(mut proc) = self.daemon_proc.take() {
-            proc.kill();
-        }
+        self.kill_daemon();
         self.connection = ConnectionState::Idle;
     }
 
@@ -530,9 +539,7 @@ impl BoltApp {
     }
 
     pub fn cancel_connect(&mut self) {
-        if let Some(mut proc) = self.daemon_proc.take() {
-            proc.kill();
-        }
+        self.kill_daemon();
         self.ipc_client = None;
         self.connection = ConnectionState::Idle;
         self.transfer = TransferState::Idle;
@@ -551,9 +558,7 @@ impl BoltApp {
                 .as_ref()
                 .and_then(|p| p.last_error())
                 .unwrap_or_else(|| "Connection timed out".into());
-            if let Some(mut proc) = self.daemon_proc.take() {
-                proc.kill();
-            }
+            self.kill_daemon();
             self.ipc_client = None;
             self.connection = ConnectionState::Error(error_detail);
             return;
@@ -567,6 +572,8 @@ impl BoltApp {
                 self.connection = ConnectionState::Error(error);
                 self.daemon_proc = None;
                 self.ipc_client = None;
+                self.wt_cert_hash = None;
+                self.wt_endpoint_ready = false;
                 return;
             }
 
@@ -587,9 +594,21 @@ impl BoltApp {
                 }
             }
 
-            // Check if daemon WS endpoint is ready — send pending signal
+            // Detect WT endpoint ready (must see this before advertising wtUrl)
+            if !self.wt_endpoint_ready && recent.iter().any(|l| l.contains("[WT_ENDPOINT] listening")) {
+                self.wt_endpoint_ready = true;
+                tracing::info!("[UI] WT endpoint ready");
+            }
+
+            // Check if daemon endpoints are ready — send pending signal.
+            // Wait for WS to be listening. If WT cert hash was captured,
+            // also wait for WT endpoint to be ready before sending signaling
+            // (prevents browser from getting wtUrl before WT is listening).
             if let Some(ref pending) = self.pending_ws_signal {
-                if recent.iter().any(|l| l.contains("[WS_ENDPOINT] listening")) {
+                let ws_ready = recent.iter().any(|l| l.contains("[WS_ENDPOINT] listening"));
+                let wt_needed = self.wt_cert_hash.is_some();
+                let wt_ready = !wt_needed || self.wt_endpoint_ready;
+                if ws_ready && wt_ready {
                     let ws_url = format!("ws://{}:{}", local_ip(), self.daemon_ws_port);
                     let device_name = hostname::get()
                         .map(|h| h.to_string_lossy().to_string())
@@ -602,10 +621,13 @@ impl BoltApp {
                         "deviceType": "desktop",
                         "wsUrl": ws_url,
                     });
-                    if let Some(ref cert_hash) = self.wt_cert_hash {
-                        let wt_url = format!("https://{}:{}", local_ip(), wt_port);
-                        payload["wtUrl"] = serde_json::Value::String(wt_url);
-                        payload["certHash"] = serde_json::Value::String(cert_hash.clone());
+                    // Only advertise WT endpoint if it's confirmed listening
+                    if self.wt_endpoint_ready {
+                        if let Some(ref cert_hash) = self.wt_cert_hash {
+                            let wt_url = format!("https://{}:{}", local_ip(), wt_port);
+                            payload["wtUrl"] = serde_json::Value::String(wt_url);
+                            payload["certHash"] = serde_json::Value::String(cert_hash.clone());
+                        }
                     }
 
                     match pending.signal_type.as_str() {
@@ -620,13 +642,17 @@ impl BoltApp {
                         }
                         "connection_accepted" => {
                             // For accepted, strip deviceName/deviceType
-                            let accept_payload = if let Some(ref cert_hash) = self.wt_cert_hash {
-                                let wt_url = format!("https://{}:{}", local_ip(), wt_port);
-                                serde_json::json!({
-                                    "wsUrl": ws_url,
-                                    "wtUrl": wt_url,
-                                    "certHash": cert_hash,
-                                })
+                            let accept_payload = if self.wt_endpoint_ready {
+                                if let Some(ref cert_hash) = self.wt_cert_hash {
+                                    let wt_url = format!("https://{}:{}", local_ip(), wt_port);
+                                    serde_json::json!({
+                                        "wsUrl": ws_url,
+                                        "wtUrl": wt_url,
+                                        "certHash": cert_hash,
+                                    })
+                                } else {
+                                    serde_json::json!({ "wsUrl": ws_url })
+                                }
                             } else {
                                 serde_json::json!({ "wsUrl": ws_url })
                             };
@@ -646,8 +672,8 @@ impl BoltApp {
 
             // Detect WS session establishment
             if self.connection.is_connecting() {
-                if recent.iter().any(|l| l.contains("[WS_SESSION]") && l.contains("session established")) {
-                    tracing::info!("[UI] daemon WS session established — browser connected");
+                if recent.iter().any(|l| (l.contains("[WS_SESSION]") || l.contains("[WT_SESSION]")) && l.contains("session established")) {
+                    tracing::info!("[UI] daemon session established — browser connected");
                     self.connection = ConnectionState::Connected;
                     // Determine verification mode from daemon HELLO logs.
                     // Legacy HELLO (no identity) → transfer allowed immediately.
