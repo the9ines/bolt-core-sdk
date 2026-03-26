@@ -193,7 +193,7 @@ export class WtDataTransport {
   private remotePublicKey: Uint8Array | null = null;
   private remoteIdentityKey: Uint8Array | null = null;
 
-  private sessionState: 'connecting' | 'pre_hello' | 'post_hello' | 'closed' = 'closed';
+  private sessionState: 'connecting' | 'key_exchange' | 'pre_hello' | 'post_hello' | 'closed' = 'closed';
   private helloComplete = false;
   private sessionLegacy = false;
   private helloTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -307,7 +307,7 @@ export class WtDataTransport {
 
         this.bridge.setWriter(writer);
         this.bridge.setReadyState('open');
-        this.sessionState = 'pre_hello';
+        this.sessionState = 'key_exchange';
 
         // Start read loop
         this.readLoopAbort = new AbortController();
@@ -320,14 +320,16 @@ export class WtDataTransport {
           resolve(true);
         };
 
-        // Initiate HELLO
-        this.handshake.initiateHello();
-        // Legacy mode: initiateHello completes synchronously when no identity
-        // is configured, setting helloComplete=true.
-        if (this.helloComplete && this.helloResolve) {
-          this.helloResolve();
-          this.helloResolve = null;
+        // Send our session-key (same protocol as WS transport)
+        if (this.keyPair) {
+          const sessionKeyMsg = JSON.stringify({
+            type: 'session-key',
+            publicKey: toBase64(this.keyPair.publicKey),
+          });
+          this.bridge.send(sessionKeyMsg);
+          console.log('[WT_TRANSPORT] Sent session-key');
         }
+        // HELLO is initiated when we receive daemon's session-key (in handleMessage)
 
         // Listen for transport closure
         this.transport.closed.then(() => {
@@ -458,6 +460,22 @@ export class WtDataTransport {
     try {
       const msg = JSON.parse(data);
 
+      // Session-key exchange (before HELLO)
+      if (msg.type === 'session-key' && msg.publicKey) {
+        this.remotePublicKey = fromBase64(msg.publicKey);
+        console.log('[WT_TRANSPORT] Received daemon session-key');
+        this.sessionState = 'pre_hello';
+
+        // Now initiate HELLO (we have remote key)
+        this.handshake.initiateHello();
+        // Legacy mode resolves synchronously
+        if (this.helloComplete && this.helloResolve) {
+          this.helloResolve();
+          this.helloResolve = null;
+        }
+        return;
+      }
+
       // HELLO routing
       if (msg.type === 'hello' && msg.payload) {
         if (this.sessionState !== 'pre_hello') {
@@ -473,7 +491,7 @@ export class WtDataTransport {
       }
 
       // Pre-handshake gate
-      if (this.sessionState === 'pre_hello') {
+      if (this.sessionState === 'pre_hello' || this.sessionState === 'key_exchange') {
         console.warn('[WT_TRANSPORT] Non-HELLO message before handshake — disconnecting');
         this.sendErrorAndDisconnect('INVALID_STATE', 'Handshake not complete');
         return;
