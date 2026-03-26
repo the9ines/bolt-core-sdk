@@ -1,5 +1,5 @@
 import tweetnacl from 'tweetnacl';
-const { box, randomBytes } = tweetnacl;
+const { box, randomBytes, scalarMult: naclScalarMult } = tweetnacl;
 import { toBase64, fromBase64 } from './encoding.js';
 import { EncryptionError } from './errors.js';
 import { getWasmCrypto } from './wasm-crypto.js';
@@ -73,3 +73,21 @@ export function openBoxPayload(
   if (!decrypted) throw new EncryptionError('Decryption failed');
   return decrypted;
 }
+
+/**
+ * X25519 scalar multiplication (Diffie-Hellman shared secret).
+ * Used by transport adapters for BTR engine initialization.
+ */
+export function scalarMult(secretKey: Uint8Array, publicKey: Uint8Array): Uint8Array {
+  return naclScalarMult(secretKey, publicKey);
+}
+
+/**
+ * BTR capability mode enum. Used by transport adapters to check
+ * whether BTR was negotiated for this session.
+ */
+export const BtrMode = {
+  None: 0,
+  FullBtr: 1,
+} as const;
+export type BtrModeValue = typeof BtrMode[keyof typeof BtrMode];

@@ -51,5 +51,13 @@ export { initWasmCrypto, initWasmCryptoFromModule, getWasmCrypto, getWasmModule,
 export type { ProtocolAuthorityMode } from './wasm-crypto.js';
 export type { WasmCryptoAdapter, WasmBtrEngineHandle, WasmBtrTransferCtxHandle, WasmSendSessionHandle } from './wasm-crypto.js';
 
-// Bolt Transfer Ratchet (BTR) — §16
-export * from './btr/index.js';
+// Bolt Transfer Ratchet (BTR) — DELETED.
+// TS BTR implementation removed. WASM is sole BTR authority.
+// Use createWasmBtrEngine() from wasm-crypto for BTR operations.
+
+// Scalar mult (re-export for transport adapters)
+export { scalarMult } from './crypto.js';
+
+// BTR mode enum (used by transport adapters for capability check)
+export { BtrMode } from './crypto.js';
+export type { BtrModeValue } from './crypto.js';
