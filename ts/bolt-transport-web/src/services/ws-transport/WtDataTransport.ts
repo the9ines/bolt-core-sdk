@@ -369,6 +369,21 @@ export class WtDataTransport {
     console.log('[WT_TRANSPORT] Peer marked as verified');
   }
 
+  /** Cancel an active transfer. */
+  cancelTransfer(filename: string): void {
+    this.transfer.cancelTransfer(filename);
+  }
+
+  /** Pause an active transfer. */
+  pauseTransfer(filename: string): void {
+    this.transfer.pauseTransfer(filename);
+  }
+
+  /** Resume a paused transfer. */
+  resumeTransfer(filename: string): void {
+    this.transfer.resumeTransfer(filename);
+  }
+
   /** Disconnect and clean up. */
   disconnect(): void {
     console.log('[WT_TRANSPORT] Disconnecting');

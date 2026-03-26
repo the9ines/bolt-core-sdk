@@ -112,9 +112,9 @@ export function createFileUpload(): HTMLElement {
     if (progress && progress.status) {
       const el = createTransferProgress(
         progress,
-        () => { if (webrtcRef && progress) webrtcRef.cancelTransfer(progress.filename); },
-        () => { if (webrtcRef && progress) webrtcRef.pauseTransfer(progress.filename); },
-        () => { if (webrtcRef && progress) webrtcRef.resumeTransfer(progress.filename); },
+        () => { const t = (directRef || webrtcRef) as any; if (t && progress) t.cancelTransfer?.(progress.filename); },
+        () => { const t = (directRef || webrtcRef) as any; if (t && progress) t.pauseTransfer?.(progress.filename); },
+        () => { const t = (directRef || webrtcRef) as any; if (t && progress) t.resumeTransfer?.(progress.filename); },
       );
       progressEl.appendChild(el);
     }
