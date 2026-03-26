@@ -43,6 +43,9 @@ import type { DataTransport } from './WsDataTransport.js';
 export interface WtDataTransportOptions {
   /** Daemon WebTransport URL, e.g. "https://localhost:4433" */
   daemonUrl: string;
+  /** SHA-256 cert hash (hex string) for serverCertificateHashes pinning.
+   *  Required for self-signed certs (SECURE-DIRECT-1). */
+  certHashHex?: string;
   /** Connection timeout in ms. Default: 5000 */
   connectTimeout?: number;
   /** Ed25519 identity keypair for HELLO handshake. */
@@ -279,7 +282,19 @@ export class WtDataTransport {
           return;
         }
 
-        this.transport = new globalThis.WebTransport(this.opts.daemonUrl);
+        // Build WebTransport options — include cert hash for self-signed certs
+        const wtOptions: Record<string, unknown> = {};
+        if (this.opts.certHashHex) {
+          const hashBytes = new Uint8Array(
+            (this.opts.certHashHex.match(/.{2}/g) ?? []).map((h) => parseInt(h, 16))
+          );
+          wtOptions.serverCertificateHashes = [
+            { algorithm: 'sha-256', value: hashBytes.buffer },
+          ];
+          console.log('[WT_TRANSPORT] Using serverCertificateHashes for self-signed cert');
+        }
+
+        this.transport = new globalThis.WebTransport(this.opts.daemonUrl, wtOptions);
 
         // Wait for transport to be ready
         await this.transport.ready;
