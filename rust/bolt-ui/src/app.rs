@@ -702,12 +702,30 @@ impl BoltApp {
                 }
             }
 
-            // Detect transfer activity from daemon stderr
+            // Detect session end (peer disconnected) from daemon stderr.
+            // Daemon logs this when the WT/WS session ends and ACTIVE_SESSION is cleared.
             if matches!(self.connection, ConnectionState::Connected) {
+                let session_ended = recent.iter().any(|l| {
+                    l.contains("ACTIVE_SESSION cleared") || l.contains("active session handle cleared")
+                });
+                if session_ended {
+                    tracing::info!("[UI] daemon session ended — peer disconnected");
+                    self.connection = ConnectionState::Idle;
+                    self.transfer = TransferState::Idle;
+                    self.verify = VerifyState::NotStarted;
+                    self.connected_peer = None;
+                    // Don't kill daemon — it can accept new connections
+                    return;
+                }
+            }
+
+            // Detect transfer activity from daemon stderr (WS or WT path)
+            if matches!(self.connection, ConnectionState::Connected) {
+                let is_transfer = |l: &str| l.contains("[WS_TRANSFER]") || l.contains("[WT_TRANSFER]");
                 for line in &recent {
                     // Detect incoming file transfer start
-                    if line.contains("[WS_TRANSFER]") && line.contains("receiving:") {
-                        // Extract filename from log: "[WS_TRANSFER] ... receiving: filename (size bytes, ...)"
+                    if is_transfer(line) && line.contains("receiving:") {
+                        // Extract filename from log: "[WS/WT_TRANSFER] ... receiving: filename (size bytes, ...)"
                         let fname = line.split("receiving:").nth(1)
                             .and_then(|s| s.trim().split('(').next())
                             .map(|s| s.trim().to_string())
@@ -721,7 +739,7 @@ impl BoltApp {
                     }
                     // Update transfer progress
                     // Daemon format: "[WS_TRANSFER] ... progress: {done}/{total} chunks ({name})"
-                    if line.contains("[WS_TRANSFER]") && line.contains("progress:") {
+                    if is_transfer(line) && line.contains("progress:") {
                         if let Some(frac) = line.split("progress:").nth(1) {
                             let parts: Vec<&str> = frac.trim().splitn(2, '/').collect();
                             if parts.len() == 2 {
@@ -739,7 +757,7 @@ impl BoltApp {
                     }
                     // Detect file saved (receive complete)
                     // Daemon format: "[WS_TRANSFER] {peer} saved: {name} ({bytes} bytes) → {path}"
-                    if line.contains("[WS_TRANSFER]") && line.contains("saved:") {
+                    if is_transfer(line) && line.contains("saved:") {
                         let after_saved = line.split("saved:").nth(1).unwrap_or("");
                         let fname = after_saved.trim().split('(').next()
                             .map(|s| s.trim().to_string())
@@ -760,7 +778,7 @@ impl BoltApp {
                     }
                     // Detect send complete
                     // Daemon format: "[WS_TRANSFER] all {N} chunks queued for {name}"
-                    if line.contains("[WS_TRANSFER]") && line.contains("chunks queued") {
+                    if is_transfer(line) && line.contains("chunks queued") {
                         if let TransferState::Sending { ref file_name, .. } = self.transfer {
                             let name = file_name.clone();
                             self.transfer = TransferState::Complete { file_name: name, save_path: None };
