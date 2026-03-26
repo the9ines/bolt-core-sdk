@@ -362,6 +362,13 @@ export class WtDataTransport {
     return this.transfer.sendFile(file);
   }
 
+  /** Mark the connected peer as verified. */
+  async markPeerVerified(): Promise<void> {
+    this.verificationInfo = { ...this.verificationInfo, state: 'verified' };
+    this.opts.onVerification?.(this.verificationInfo);
+    console.log('[WT_TRANSPORT] Peer marked as verified');
+  }
+
   /** Disconnect and clean up. */
   disconnect(): void {
     console.log('[WT_TRANSPORT] Disconnecting');
