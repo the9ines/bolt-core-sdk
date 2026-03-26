@@ -1,5 +1,0 @@
-{
-  "type": "signal",
-  "to": "XYZ789",
-  "payload": { "sdp": "offer-data" }
-}

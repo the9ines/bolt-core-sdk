@@ -1,5 +1,0 @@
-{
-  "type": "signal",
-  "from": "ABC123",
-  "payload": { "sdp": "offer-data" }
-}
