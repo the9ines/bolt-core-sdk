@@ -85,6 +85,8 @@ pub struct BoltApp {
     cloud_signal_url: Option<String>,
     /// Port the daemon WS endpoint listens on (for direct browser connections).
     daemon_ws_port: u16,
+    /// WT endpoint cert hash (captured from daemon stderr, SECURE-DIRECT-1).
+    wt_cert_hash: Option<String>,
     /// Signal waiting to be sent once daemon WS endpoint is ready.
     pending_ws_signal: Option<PendingWsSignal>,
 
@@ -166,6 +168,7 @@ impl BoltApp {
             socket_path,
             cloud_signal_url: cloud_url_for_storage,
             daemon_ws_port,
+            wt_cert_hash: None,
             pending_ws_signal: None,
             signaling_rx: rx,
             signaling_handle,
@@ -569,6 +572,21 @@ impl BoltApp {
 
             let recent = proc.recent_stderr(30);
 
+            // Capture WT cert hash from daemon stderr (SECURE-DIRECT-1 SD1).
+            // Format: "[WT_CERT] hash=<64 hex chars>"
+            if self.wt_cert_hash.is_none() {
+                if let Some(hash) = recent.iter().find_map(|l| {
+                    if let Some(idx) = l.find("[WT_CERT] hash=") {
+                        Some(l[idx + 15..].trim().to_string())
+                    } else {
+                        None
+                    }
+                }) {
+                    tracing::info!("[UI] captured WT cert hash: {hash}");
+                    self.wt_cert_hash = Some(hash);
+                }
+            }
+
             // Check if daemon WS endpoint is ready — send pending signal
             if let Some(ref pending) = self.pending_ws_signal {
                 if recent.iter().any(|l| l.contains("[WS_ENDPOINT] listening")) {
@@ -577,25 +595,45 @@ impl BoltApp {
                         .map(|h| h.to_string_lossy().to_string())
                         .unwrap_or_else(|_| "Desktop".to_string());
 
+                    // Build signaling payload with WS + optional WT endpoints
+                    let wt_port = self.daemon_ws_port + 1;
+                    let mut payload = serde_json::json!({
+                        "deviceName": device_name,
+                        "deviceType": "desktop",
+                        "wsUrl": ws_url,
+                    });
+                    if let Some(ref cert_hash) = self.wt_cert_hash {
+                        let wt_url = format!("https://{}:{}", local_ip(), wt_port);
+                        payload["wtUrl"] = serde_json::Value::String(wt_url);
+                        payload["certHash"] = serde_json::Value::String(cert_hash.clone());
+                    }
+
                     match pending.signal_type.as_str() {
                         "connection_request" => {
                             self.signaling_handle.send_signal(
                                 &pending.peer_code,
                                 "connection_request",
-                                serde_json::json!({
-                                    "deviceName": device_name,
-                                    "deviceType": "desktop",
-                                    "wsUrl": ws_url,
-                                }),
+                                payload,
                                 &self.local_peer_code,
                             );
                             tracing::info!("[UI] daemon WS ready — sent connection_request with wsUrl={ws_url}");
                         }
                         "connection_accepted" => {
+                            // For accepted, strip deviceName/deviceType
+                            let accept_payload = if let Some(ref cert_hash) = self.wt_cert_hash {
+                                let wt_url = format!("https://{}:{}", local_ip(), wt_port);
+                                serde_json::json!({
+                                    "wsUrl": ws_url,
+                                    "wtUrl": wt_url,
+                                    "certHash": cert_hash,
+                                })
+                            } else {
+                                serde_json::json!({ "wsUrl": ws_url })
+                            };
                             self.signaling_handle.send_signal(
                                 &pending.peer_code,
                                 "connection_accepted",
-                                serde_json::json!({ "wsUrl": ws_url }),
+                                accept_payload,
                                 &self.local_peer_code,
                             );
                             tracing::info!("[UI] daemon WS ready — sent connection_accepted with wsUrl={ws_url}");
