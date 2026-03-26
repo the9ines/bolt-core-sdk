@@ -1,3 +1,15 @@
 **/node_modules/
 **/.DS_Store
 *.tgz
+.gitnexus
+
+# Build outputs
+**/target/
+
+# Orphaned TS-era lockfile (SDK is Rust-only now)
+package-lock.json
+
+# Claude Code workspace artifacts
+.claude/
+CLAUDE.md
+AGENTS.md
