@@ -224,10 +224,16 @@ impl IpcBridgeCore {
                     cb("daemon://transfer-request", serde_json::to_value(&payload).unwrap_or_default());
                 }
             }
-            // Session lifecycle events (emitted by daemon when session layer is wired)
+            // Session lifecycle events
             "session.connected" | "session.sas" | "session.ended" | "session.error" => {
                 let event_name = format!("daemon://{}", msg.msg_type.replace('.', "-"));
                 tracing::info!("[IPC_BRIDGE] session event: {}", msg.msg_type);
+                cb(&event_name, msg.payload);
+            }
+            // Transfer lifecycle events
+            "transfer.started" | "transfer.progress" | "transfer.complete" | "transfer.error" => {
+                let event_name = format!("daemon://{}", msg.msg_type.replace('.', "-"));
+                tracing::info!("[IPC_BRIDGE] transfer event: {}", msg.msg_type);
                 cb(&event_name, msg.payload);
             }
             other => {
