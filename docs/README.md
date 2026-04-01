@@ -1,5 +1,11 @@
 # bolt-core-sdk — Documentation
 
+## External Adopters
+
+Start here: **[INTEGRATION_GUIDE.md](INTEGRATION_GUIDE.md)** — how to build
+a Bolt-conformant app outside the core ecosystem (contract consumption,
+transport adapters, signaling registration, minimal adopter path).
+
 ## Doc Routing
 
 - **Canonical routing table:** [`bolt-ecosystem/docs/DOC_ROUTING.md`](https://github.com/the9ines/bolt-ecosystem/blob/main/docs/DOC_ROUTING.md)
