@@ -13,7 +13,9 @@
 //! - [`platform`] — Platform-aware path defaults and process management
 //! - [`daemon_log`] — Stderr ring buffer and crash snapshot persistence
 //! - [`signal_monitor`] — Signal server health probe state machine (N8 spec)
+//! - [`contracts`] — Session/transfer state contract validators (v1)
 
+pub mod contracts;
 pub mod daemon_lifecycle;
 pub mod daemon_log;
 pub mod ipc_bridge_core;

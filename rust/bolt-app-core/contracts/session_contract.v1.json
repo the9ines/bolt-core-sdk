@@ -1,0 +1,59 @@
+{
+  "version": 1,
+  "session_phases": [
+    { "id": "idle",             "meaning": "No session activity" },
+    { "id": "requesting",       "meaning": "Outbound connection request sent, awaiting peer response" },
+    { "id": "incoming_request", "meaning": "Inbound connection request received, awaiting local decision" },
+    { "id": "connecting",       "meaning": "Request accepted, transport handshake in progress" },
+    { "id": "connected",        "meaning": "Session active, transfer-ready" }
+  ],
+  "transfer_phases": [
+    { "id": "idle",      "meaning": "No transfer in progress" },
+    { "id": "sending",   "meaning": "Outbound transfer in progress" },
+    { "id": "receiving", "meaning": "Inbound transfer in progress" },
+    { "id": "complete",  "meaning": "Transfer finished successfully" },
+    { "id": "failed",    "meaning": "Transfer failed" }
+  ],
+  "verification_states": [
+    { "id": "unverified", "meaning": "SAS received, pending user confirmation", "transfer_allowed": false },
+    { "id": "verified",   "meaning": "User confirmed SAS match",               "transfer_allowed": true },
+    { "id": "legacy",     "meaning": "Peer lacks identity support (no SAS)",    "transfer_allowed": true }
+  ],
+  "session_transitions": [
+    { "from": "idle",             "to": "requesting",       "trigger": "user selects peer" },
+    { "from": "idle",             "to": "incoming_request", "trigger": "signal received from remote" },
+    { "from": "requesting",       "to": "connecting",       "trigger": "remote accepted" },
+    { "from": "requesting",       "to": "idle",             "trigger": "remote declined or timeout" },
+    { "from": "incoming_request", "to": "connecting",       "trigger": "local user accepted" },
+    { "from": "incoming_request", "to": "idle",             "trigger": "local user declined" },
+    { "from": "connecting",       "to": "connected",        "trigger": "handshake complete" },
+    { "from": "connecting",       "to": "idle",             "trigger": "handshake failed" },
+    { "from": "connected",        "to": "idle",             "trigger": "disconnect, error, or remote close" }
+  ],
+  "transfer_transitions": [
+    { "from": "idle",      "to": "sending",   "trigger": "user initiates send" },
+    { "from": "idle",      "to": "receiving", "trigger": "remote initiates send" },
+    { "from": "sending",   "to": "complete",  "trigger": "all chunks acknowledged" },
+    { "from": "sending",   "to": "failed",    "trigger": "error or session lost" },
+    { "from": "receiving", "to": "complete",  "trigger": "all chunks received and saved" },
+    { "from": "receiving", "to": "failed",    "trigger": "error or session lost" },
+    { "from": "complete",  "to": "idle",      "trigger": "user dismisses" },
+    { "from": "failed",    "to": "idle",      "trigger": "user dismisses" },
+    { "from": "sending",   "to": "idle",      "trigger": "session disconnect (mandatory cleanup)" },
+    { "from": "receiving", "to": "idle",      "trigger": "session disconnect (mandatory cleanup)" },
+    { "from": "complete",  "to": "idle",      "trigger": "session disconnect (mandatory cleanup)" },
+    { "from": "failed",    "to": "idle",      "trigger": "session disconnect (mandatory cleanup)" }
+  ],
+  "policies": [
+    { "id": "P1", "rule": "Transfer allowed only when session_phase == connected AND verification_state IN (verified, legacy)" },
+    { "id": "P2", "rule": "Only one active session per product instance" },
+    { "id": "P3", "rule": "The only path from connected to idle is through resetSession(), which MUST also reset transfer phase to idle" }
+  ],
+  "invariants": [
+    { "id": "INV-1", "description": "Session disconnect MUST reset transfer phase to idle",                "level": "REQUIRED" },
+    { "id": "INV-2", "description": "Transfer MUST be gated by policy P1",                                 "level": "REQUIRED" },
+    { "id": "INV-3", "description": "Only one active session per product instance",                         "level": "REQUIRED" },
+    { "id": "INV-4", "description": "Generation counter SHOULD increment on every session reset",           "level": "RECOMMENDED" },
+    { "id": "INV-5", "description": "Stale callbacks (generation mismatch) SHOULD be rejected",             "level": "RECOMMENDED" }
+  ]
+}

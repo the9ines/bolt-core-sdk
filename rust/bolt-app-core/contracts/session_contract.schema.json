@@ -1,0 +1,156 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bolt-protocol.org/session-contract/v1",
+  "title": "Bolt Session/Transfer State Contract v1",
+  "description": "Canonical state-machine contract for session lifecycle, transfer lifecycle, and verification state across all Bolt Protocol products. Schema guarantees structural integrity and exact enum membership. Rust validators in bolt-app-core are the executable authority for legal transitions.",
+  "type": "object",
+  "required": [
+    "version",
+    "session_phases",
+    "transfer_phases",
+    "verification_states",
+    "session_transitions",
+    "transfer_transitions",
+    "policies",
+    "invariants"
+  ],
+  "$defs": {
+    "session_phase_id": {
+      "enum": ["idle", "requesting", "incoming_request", "connecting", "connected"]
+    },
+    "transfer_phase_id": {
+      "enum": ["idle", "sending", "receiving", "complete", "failed"]
+    },
+    "verification_state_id": {
+      "enum": ["unverified", "verified", "legacy"]
+    },
+    "invariant_level": {
+      "enum": ["REQUIRED", "RECOMMENDED"]
+    },
+    "session_phase_entry": {
+      "type": "object",
+      "required": ["id", "meaning"],
+      "properties": {
+        "id": { "$ref": "#/$defs/session_phase_id" },
+        "meaning": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "transfer_phase_entry": {
+      "type": "object",
+      "required": ["id", "meaning"],
+      "properties": {
+        "id": { "$ref": "#/$defs/transfer_phase_id" },
+        "meaning": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "verification_state_entry": {
+      "type": "object",
+      "required": ["id", "meaning", "transfer_allowed"],
+      "properties": {
+        "id": { "$ref": "#/$defs/verification_state_id" },
+        "meaning": { "type": "string" },
+        "transfer_allowed": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "session_phases": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/session_phase_entry" },
+      "minItems": 5,
+      "maxItems": 5,
+      "contains": { "properties": { "id": { "const": "idle" } }, "required": ["id"] },
+      "allOf": [
+        { "contains": { "properties": { "id": { "const": "idle" } }, "required": ["id"] }, "minContains": 1, "maxContains": 1 },
+        { "contains": { "properties": { "id": { "const": "requesting" } }, "required": ["id"] }, "minContains": 1, "maxContains": 1 },
+        { "contains": { "properties": { "id": { "const": "incoming_request" } }, "required": ["id"] }, "minContains": 1, "maxContains": 1 },
+        { "contains": { "properties": { "id": { "const": "connecting" } }, "required": ["id"] }, "minContains": 1, "maxContains": 1 },
+        { "contains": { "properties": { "id": { "const": "connected" } }, "required": ["id"] }, "minContains": 1, "maxContains": 1 }
+      ]
+    },
+    "transfer_phases": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/transfer_phase_entry" },
+      "minItems": 5,
+      "maxItems": 5,
+      "allOf": [
+        { "contains": { "properties": { "id": { "const": "idle" } }, "required": ["id"] }, "minContains": 1, "maxContains": 1 },
+        { "contains": { "properties": { "id": { "const": "sending" } }, "required": ["id"] }, "minContains": 1, "maxContains": 1 },
+        { "contains": { "properties": { "id": { "const": "receiving" } }, "required": ["id"] }, "minContains": 1, "maxContains": 1 },
+        { "contains": { "properties": { "id": { "const": "complete" } }, "required": ["id"] }, "minContains": 1, "maxContains": 1 },
+        { "contains": { "properties": { "id": { "const": "failed" } }, "required": ["id"] }, "minContains": 1, "maxContains": 1 }
+      ]
+    },
+    "verification_states": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/verification_state_entry" },
+      "minItems": 3,
+      "maxItems": 3,
+      "allOf": [
+        { "contains": { "properties": { "id": { "const": "unverified" } }, "required": ["id"] }, "minContains": 1, "maxContains": 1 },
+        { "contains": { "properties": { "id": { "const": "verified" } }, "required": ["id"] }, "minContains": 1, "maxContains": 1 },
+        { "contains": { "properties": { "id": { "const": "legacy" } }, "required": ["id"] }, "minContains": 1, "maxContains": 1 }
+      ]
+    },
+    "session_transitions": {
+      "description": "Declared session transitions. Schema validates structural correctness (valid phase IDs). The exact legal transition set is enforced by Rust validators in bolt-app-core, not by this schema.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["from", "to", "trigger"],
+        "properties": {
+          "from": { "$ref": "#/$defs/session_phase_id" },
+          "to": { "$ref": "#/$defs/session_phase_id" },
+          "trigger": { "type": "string", "minLength": 1 }
+        },
+        "additionalProperties": false
+      }
+    },
+    "transfer_transitions": {
+      "description": "Declared transfer transitions. Schema validates structural correctness (valid phase IDs). The exact legal transition set is enforced by Rust validators in bolt-app-core, not by this schema.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["from", "to", "trigger"],
+        "properties": {
+          "from": { "$ref": "#/$defs/transfer_phase_id" },
+          "to": { "$ref": "#/$defs/transfer_phase_id" },
+          "trigger": { "type": "string", "minLength": 1 }
+        },
+        "additionalProperties": false
+      }
+    },
+    "policies": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "rule"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "rule": { "type": "string", "minLength": 1 }
+        },
+        "additionalProperties": false
+      }
+    },
+    "invariants": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "description", "level"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "description": { "type": "string", "minLength": 1 },
+          "level": { "$ref": "#/$defs/invariant_level" }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}
