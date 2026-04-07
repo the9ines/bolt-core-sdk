@@ -1,15 +1,19 @@
 # Bolt Core SDK — Authority Model
 
+**Status:** Frozen. Locked 2026-04-07.
+
 Defines which implementation is canonical, how adapter implementations
 relate to it, and what gates enforce cross-implementation compatibility.
+Changes to the authority hierarchy require explicit governance review.
 
 Keywords: RFC 2119 (MUST, MUST NOT, REQUIRED, SHALL, SHOULD, MAY).
 
 ## Core Rule
 
-**Canonical truth = contracts (`PROTOCOL.md`, `TRANSPORT_CONTRACT.md`) +
-golden vectors + Rust crates (`rust/bolt-core/`, `rust/bolt-btr/`,
-`rust/bolt-transfer-core/`, `rust/bolt-transfer-policy-wasm/`).**
+**Canonical truth = normative specs (`PROTOCOL.md`, `TRANSPORT_CONTRACT.md`,
+`SESSION_CONTRACT.md`) + golden vectors + Rust crates (`rust/bolt-core/`,
+`rust/bolt-btr/`, `rust/bolt-transfer-core/`, `rust/bolt-transfer-policy-wasm/`,
+`rust/bolt-app-core/`).**
 
 TypeScript (`@the9ines/bolt-core`) is supported but MUST pass
 compatibility tests against canonical vectors. It does not define
@@ -49,16 +53,19 @@ Adapter rules:
 
 ## 3. Source of Truth Hierarchy
 
-| Authority level | Source |
-|----------------|--------|
-| Protocol semantics | `PROTOCOL.md` + `TRANSPORT_CONTRACT.md` |
-| Behavioral truth | Canonical implementation (Rust) + golden vectors |
-| API surface (Rust) | `docs/API_SURFACE.md` (unified crate registry) |
-| API stability (Rust) | `docs/SDK_STABILITY.md` §6 (Rust crate) |
-| API stability (TS) | `docs/SDK_STABILITY.md` §1–§5 (TypeScript) |
-| Consumer boundaries | `docs/BOUNDARY_CONTRACT.md` (Rust-direct, WASM, Tauri IPC) |
-| Transport requirements | `docs/TRANSPORT_CONTRACT.md` |
-| Operator surface | `docs/DAEMON_CONTRACT.md` (bolt-daemon repo) |
+The authority model has two normative doc layers and one executable layer:
+
+| Authority level | Source | Scope |
+|----------------|--------|-------|
+| Wire-level protocol | `PROTOCOL.md` + `TRANSPORT_CONTRACT.md` | Wire formats, crypto, §9 state machines, §13 conformance, error registry, handshake invariants, BTR |
+| Ecosystem interop | `docs/SESSION_CONTRACT.md` + `rust/bolt-app-core/contracts/` | Product-level session/transfer phases, verification gating, cross-product conformance |
+| Behavioral truth | Canonical implementation (Rust) + golden vectors | Tie-breaker when docs are ambiguous; does not replace normative docs |
+| API surface (Rust) | `docs/API_SURFACE.md` (unified crate registry) | |
+| API stability (Rust) | `docs/SDK_STABILITY.md` §6 (Rust crate) | |
+| API stability (TS) | `docs/SDK_STABILITY.md` §1–§5 (TypeScript) | |
+| Consumer boundaries | `docs/BOUNDARY_CONTRACT.md` (Rust-direct, WASM, Tauri IPC) | |
+| Transport requirements | `docs/TRANSPORT_CONTRACT.md` | |
+| Operator surface | `docs/DAEMON_CONTRACT.md` (bolt-daemon repo) | |
 
 ## 4. Golden Vectors
 

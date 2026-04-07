@@ -2,7 +2,13 @@
 
 ## Status
 
-Active. Primary ecosystem interoperability authority.
+**Frozen (v1).** Primary ecosystem interoperability authority.
+Frozen 2026-04-07. No breaking changes without a major version bump (v2).
+
+Stable surface: 5 session phases, 9 session transitions, 5 transfer phases,
+10 transfer transitions, 3 verification states, policies P1–P3, invariants
+INV-1 through INV-5. Items listed under "Deferred to v2" are explicitly
+not part of the frozen contract.
 
 ## Layer Relationship
 
@@ -114,7 +120,9 @@ complete ──► idle       (session disconnect — mandatory cleanup)
 failed ────► idle       (session disconnect — mandatory cleanup)
 ```
 
-12 legal transitions. All other transfer phase transitions are ILLEGAL.
+10 unique legal transition pairs (`complete→idle` and `failed→idle` each
+subsume both user-dismiss and session-disconnect triggers).
+All other transfer phase transitions are ILLEGAL.
 
 ## Verification States
 

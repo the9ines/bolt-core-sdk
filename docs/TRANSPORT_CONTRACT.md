@@ -1,6 +1,10 @@
 # Bolt Transport Contract
 
+**Status:** Frozen. Locked 2026-04-07.
+
 Defines the abstraction boundary between the Bolt protocol layer and transport implementations.
+Transport requirement changes (§1) require a spec amendment. New compliant
+implementations (§2) may be added without a version bump.
 
 **SDK Stability Alignment:** This document defines behavioral requirements
 for transport implementations. [SDK_STABILITY.md](SDK_STABILITY.md) defines
@@ -77,6 +81,42 @@ The transport MUST expose at minimum:
 - **Status**: Candidate. Under evaluation for bolt-daemon and headless deployments.
 - **Requirements**: Must satisfy the same ordered/reliable/message-framed contract.
 - **Graduation criteria**: See `ECOSYSTEM_STRATEGY.md` § Headless Transport Lane.
+
+### QUIC via quinn (Rust)
+
+- **Status**: Supported. Used for native↔native (app↔app) transfers.
+- **Ordered delivery**: QUIC bidirectional streams provide ordered delivery natively.
+- **Reliability**: QUIC streams are reliable by default.
+- **Message framing**: Application-level length-prefix framing required (QUIC streams are byte-oriented).
+- **Backpressure**: QUIC flow control provides stream-level and connection-level backpressure.
+
+### WebTransport (HTTP/3)
+
+- **Status**: Supported. Production path for HTTPS web↔native communication.
+- **Ordered delivery**: WebTransport bidirectional streams provide ordered delivery.
+- **Reliability**: Reliable streams mode.
+- **Message framing**: Application-level message boundaries required.
+- **Requirements**: Daemon serves a WebTransport/HTTP3 endpoint with TLS. Browser requires WebTransport API support (Chrome, Edge, Firefox — not Safari as of 2026).
+- **Capability**: Negotiated via `bolt.transport-webtransport-v1`.
+
+### WebSocket-direct (dev/LAN only)
+
+- **Status**: Supported. Development and LAN testing path for HTTP/localhost web↔native.
+- **Ordered delivery**: WebSocket provides ordered delivery natively.
+- **Reliability**: TCP-backed, reliable.
+- **Message framing**: WebSocket frames provide message boundaries.
+- **Scope**: HTTP origins only (not HTTPS). No TLS required. Not for production deployment.
+
+### Transport Path Summary
+
+| Endpoint Pair | Transport | Status |
+|--------------|-----------|--------|
+| native↔native (app↔app) | QUIC via quinn (Rust) | Supported |
+| browser↔browser | WebRTC DataChannel | Supported (G1 invariant — immutable) |
+| HTTPS web↔native | WebTransport (HTTP/3) | Supported (production) |
+| HTTP/localhost web↔native | WebSocket-direct | Supported (dev/LAN only) |
+
+**G1 invariant:** browser↔browser always uses WebRTC. This is not negotiable.
 
 ## 3. Binary Encoding Rule
 
